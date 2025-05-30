@@ -1,0 +1,43 @@
+{
+  "meal_plan": {
+    "days": [
+      {
+        "day_of_week": "Thứ 2",
+        "breakfast": {
+          "dishes": [],
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "fat": 0.0,
+            "carbs": 0.0
+          }
+        },
+        "lunch": {
+          "dishes": [],
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "fat": 0.0,
+            "carbs": 0.0
+          }
+        },
+        "dinner": {
+          "dishes": [],
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "fat": 0.0,
+            "carbs": 0.0
+          }
+        },
+        "nutrition": {
+          "calories": 0.0,
+          "protein": 0.0,
+          "fat": 0.0,
+          "carbs": 0.0
+        }
+      }
+    ]
+  },
+  "message": "Weekly meal plan generated successfully"
+}

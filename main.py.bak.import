@@ -1,0 +1,849 @@
+from fastapi import FastAPI, HTTPException, Depends, Query, Body, Path
+from fastapi.middleware.cors import CORSMiddleware
+from typing import Dict, Optional, List
+import time
+import os
+
+from models import (
+    NutritionTarget, ReplaceDayRequest, WeeklyMealPlan, DayMealPlan,
+    GenerateWeeklyMealRequest, GenerateWeeklyMealResponse, ReplaceDayResponse, ReplaceWeekResponse
+)
+import services
+from storage_manager import storage_manager
+
+# Import generate_random_data
+from generate_random_data import generate_weekly_plan
+
+# Import USDA API integration
+from usda_integration import usda_api
+
+# Import Firestore router
+from routers import firestore_router
+
+# Thêm import cho chat API
+from pydantic import BaseModel
+from openai import OpenAI
+
+# Create FastAPI app
+app = FastAPI(
+    title="DietAI API",
+    description="API for generating and managing personalized nutrition plans",
+    version="1.0.0"
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, you should restrict this to your frontend domain
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Khởi tạo Groq client cho chat API
+groq_api_key = os.environ.get("GROQ_API_KEY", "")
+try:
+    chat_client = OpenAI(
+        api_key=groq_api_key,
+        base_url="https://api.groq.com/openai/v1"
+    )
+    chat_available = bool(groq_api_key)
+except:
+    chat_client = None
+    chat_available = False
+
+# Chat API models
+class ChatMessage(BaseModel):
+    message: str
+
+class ChatResponse(BaseModel):
+    reply: str
+
+# Include the Firestore router
+app.include_router(firestore_router)
+
+# Dependency to get the current meal plan from storage
+async def get_current_meal_plan(user_id: str = "default") -> Optional[WeeklyMealPlan]:
+    """
+    Đọc kế hoạch thực đơn hiện tại từ bộ nhớ (Firebase hoặc file)
+    
+    Args:
+        user_id: ID của người dùng
+        
+    Returns:
+        Đối tượng WeeklyMealPlan hiện tại hoặc None
+    """
+    return storage_manager.load_meal_plan(user_id)
+
+@app.get("/")
+async def root():
+    """Root endpoint to check if API is running"""
+    return {"message": "Welcome to DietAI API. Visit /docs for API documentation."}
+
+@app.post("/generate-weekly-meal", response_model=GenerateWeeklyMealResponse)
+def generate_weekly_meal(
+    meal_request: GenerateWeeklyMealRequest = Body(...),
+    user_id: str = Query(default="default"),
+    use_ai: bool = Query(default=False)
+) -> GenerateWeeklyMealResponse:
+    """
+    Tạo kế hoạch bữa ăn hàng tuần
+    """
+    print(f"\n===== Generating weekly meal plan for user: {user_id} =====")
+    print(f"Use AI: {use_ai}")
+    print(f"Meal request: {meal_request}")
+    
+    # Generate meal plan
+    try:
+        start_time = time.time()
+        
+        # Trong môi trường test, chỉ tạo một ngày để tăng tốc độ
+        if "_test" in user_id or "test_" in user_id:
+            print(f"TEST MODE: Creating a single-day plan for test user {user_id}")
+            # Tạo kế hoạch chỉ có một ngày
+            day_plan = services.generate_day_meal_plan(
+                "Thứ 2",
+                meal_request.calories_target,
+                meal_request.protein_target,
+                meal_request.fat_target,
+                meal_request.carbs_target,
+                preferences=meal_request.preferences,
+                allergies=meal_request.allergies,
+                cuisine_style=meal_request.cuisine_style,
+                use_ai=use_ai
+            )
+            
+            # Đảm bảo day_plan có ít nhất một món ăn
+            if not day_plan.breakfast.dishes:
+                day_plan.breakfast = services.create_fallback_meal(
+                    "bữa sáng", 
+                    meal_request.calories_target * 0.25,
+                    meal_request.protein_target * 0.25,
+                    meal_request.fat_target * 0.25,
+                    meal_request.carbs_target * 0.25
+                )
+            
+            if not day_plan.lunch.dishes:
+                day_plan.lunch = services.create_fallback_meal(
+                    "bữa trưa", 
+                    meal_request.calories_target * 0.4,
+                    meal_request.protein_target * 0.4,
+                    meal_request.fat_target * 0.4,
+                    meal_request.carbs_target * 0.4
+                )
+            
+            if not day_plan.dinner.dishes:
+                day_plan.dinner = services.create_fallback_meal(
+                    "bữa tối", 
+                    meal_request.calories_target * 0.35,
+                    meal_request.protein_target * 0.35,
+                    meal_request.fat_target * 0.35,
+                    meal_request.carbs_target * 0.35
+                )
+            
+            meal_plan = WeeklyMealPlan(days=[day_plan])
+        else:
+            meal_plan = services.generate_weekly_meal_plan(
+                meal_request.calories_target,
+                meal_request.protein_target,
+                meal_request.fat_target,
+                meal_request.carbs_target,
+                preferences=meal_request.preferences,
+                allergies=meal_request.allergies,
+                cuisine_style=meal_request.cuisine_style,
+            use_ai=use_ai
+        )
+        
+        # Verify meal plan data before saving
+        if not meal_plan or not meal_plan.days:
+            print("ERROR: Generated meal plan is empty or has no days!")
+            raise Exception("Generated meal plan is empty. Please check the meal generation code.")
+        
+        # Count how many dishes were actually generated
+        dish_count = 0
+        for day in meal_plan.days:
+            day_dishes = (
+                len(day.breakfast.dishes) + 
+                len(day.lunch.dishes) + 
+                len(day.dinner.dishes)
+            )
+            dish_count += day_dishes
+            print(f"Day {day.day_of_week}: {day_dishes} dishes generated")
+        
+        print(f"Total dishes generated across all days: {dish_count}")
+        
+        # Lưu meal plan vào storage
+        storage_path = storage_manager.save_meal_plan(meal_plan, user_id)
+        print(f"Meal plan saved to: {storage_path}")
+        
+        # Return the response
+        return GenerateWeeklyMealResponse(meal_plan=meal_plan)
+    except Exception as e:
+        print(f"ERROR in generate_weekly_meal: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error generating meal plan: {str(e)}")
+
+@app.post("/generate-weekly-meal-personalized", response_model=GenerateWeeklyMealResponse)
+async def create_personalized_meal_plan(
+    nutrition_target: NutritionTarget,
+    preferences: List[str] = Body([], description="Danh sách sở thích thực phẩm"),
+    allergies: List[str] = Body([], description="Danh sách thực phẩm gây dị ứng cần tránh"),
+    cuisine_style: Optional[str] = Body(None, description="Phong cách ẩm thực ưa thích"),
+    user_id: str = Query("default", description="ID của người dùng"),
+    use_ai: bool = Query(False, description="Sử dụng AI để tạo kế hoạch thực đơn")
+):
+    """
+    Generate a personalized weekly meal plan that meets nutritional targets and dietary preferences.
+    
+    Parameters:
+    - calories_target: Target calories per day (kcal)
+    - protein_target: Target protein per day (g)
+    - fat_target: Target fat per day (g)
+    - carbs_target: Target carbohydrates per day (g)
+    - preferences: List of food preferences
+    - allergies: List of food allergies to avoid
+    - cuisine_style: Preferred cuisine style
+    - user_id: ID của người dùng (query parameter)
+    - use_ai: Sử dụng AI để tạo kế hoạch thực đơn (query parameter)
+    
+    Returns:
+    - A weekly meal plan with detailed nutrition information for each day and meal
+    """
+    try:
+        print(f"Generating personalized meal plan for user: {user_id}")
+        print(f"Preferences: {preferences}")
+        print(f"Allergies: {allergies}")
+        print(f"Cuisine style: {cuisine_style}")
+        print(f"Using AI: {use_ai}")
+        
+        # Generate meal plan with personalization
+        meal_plan = services.generate_weekly_meal_plan(
+            nutrition_target.calories_target,
+            nutrition_target.protein_target,
+            nutrition_target.fat_target,
+            nutrition_target.carbs_target,
+            preferences=preferences,
+            allergies=allergies,
+            cuisine_style=cuisine_style,
+            use_ai=use_ai
+        )
+        
+        # Save to storage
+        storage_manager.save_meal_plan(meal_plan, user_id)
+        
+        # Return the response
+        return GenerateWeeklyMealResponse(meal_plan=meal_plan)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating personalized meal plan: {str(e)}")
+
+@app.post("/replace-day", response_model=ReplaceDayResponse)
+async def replace_day(
+    replace_request: ReplaceDayRequest,
+    user_id: str = Query("default", description="ID của người dùng"),
+    use_ai: bool = Query(False, description="Sử dụng AI để tạo kế hoạch thực đơn"),
+    meal_plan: Optional[WeeklyMealPlan] = Depends(get_current_meal_plan)
+):
+    """
+    Replace a specific day's meal plan.
+    
+    Parameters:
+    - day_of_week: Day to replace (e.g., "Thứ 2", "Thứ 3", etc.)
+    - calories_target: Target calories for the day (kcal)
+    - protein_target: Target protein for the day (g)
+    - fat_target: Target fat for the day (g)
+    - carbs_target: Target carbohydrates for the day (g)
+    - user_id: ID của người dùng (query parameter)
+    - use_ai: Sử dụng AI để tạo kế hoạch thực đơn (query parameter)
+    
+    Returns:
+    - The updated meal plan for the specified day
+    """
+    try:
+        # Check if we have a current meal plan
+        if not meal_plan:
+            raise HTTPException(
+                status_code=400, 
+                detail="No meal plan exists. Generate a weekly meal plan first."
+            )
+        
+        # Check if the day exists in the current plan
+        if replace_request.day_of_week not in [day.day_of_week for day in meal_plan.days]:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Day '{replace_request.day_of_week}' not found in the current meal plan."
+            )
+        
+        # Replace the day's meal plan
+        new_day_plan = services.replace_day_meal_plan(
+            meal_plan, 
+            replace_request,
+            use_ai=use_ai
+        )
+        
+        # Lưu meal plan mới vào storage
+        storage_manager.save_meal_plan(meal_plan, user_id)
+        
+        # Return the response
+        return ReplaceDayResponse(day_meal_plan=new_day_plan)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error replacing day meal plan: {str(e)}")
+
+@app.post("/replace-day-personalized", response_model=ReplaceDayResponse)
+async def replace_day_personalized(
+    replace_request: ReplaceDayRequest,
+    preferences: List[str] = Body([], description="Danh sách sở thích thực phẩm"),
+    allergies: List[str] = Body([], description="Danh sách thực phẩm gây dị ứng cần tránh"),
+    cuisine_style: Optional[str] = Body(None, description="Phong cách ẩm thực ưa thích"),
+    user_id: str = Query("default", description="ID của người dùng"),
+    use_ai: bool = Query(False, description="Sử dụng AI để tạo kế hoạch thực đơn"),
+    meal_plan: Optional[WeeklyMealPlan] = Depends(get_current_meal_plan)
+):
+    """
+    Replace a specific day in the meal plan with a new personalized plan.
+    
+    Parameters:
+    - replace_request: Day and nutrition targets for the new day
+    - preferences: List of food preferences
+    - allergies: List of food allergies to avoid
+    - cuisine_style: Preferred cuisine style
+    - user_id: ID của người dùng (query parameter)
+    - use_ai: Sử dụng AI để tạo kế hoạch thực đơn (query parameter)
+    
+    Returns:
+    - The new day's meal plan
+    """
+    try:
+        # Check if we have a current meal plan
+        if not meal_plan:
+            raise HTTPException(
+                status_code=400, 
+                detail="No meal plan exists. Generate a weekly meal plan first."
+            )
+        
+        # Check if the day exists in the current plan
+        if replace_request.day_of_week not in [day.day_of_week for day in meal_plan.days]:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Day '{replace_request.day_of_week}' not found in the current meal plan."
+            )
+        
+        # Replace the day's meal plan with personalized options
+        new_day_plan = services.replace_day_meal_plan(
+            meal_plan, 
+            replace_request,
+            preferences=preferences,
+            allergies=allergies,
+            cuisine_style=cuisine_style,
+            use_ai=use_ai
+        )
+        
+        # Lưu meal plan mới vào storage
+        storage_manager.save_meal_plan(meal_plan, user_id)
+        
+        # Return the response
+        return ReplaceDayResponse(day_meal_plan=new_day_plan)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error replacing day meal plan with personalization: {str(e)}")
+
+@app.post("/replace-week", response_model=ReplaceWeekResponse)
+async def replace_week(
+    nutrition_target: NutritionTarget,
+    user_id: str = Query("default", description="ID của người dùng"),
+    use_ai: bool = Query(False, description="Sử dụng AI để tạo kế hoạch thực đơn")
+):
+    """
+    Generate a new weekly meal plan, replacing the current one.
+    
+    Parameters:
+    - calories_target: Target calories per day (kcal)
+    - protein_target: Target protein per day (g)
+    - fat_target: Target fat per day (g)
+    - carbs_target: Target carbohydrates per day (g)
+    - user_id: ID của người dùng (query parameter)
+    - use_ai: Sử dụng AI để tạo kế hoạch thực đơn (query parameter)
+    
+    Returns:
+    - A new weekly meal plan with detailed nutrition information
+    """
+    try:
+        # Generate a new weekly meal plan
+        meal_plan = services.generate_weekly_meal_plan(
+            nutrition_target.calories_target,
+            nutrition_target.protein_target,
+            nutrition_target.fat_target,
+            nutrition_target.carbs_target,
+            use_ai=use_ai
+        )
+        
+        # Lưu meal plan vào storage
+        storage_manager.save_meal_plan(meal_plan, user_id)
+        
+        # Return the response
+        return ReplaceWeekResponse(meal_plan=meal_plan)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error replacing weekly meal plan: {str(e)}")
+
+@app.get("/meal-plan-history", response_model=List[Dict])
+async def get_meal_plan_history(
+    user_id: str = Query("default", description="ID của người dùng"),
+    limit: int = Query(10, description="Số lượng kế hoạch tối đa")
+):
+    """
+    Lấy lịch sử kế hoạch thực đơn của người dùng
+    
+    Parameters:
+    - user_id: ID của người dùng (query parameter)
+    - limit: Số lượng kế hoạch tối đa trả về (query parameter)
+    
+    Returns:
+    - Danh sách các kế hoạch thực đơn trước đây
+    """
+    try:
+        history = storage_manager.get_meal_plan_history(user_id, limit)
+        return history
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting meal plan history: {str(e)}")
+
+@app.delete("/meal-plan/{filename}")
+async def delete_meal_plan(filename: str):
+    """
+    Xóa một kế hoạch thực đơn
+    
+    Parameters:
+    - filename: Tên file hoặc ID document cần xóa
+    
+    Returns:
+    - Thông báo kết quả
+    """
+    if storage_manager.delete_meal_plan(filename):
+        return {"message": f"Deleted meal plan: {filename}"}
+    else:
+        raise HTTPException(status_code=404, detail=f"Meal plan not found: {filename}")
+
+@app.get("/check-ai-availability")
+async def check_ai_availability():
+    """
+    Kiểm tra xem tính năng AI có khả dụng không
+    
+    Returns:
+    - Thông tin về tính khả dụng của AI
+    """
+    try:
+        # Kiểm tra Groq LLaMA 3
+        try:
+            from groq_integration import groq_service
+            if groq_service.available:
+                return {
+                    "ai_available": True,
+                    "ai_type": "LLaMA 3 (Groq)",
+                    "model": getattr(groq_service, "model", "unknown"),
+                    "message": "LLaMA 3 via Groq API is available and ready to use"
+                }
+        except ImportError:
+            pass
+            
+        # Không có AI nào khả dụng
+        return {
+            "ai_available": False,
+            "message": "No AI service is available. Install Groq client and set API key to enable AI features."
+        }
+    except Exception as e:
+        return {
+            "ai_available": False,
+            "message": f"Error checking AI availability: {str(e)}"
+        }
+
+@app.post("/generate-weekly-meal-demo", response_model=GenerateWeeklyMealResponse, tags=["Demo"])
+async def create_demo_weekly_meal_plan(
+    nutrition_target: NutritionTarget,
+    user_id: str = Query("default", description="ID của người dùng"),
+    use_ai: bool = Query(False, description="Sử dụng AI để tạo kế hoạch thực đơn")
+):
+    """
+    Generate a demo weekly meal plan with mock data for testing.
+    
+    Parameters:
+    - calories_target: Target calories per day (kcal)
+    - protein_target: Target protein per day (g)
+    - fat_target: Target fat per day (g)
+    - carbs_target: Target carbohydrates per day (g)
+    - user_id: ID của người dùng (query parameter)
+    - use_ai: Sử dụng AI để tạo kế hoạch thực đơn (query parameter)
+    
+    Returns:
+    - A weekly meal plan with detailed nutrition information for each day and meal
+    """
+    try:
+        print(f"=====================================================")
+        print(f"Starting DEMO weekly meal plan generation for user: {user_id}")
+        print(f"Targets: calories={nutrition_target.calories_target}, protein={nutrition_target.protein_target}, fat={nutrition_target.fat_target}, carbs={nutrition_target.carbs_target}")
+        print(f"Using AI: {use_ai}")
+        
+        if use_ai:
+            # Try to use AI for demo generation
+            try:
+                from groq_integration import groq_service
+                if groq_service.available and not groq_service.quota_exceeded:
+                    print("AI is available. Generating meal plan with AI...")
+                    meal_plan = services.generate_weekly_meal_plan(
+                        nutrition_target.calories_target,
+                        nutrition_target.protein_target,
+                        nutrition_target.fat_target,
+                        nutrition_target.carbs_target,
+                        use_ai=True
+                    )
+                    
+                    # Save to storage
+                    storage_manager.save_meal_plan(meal_plan, user_id)
+                    
+                    # Return the response
+                    return GenerateWeeklyMealResponse(meal_plan=meal_plan)
+                else:
+                    print("AI requested but not available or quota exceeded. Falling back to demo data.")
+            except Exception as e:
+                print(f"Error using AI for demo: {str(e)}")
+                print("Falling back to demo data.")
+        
+        # Generate mock meal plan data
+        print("Generating demo meal plan with mock data...")
+        mock_data = generate_weekly_plan(
+            calories=nutrition_target.calories_target,
+            protein=nutrition_target.protein_target,
+            fat=nutrition_target.fat_target,
+            carbs=nutrition_target.carbs_target
+        )
+        
+        # Convert from dictionary to WeeklyMealPlan model
+        meal_plan = WeeklyMealPlan.parse_obj(mock_data)
+        
+        # Save to storage
+        storage_manager.save_meal_plan(meal_plan, user_id)
+        
+        # Return the response
+        return GenerateWeeklyMealResponse(meal_plan=meal_plan)
+    except Exception as e:
+        print(f"ERROR in create_demo_weekly_meal_plan: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error generating demo meal plan: {str(e)}")
+
+@app.get("/cache-info")
+async def get_cache_info():
+    """
+    Hiển thị thông tin về cache và rate limiting của Groq
+    
+    Returns:
+    - Thông tin về cache và rate limiting
+    """
+    try:
+        from groq_integration import groq_service
+        cache_info = groq_service.get_cache_info()
+        
+        rate_limiter_info = {
+            "requests_per_minute": groq_service.rate_limiter.requests_per_minute,
+            "requests_per_day": groq_service.rate_limiter.requests_per_day,
+            "minute_requests_used": groq_service.rate_limiter.minute_requests,
+            "day_requests_used": groq_service.rate_limiter.day_requests,
+            "minute_reset_in_seconds": max(0, int(groq_service.rate_limiter.minute_reset_time - time.time())),
+            "day_reset_in_seconds": max(0, int(groq_service.rate_limiter.day_reset_time - time.time()))
+        }
+        
+        return {
+            "cache": cache_info,
+            "rate_limiter": rate_limiter_info,
+            "ai_available": groq_service.available
+        }
+    except Exception as e:
+        return {
+            "error": f"Error getting cache info: {str(e)}"
+        }
+
+@app.get("/api-status")
+async def get_api_status():
+    """
+    Kiểm tra trạng thái API, bao gồm thông tin quota của AI và rate limit
+    
+    Returns:
+    - Thông tin trạng thái API, quota và rate limit
+    """
+    try:
+        import time
+        import datetime
+        
+        # Kiểm tra Groq LLaMA 3
+        try:
+            from groq_integration import groq_service
+            if groq_service.available:
+                current_time = time.time()
+                quota_status = {
+                    "exceeded": groq_service.quota_exceeded,
+                    "reset_time": None,
+                    "remaining_seconds": None,
+                    "estimated_reset_time_utc": None,
+                }
+                
+                if groq_service.quota_reset_time:
+                    quota_status["reset_time"] = groq_service.quota_reset_time
+                    remaining = max(0, int(groq_service.quota_reset_time - current_time))
+                    quota_status["remaining_seconds"] = remaining
+                    reset_time_utc = datetime.datetime.utcfromtimestamp(groq_service.quota_reset_time).isoformat()
+                    quota_status["estimated_reset_time_utc"] = reset_time_utc
+                
+                rate_limit_status = {
+                    "minute_limit": groq_service.rate_limiter.requests_per_minute,
+                    "day_limit": groq_service.rate_limiter.requests_per_day,
+                    "minute_used": groq_service.rate_limiter.minute_requests,
+                    "day_used": groq_service.rate_limiter.day_requests,
+                    "minute_reset_in": max(0, int(groq_service.rate_limiter.minute_reset_time - current_time)),
+                    "day_reset_in": max(0, int(groq_service.rate_limiter.day_reset_time - current_time)),
+                }
+                
+                return {
+                    "ai_available": True,
+                    "ai_type": "LLaMA 3 (Groq)",
+                    "ai_model": getattr(groq_service, "model", "unknown"),
+                    "use_fallback_data": groq_service.quota_exceeded or not groq_service.available,
+                    "quota_status": quota_status,
+                    "rate_limits": rate_limit_status,
+                    "server_time_utc": datetime.datetime.utcnow().isoformat()
+                }
+        except ImportError:
+            pass
+        
+        # Không có AI nào khả dụng
+        return {
+            "ai_available": False,
+            "ai_type": "None",
+            "use_fallback_data": True,
+            "server_time_utc": datetime.datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        return {
+            "ai_available": False,
+            "use_fallback_data": True,
+            "error": f"Error checking API status: {str(e)}"
+        }
+
+@app.post("/clear-cache")
+async def clear_cache():
+    """
+    Xóa cache để buộc tạo mới dữ liệu
+    
+    Returns:
+    - Thông báo kết quả
+    """
+    try:
+        result = {"message": "Cache cleared successfully", "details": []}
+        
+        # Xóa cache của Groq
+        try:
+            from groq_integration import groq_service
+            groq_service.clear_cache()
+            result["details"].append("Groq cache cleared")
+        except ImportError:
+            pass
+        except Exception as e:
+            result["details"].append(f"Error clearing Groq cache: {str(e)}")
+            
+        return result
+    except Exception as e:
+        return {"error": f"Error clearing cache: {str(e)}"}
+
+# USDA Food Database Endpoints
+@app.get("/usda/search", tags=["USDA Food Database"])
+async def search_usda_foods(
+    query: str = Query(..., description="Từ khóa tìm kiếm thực phẩm (tiếng Việt hoặc tiếng Anh)"),
+    vietnamese: bool = Query(True, description="Có phải truy vấn tiếng Việt không"),
+    max_results: int = Query(10, description="Số kết quả tối đa trả về")
+):
+    """
+    Tìm kiếm thực phẩm trong cơ sở dữ liệu USDA FoodData Central.
+    
+    Nếu query là tiếng Việt, hệ thống sẽ dịch sang tiếng Anh trước khi tìm kiếm.
+    
+    Parameters:
+    - query: Từ khóa tìm kiếm thực phẩm
+    - vietnamese: Có phải truy vấn tiếng Việt không
+    - max_results: Số kết quả tối đa trả về
+    
+    Returns:
+    - Danh sách các thực phẩm phù hợp với từ khóa tìm kiếm
+    """
+    try:
+        if not usda_api.available:
+            raise HTTPException(
+                status_code=503, 
+                detail="USDA API không khả dụng. Vui lòng cấu hình USDA_API_KEY trong biến môi trường."
+            )
+        
+        results = usda_api.search_foods(query, vietnamese=vietnamese, max_results=max_results)
+        
+        return {
+            "query": query,
+            "translated_query": usda_api._translate_vi_to_en(query) if vietnamese else query,
+            "count": len(results),
+            "results": results
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi khi tìm kiếm thực phẩm: {str(e)}")
+
+@app.get("/usda/food/{food_id}", tags=["USDA Food Database"])
+async def get_usda_food(
+    food_id: int = Path(..., description="ID của thực phẩm trong USDA FoodData Central")
+):
+    """
+    Lấy thông tin chi tiết về một loại thực phẩm trong USDA FoodData Central.
+    
+    Parameters:
+    - food_id: ID của thực phẩm
+    
+    Returns:
+    - Thông tin chi tiết về thực phẩm
+    """
+    try:
+        if not usda_api.available:
+            raise HTTPException(
+                status_code=503, 
+                detail="USDA API không khả dụng. Vui lòng cấu hình USDA_API_KEY trong biến môi trường."
+            )
+        
+        food_detail = usda_api.get_food_detail(food_id)
+        
+        if not food_detail:
+            raise HTTPException(status_code=404, detail=f"Không tìm thấy thực phẩm có ID: {food_id}")
+        
+        return food_detail
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi khi lấy thông tin thực phẩm: {str(e)}")
+
+@app.get("/usda/nutrition", tags=["USDA Food Database"])
+async def get_nutrition_info(
+    query: str = Query(..., description="Tên thực phẩm cần tìm (tiếng Việt hoặc tiếng Anh)"),
+    amount: Optional[str] = Query(None, description="Số lượng (ví dụ: '100g', '1 cup')"),
+    vietnamese: bool = Query(True, description="Có phải truy vấn tiếng Việt không")
+):
+    """
+    Lấy thông tin dinh dưỡng cho một loại thực phẩm với số lượng cụ thể.
+    
+    Parameters:
+    - query: Tên thực phẩm cần tìm
+    - amount: Số lượng (ví dụ: "100g", "1 cup")
+    - vietnamese: Có phải truy vấn tiếng Việt không
+    
+    Returns:
+    - Thông tin dinh dưỡng của thực phẩm với số lượng đã chỉ định
+    """
+    try:
+        if not usda_api.available:
+            raise HTTPException(
+                status_code=503, 
+                detail="USDA API không khả dụng. Vui lòng cấu hình USDA_API_KEY trong biến môi trường."
+            )
+        
+        nutrition_info = usda_api.get_nutrition_info(query, amount, vietnamese=vietnamese)
+        
+        if not nutrition_info:
+            raise HTTPException(status_code=404, detail=f"Không tìm thấy thông tin dinh dưỡng cho: {query}")
+        
+        return {
+            "query": query,
+            "translated_query": usda_api._translate_vi_to_en(query) if vietnamese else query,
+            "nutrition": nutrition_info
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi khi lấy thông tin dinh dưỡng: {str(e)}")
+
+@app.get("/usda/translate", tags=["USDA Food Database"])
+async def translate_food_name(
+    vietnamese_query: str = Query(..., description="Tên thực phẩm bằng tiếng Việt")
+):
+    """
+    Dịch tên thực phẩm từ tiếng Việt sang tiếng Anh.
+    
+    Parameters:
+    - vietnamese_query: Tên thực phẩm bằng tiếng Việt
+    
+    Returns:
+    - Tên thực phẩm đã được dịch sang tiếng Anh
+    """
+    try:
+        english_query = usda_api._translate_vi_to_en(vietnamese_query)
+        
+        return {
+            "vietnamese": vietnamese_query,
+            "english": english_query
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi khi dịch tên thực phẩm: {str(e)}")
+
+@app.post("/usda/clear-cache", tags=["USDA Food Database"])
+async def clear_usda_cache():
+    """
+    Xóa cache của USDA API.
+    
+    Returns:
+    - Thông báo kết quả
+    """
+    try:
+        usda_api.clear_cache()
+        return {"success": True, "message": "Đã xóa cache USDA API"}
+    except Exception as e:
+        return {"success": False, "error": f"Lỗi khi xóa cache USDA API: {str(e)}"}
+
+# Thêm endpoint /chat vào FastAPI
+@app.post("/chat", response_model=ChatResponse, tags=["Chat API"])
+async def chat(message: ChatMessage):
+    """
+    Endpoint nhận tin nhắn từ người dùng, xử lý qua Groq API và trả về phản hồi
+    
+    Parameters:
+    - message: Nội dung tin nhắn từ người dùng
+    
+    Returns:
+    - Phản hồi từ AI
+    """
+    try:
+        if not chat_client or not chat_available:
+            raise HTTPException(
+                status_code=503,
+                detail="Groq API không khả dụng. Vui lòng cấu hình GROQ_API_KEY trong biến môi trường."
+            )
+            
+        # Gọi Groq API với system prompt và user message
+        completion = chat_client.chat.completions.create(
+            model="llama3-8b-8192",
+            messages=[
+                {
+                    "role": "system", 
+                    "content": "Bạn là trợ lý ẩm thực thông minh, chuyên tư vấn món ăn theo nhu cầu người dùng"
+                },
+                {
+                    "role": "user", 
+                    "content": message.message
+                }
+            ],
+            temperature=0.7,
+        )
+        
+        # Trích xuất phản hồi từ AI
+        ai_reply = completion.choices[0].message.content
+        
+        # Trả về kết quả dạng JSON
+        return ChatResponse(reply=ai_reply)
+        
+    except Exception as e:
+        print(f"Lỗi khi xử lý chat: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Đã xảy ra lỗi: {str(e)}")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

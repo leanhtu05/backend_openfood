@@ -1,0 +1,151 @@
+import time
+from firebase_integration import firebase
+from groq_integration import groq_service
+from models import WeeklyMealPlan, NutritionTarget, DayMealPlan, Meal, Dish, NutritionInfo, Ingredient
+import services
+import random
+
+print("\n===== KIỂM TRA TÍCH HỢP GROQ VÀ FIREBASE =====")
+
+print("\n--- Kiểm tra Groq ---")
+print(f"Groq available: {groq_service.available}")
+print(f"Using model: {getattr(groq_service, 'model', 'unknown')}")
+print(f"Quota exceeded: {groq_service.quota_exceeded}")
+
+if not groq_service.available:
+    print("ERROR: Groq không khả dụng, vui lòng kiểm tra API key và cài đặt thư viện")
+
+print("\n--- Kiểm tra Firebase ---")
+print(f"Firebase initialized: {firebase.initialized}")
+
+if not firebase.initialized:
+    print("ERROR: Firebase không được khởi tạo, vui lòng kiểm tra credentials")
+
+# Kiểm tra kế hoạch thực đơn gần đây nhất
+user_id = "default"  # Thay đổi thành user_id bạn muốn kiểm tra
+
+print(f"\n--- Kiểm tra kế hoạch thực đơn cho user '{user_id}' ---")
+meal_plan = firebase.load_meal_plan(user_id)
+
+if meal_plan:
+    print(f"Đã tìm thấy kế hoạch thực đơn cho user '{user_id}'")
+    print(f"Số ngày trong kế hoạch: {len(meal_plan.days)}")
+    
+    # Kiểm tra chi tiết kế hoạch thực đơn
+    dish_count = 0
+    for day in meal_plan.days:
+        day_dishes = (
+            len(day.breakfast.dishes if day.breakfast else []) + 
+            len(day.lunch.dishes if day.lunch else []) + 
+            len(day.dinner.dishes if day.dinner else [])
+        )
+        dish_count += day_dishes
+        print(f"Ngày {day.day_of_week}: {day_dishes} món ăn")
+    
+    print(f"Tổng số món ăn: {dish_count}")
+    print("\nTrạng thái: ✅ Groq đã tạo thực đơn và lưu vào Firestore thành công")
+else:
+    print(f"Không tìm thấy kế hoạch thực đơn cho user '{user_id}'")
+    print("\nTrạng thái: ❌ Chưa có thực đơn nào được tạo và lưu vào Firestore")
+    
+    print("\n--- Tạo thử kế hoạch thực đơn mới ---")
+    try:
+        # Tạo kế hoạch thực đơn mẫu đầy đủ
+        print("Tạo kế hoạch thực đơn mẫu...")
+        
+        # Tạo một WeeklyMealPlan hoàn chỉnh
+        def create_demo_dish(name, calories=400, protein=20, fat=15, carbs=45):
+            return Dish(
+                name=name,
+                ingredients=[
+                    Ingredient(name=f"Nguyên liệu 1 cho {name}", amount="100g"),
+                    Ingredient(name=f"Nguyên liệu 2 cho {name}", amount="50g"),
+                ],
+                preparation=f"Cách chế biến món {name}",
+                nutrition=NutritionInfo(
+                    calories=calories,
+                    protein=protein,
+                    fat=fat,
+                    carbs=carbs
+                )
+            )
+        
+        def create_demo_meal(meal_type, num_dishes=2, calories=600, protein=30, fat=20, carbs=65):
+            dishes = []
+            calories_per_dish = calories / num_dishes
+            protein_per_dish = protein / num_dishes
+            fat_per_dish = fat / num_dishes
+            carbs_per_dish = carbs / num_dishes
+            
+            for i in range(num_dishes):
+                dishes.append(create_demo_dish(
+                    f"Món {i+1} {meal_type}",
+                    calories=calories_per_dish,
+                    protein=protein_per_dish,
+                    fat=fat_per_dish,
+                    carbs=carbs_per_dish
+                ))
+            
+            return Meal(
+                dishes=dishes,
+                nutrition=NutritionInfo(
+                    calories=calories,
+                    protein=protein,
+                    fat=fat,
+                    carbs=carbs
+                )
+            )
+        
+        # Create a few days of meal plans
+        days_of_week = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"]
+        days = []
+        
+        for day in days_of_week:
+            breakfast = create_demo_meal(f"bữa sáng {day}", num_dishes=1, calories=500, protein=25, fat=15, carbs=70)
+            lunch = create_demo_meal(f"bữa trưa {day}", num_dishes=2, calories=800, protein=40, fat=25, carbs=100)
+            dinner = create_demo_meal(f"bữa tối {day}", num_dishes=2, calories=700, protein=35, fat=25, carbs=80)
+            
+            day_nutrition = NutritionInfo(
+                calories=breakfast.nutrition.calories + lunch.nutrition.calories + dinner.nutrition.calories,
+                protein=breakfast.nutrition.protein + lunch.nutrition.protein + dinner.nutrition.protein,
+                fat=breakfast.nutrition.fat + lunch.nutrition.fat + dinner.nutrition.fat,
+                carbs=breakfast.nutrition.carbs + lunch.nutrition.carbs + dinner.nutrition.carbs
+            )
+            
+            days.append(DayMealPlan(
+                day_of_week=day,
+                breakfast=breakfast,
+                lunch=lunch,
+                dinner=dinner,
+                nutrition=day_nutrition
+            ))
+        
+        # Tạo weekly meal plan
+        meal_plan = WeeklyMealPlan(days=days)
+        
+        # Lưu kế hoạch thực đơn vào Firebase
+        print("Đang lưu kế hoạch thực đơn vào Firebase...")
+        plan_id = firebase.save_meal_plan(meal_plan, user_id)
+        
+        if plan_id:
+            print(f"Đã tạo và lưu kế hoạch thực đơn thành công với ID: {plan_id}")
+            
+            # Verify meal plan was saved
+            meal_plan_check = firebase.load_meal_plan(user_id)
+            if meal_plan_check:
+                print(f"Đã xác nhận kế hoạch thực đơn có thể được đọc lại từ Firestore")
+                print(f"Số ngày trong kế hoạch: {len(meal_plan_check.days)}")
+                print("\nTrạng thái: ✅ Đã tạo thực đơn mới và lưu vào Firestore thành công")
+            else:
+                print("Không thể đọc lại kế hoạch thực đơn từ Firestore")
+                print("\nTrạng thái: ❌ Lưu kế hoạch thực đơn thành công nhưng không đọc lại được")
+        else:
+            print("Không thể lưu kế hoạch thực đơn vào Firebase")
+            print("\nTrạng thái: ❌ Tạo thực đơn thành công nhưng không lưu được vào Firestore")
+    except Exception as e:
+        print(f"Lỗi khi tạo kế hoạch thực đơn: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        print("\nTrạng thái: ❌ Lỗi khi tạo thực đơn mới")
+
+print("\n===== KẾT THÚC KIỂM TRA =====") 

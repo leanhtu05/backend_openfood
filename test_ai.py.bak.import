@@ -1,0 +1,38 @@
+from groq_integration import groq_service
+
+print("Groq Service Available:", groq_service.available)
+print("Using model:", getattr(groq_service, "model", "unknown"))
+
+# Try to generate a meal suggestion
+if groq_service.available:
+    print("\nTesting meal suggestion generation...")
+    try:
+        meal_suggestions = groq_service.generate_meal_suggestions(
+            calories_target=500,
+            protein_target=30,
+            fat_target=20,
+            carbs_target=50,
+            meal_type="bữa sáng",
+            preferences=["trái cây", "sữa chua"],
+            allergies=["đậu phộng"],
+            use_ai=True
+        )
+        
+        print(f"\nReceived {len(meal_suggestions)} meal suggestions")
+        
+        # Print the first suggestion
+        if meal_suggestions:
+            first_meal = meal_suggestions[0]
+            print("\nFirst Meal Suggestion:")
+            print(f"Name: {first_meal.get('name', 'No name')}")
+            print(f"Description: {first_meal.get('description', 'No description')}")
+            print("\nIngredients:")
+            for ingredient in first_meal.get('ingredients', []):
+                print(f"- {ingredient.get('name', 'Unknown')}: {ingredient.get('amount', 'Unknown amount')}")
+            print(f"\nPreparation: {first_meal.get('preparation', 'No preparation instructions')}")
+    except Exception as e:
+        print(f"Error during AI meal suggestion: {str(e)}")
+        import traceback
+        traceback.print_exc()
+else:
+    print("Groq service is not available. Cannot test meal suggestion.") 

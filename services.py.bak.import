@@ -1,0 +1,545 @@
+from typing import List, Dict, Optional
+import random
+from models import (
+    NutritionTarget, ReplaceDayRequest, DayMealPlan, WeeklyMealPlan,
+    Dish, Meal, NutritionInfo, Ingredient
+)
+from utils import (
+    DAYS_OF_WEEK, SAMPLE_RECIPES, calculate_meal_nutrition,
+    calculate_day_nutrition, distribute_nutrition_targets,
+    adjust_dish_portions, generate_random_dishes, format_nutrition_value
+)
+from nutritionix import get_nutrition_fallback
+from nutritionix_optimized import nutritionix_optimized_api
+
+# Import Groq integration
+try:
+    from groq_integration import groq_service
+    AI_SERVICE = groq_service
+    AI_AVAILABLE = groq_service.available
+except ImportError:
+    # Không có dịch vụ AI
+    AI_SERVICE = None
+    AI_AVAILABLE = False
+    print("WARNING: Groq integration not available")
+
+# Sử dụng phiên bản API đã tối ưu
+nutritionix_api = nutritionix_optimized_api
+
+def generate_dish(recipe_dict: Dict) -> Dish:
+    """
+    Generate a Dish object from a recipe dictionary.
+    
+    Args:
+        recipe_dict: Dictionary with dish recipe information
+        
+    Returns:
+        Dish object with nutritional information
+    """
+    print(f"Generating dish: {recipe_dict.get('name', 'Unnamed')}")
+    
+    # Convert ingredient dictionaries to Ingredient objects
+    ingredients = []
+    if "ingredients" in recipe_dict and recipe_dict["ingredients"]:
+        ingredients = [
+            Ingredient(name=ing["name"], amount=ing["amount"])
+            for ing in recipe_dict["ingredients"]
+        ]
+        print(f"Found {len(ingredients)} ingredients")
+    else:
+        print(f"WARNING: No ingredients found for dish {recipe_dict.get('name', 'Unnamed')}")
+    
+    # Get nutrition information for the dish
+    try:
+        # Kiểm tra xem recipe_dict đã có thông tin dinh dưỡng chưa
+        if "nutrition" in recipe_dict and isinstance(recipe_dict["nutrition"], dict):
+            # Trường hợp response từ LLaMA đã có nutrition info
+            nutrition_data = recipe_dict["nutrition"]
+            print(f"Using nutrition data from recipe: {nutrition_data}")
+            dish_nutrition = NutritionInfo(
+                calories=nutrition_data.get("calories", 0),
+                protein=nutrition_data.get("protein", 0),
+                fat=nutrition_data.get("fat", 0),
+                carbs=nutrition_data.get("carbs", 0)
+            )
+        elif "total_nutrition" in recipe_dict and isinstance(recipe_dict["total_nutrition"], dict):
+            # Cấu trúc Groq LLaMA có thể trả về total_nutrition
+            nutrition_data = recipe_dict["total_nutrition"]
+            print(f"Using total_nutrition data from recipe: {nutrition_data}")
+            dish_nutrition = NutritionInfo(
+                calories=nutrition_data.get("calories", 0),
+                protein=nutrition_data.get("protein", 0),
+                fat=nutrition_data.get("fat", 0),
+                carbs=nutrition_data.get("carbs", 0)
+            )
+        else:
+            # Nếu không có sẵn thông tin dinh dưỡng và có ingredients
+            if ingredients:
+                print(f"Getting nutrition from Nutritionix API for {len(ingredients)} ingredients")
+                # Try to get nutrition from Nutritionix API
+                dish_nutrition = nutritionix_api.get_nutrition_for_ingredients(ingredients)
+            else:
+                print("No ingredients and no nutrition data. Using default values.")
+                dish_nutrition = NutritionInfo(
+                    calories=400, 
+                    protein=20, 
+                    fat=15, 
+                    carbs=45
+                )
+    except Exception as e:
+        # Log error details
+        print(f"Error getting nutrition data: {str(e)}")
+        # Fallback: Calculate nutrition from local data
+        dish_nutrition = NutritionInfo(calories=0, protein=0, fat=0, carbs=0)
+        for ingredient in ingredients:
+            try:
+                ing_nutrition = get_nutrition_fallback(ingredient.name, ingredient.amount)
+                dish_nutrition.calories += ing_nutrition.calories
+                dish_nutrition.protein += ing_nutrition.protein
+                dish_nutrition.fat += ing_nutrition.fat
+                dish_nutrition.carbs += ing_nutrition.carbs
+            except Exception as ing_error:
+                print(f"Error processing ingredient '{ingredient.name}': {str(ing_error)}")
+        
+        if dish_nutrition.calories == 0:
+            print("Fallback nutrition also failed. Using default values.")
+            dish_nutrition = NutritionInfo(
+                calories=400, 
+                protein=20, 
+                fat=15, 
+                carbs=45
+            )
+    
+    # Format nutrition values
+    dish_nutrition.calories = format_nutrition_value(dish_nutrition.calories)
+    dish_nutrition.protein = format_nutrition_value(dish_nutrition.protein)
+    dish_nutrition.fat = format_nutrition_value(dish_nutrition.fat)
+    dish_nutrition.carbs = format_nutrition_value(dish_nutrition.carbs)
+    
+    print(f"Final dish nutrition: cal={dish_nutrition.calories}, protein={dish_nutrition.protein}, fat={dish_nutrition.fat}, carbs={dish_nutrition.carbs}")
+    
+    # Create and return the Dish object
+    return Dish(
+        name=recipe_dict.get("name", "Món ăn không tên"),
+        ingredients=ingredients,
+        preparation=recipe_dict.get("preparation", "Không có hướng dẫn chi tiết."),
+        nutrition=dish_nutrition
+    )
+
+def generate_meal(
+    meal_type: str, 
+    target_calories: float, 
+    target_protein: float, 
+    target_fat: float, 
+    target_carbs: float,
+    preferences: List[str] = None,
+    allergies: List[str] = None,
+    cuisine_style: str = None,
+    use_ai: bool = True
+) -> Meal:
+    """
+    Generate a meal with dishes that meet nutritional targets.
+    
+    Args:
+        meal_type: Type of meal (breakfast, lunch, dinner)
+        target_calories: Target calories for the meal
+        target_protein: Target protein for the meal (g)
+        target_fat: Target fat for the meal (g)
+        target_carbs: Target carbs for the meal (g)
+        preferences: Danh sách sở thích thực phẩm (tùy chọn)
+        allergies: Danh sách dị ứng thực phẩm (tùy chọn)
+        cuisine_style: Phong cách ẩm thực (tùy chọn)
+        use_ai: Có sử dụng AI để tạo món ăn hay không
+        
+    Returns:
+        Meal object with dishes and nutritional information
+    """
+    print(f"==== GENERATING MEAL: {meal_type} ====")
+    print(f"Targets: cal={target_calories}, protein={target_protein}, fat={target_fat}, carbs={target_carbs}")
+    print(f"Using AI: {use_ai}")
+    
+    dishes = []
+    
+    # Quyết định phương pháp tạo món ăn (AI hoặc ngẫu nhiên)
+    if use_ai and AI_SERVICE and AI_AVAILABLE:
+        # Sử dụng LLaMA 3 qua Groq để tạo món ăn
+        try:
+            print(f"Attempting to generate dishes using AI ({AI_SERVICE.__class__.__name__}) for {meal_type}")
+            ai_dish_dicts = AI_SERVICE.generate_meal_suggestions(
+                calories_target=int(target_calories),
+                protein_target=int(target_protein),
+                fat_target=int(target_fat),
+                carbs_target=int(target_carbs),
+                meal_type=meal_type,
+                preferences=preferences,
+                allergies=allergies,
+                cuisine_style=cuisine_style,
+                use_ai=use_ai
+            )
+            
+            print(f"AI returned {len(ai_dish_dicts) if ai_dish_dicts else 0} dishes")
+            
+            if ai_dish_dicts:
+                # Chuyển đổi kết quả từ LLaMA thành Dish objects
+                dishes = [generate_dish(dish_dict) for dish_dict in ai_dish_dicts]
+                print(f"Successfully created {len(dishes)} dishes from AI for {meal_type}")
+                
+                # Validation check
+                if not dishes or all(len(dish.ingredients) == 0 for dish in dishes):
+                    print("WARNING: AI returned dishes without ingredients. Falling back to random generation.")
+                    dishes = []
+            else:
+                # Fallback nếu không có kết quả AI
+                print(f"No results from AI, using random method for {meal_type}")
+                dishes = []
+        except Exception as e:
+            # Xử lý lỗi khi gọi AI
+            print(f"Error when using AI to generate dishes: {str(e)}")
+            dishes = []
+    
+    # Nếu không sử dụng AI hoặc AI không thành công, dùng phương pháp ngẫu nhiên
+    if not dishes:
+        print(f"Using random dish generation for {meal_type}")
+        dish_count = random.randint(1, 2)  # 1-2 dishes per meal
+        selected_dish_dicts = generate_random_dishes(meal_type, dish_count)
+        
+        # Adjust portions to meet targets
+        adjusted_dish_dicts = adjust_dish_portions(
+            selected_dish_dicts, 
+            target_calories, 
+            target_protein, 
+            target_fat, 
+            target_carbs
+        )
+        
+        # Convert to Dish objects
+        dishes = [generate_dish(dish_dict) for dish_dict in adjusted_dish_dicts]
+        print(f"Generated {len(dishes)} random dishes for {meal_type}")
+    
+    # Final validation - if we still have no dishes, create a basic dish
+    if not dishes:
+        print(f"WARNING: Failed to generate any dishes for {meal_type}. Creating a basic dish.")
+        # Tạo món ăn mẫu dựa trên loại bữa
+        if "sáng" in meal_type.lower():
+            basic_dish = {
+                "name": "Bánh mì trứng",
+                "ingredients": [
+                    {"name": "bánh mì", "amount": "2 lát"},
+                    {"name": "trứng gà", "amount": "2 quả"},
+                    {"name": "gia vị", "amount": "vừa đủ"}
+                ],
+                "preparation": "Đập trứng vào chảo, chiên vàng. Ăn kèm với bánh mì.",
+                "nutrition": {
+                    "calories": target_calories,
+                    "protein": target_protein,
+                    "fat": target_fat,
+                    "carbs": target_carbs
+                }
+            }
+        elif "trưa" in meal_type.lower():
+            basic_dish = {
+                "name": "Cơm với thịt gà",
+                "ingredients": [
+                    {"name": "gạo", "amount": "150g"},
+                    {"name": "thịt gà", "amount": "150g"},
+                    {"name": "rau củ", "amount": "100g"}
+                ],
+                "preparation": "Nấu cơm chín. Thịt gà ướp gia vị, rán chín. Ăn kèm rau củ luộc.",
+                "nutrition": {
+                    "calories": target_calories,
+                    "protein": target_protein,
+                    "fat": target_fat,
+                    "carbs": target_carbs
+                }
+            }
+        else:  # Bữa tối
+            basic_dish = {
+                "name": "Canh rau củ với thịt bò",
+                "ingredients": [
+                    {"name": "thịt bò", "amount": "100g"},
+                    {"name": "rau củ tổng hợp", "amount": "200g"},
+                    {"name": "gia vị", "amount": "vừa đủ"}
+                ],
+                "preparation": "Thịt bò xào chín với gia vị. Rau củ nấu canh. Ăn kèm cơm trắng.",
+                "nutrition": {
+                    "calories": target_calories,
+                    "protein": target_protein,
+                    "fat": target_fat,
+                    "carbs": target_carbs
+                }
+            }
+        dishes = [generate_dish(basic_dish)]
+        print(f"Created fallback dish: {basic_dish['name']}")
+    
+    # Calculate meal nutrition
+    meal_nutrition = calculate_meal_nutrition(dishes)
+    print(f"Meal nutrition: cal={meal_nutrition.calories}, protein={meal_nutrition.protein}, fat={meal_nutrition.fat}, carbs={meal_nutrition.carbs}")
+    
+    # Create and return the Meal object
+    return Meal(dishes=dishes, nutrition=meal_nutrition)
+
+def generate_day_meal_plan(
+    day_of_week: str,
+    calories_target: int,
+    protein_target: int,
+    fat_target: int,
+    carbs_target: int,
+    preferences: List[str] = None,
+    allergies: List[str] = None,
+    cuisine_style: str = None,
+    use_ai: bool = True
+) -> DayMealPlan:
+    """
+    Generate a daily meal plan that meets nutritional targets.
+    
+    Args:
+        day_of_week: Day of the week
+        calories_target: Target calories for the day
+        protein_target: Target protein for the day (g)
+        fat_target: Target fat for the day (g)
+        carbs_target: Target carbs for the day (g)
+        preferences: Danh sách sở thích thực phẩm (tùy chọn)
+        allergies: Danh sách dị ứng thực phẩm (tùy chọn)
+        cuisine_style: Phong cách ẩm thực (tùy chọn)
+        use_ai: Có sử dụng AI để tạo món ăn hay không
+        
+    Returns:
+        DayMealPlan object with meals and nutritional information
+    """
+    print(f"==== GENERATING DAY MEAL PLAN FOR {day_of_week} ====")
+    print(f"Targets: cal={calories_target}, protein={protein_target}, fat={fat_target}, carbs={carbs_target}")
+    
+    # Distribute nutrition targets across meals
+    meal_targets = distribute_nutrition_targets(
+        calories_target, protein_target, fat_target, carbs_target
+    )
+    
+    # Generate each meal
+    breakfast = generate_meal(
+        "bữa sáng",
+        meal_targets["breakfast"]["calories"],
+        meal_targets["breakfast"]["protein"],
+        meal_targets["breakfast"]["fat"],
+        meal_targets["breakfast"]["carbs"],
+        preferences=preferences,
+        allergies=allergies,
+        cuisine_style=cuisine_style,
+        use_ai=use_ai
+    )
+    
+    lunch = generate_meal(
+        "bữa trưa",
+        meal_targets["lunch"]["calories"],
+        meal_targets["lunch"]["protein"],
+        meal_targets["lunch"]["fat"],
+        meal_targets["lunch"]["carbs"],
+        preferences=preferences,
+        allergies=allergies,
+        cuisine_style=cuisine_style,
+        use_ai=use_ai
+    )
+    
+    dinner = generate_meal(
+        "bữa tối",
+        meal_targets["dinner"]["calories"],
+        meal_targets["dinner"]["protein"],
+        meal_targets["dinner"]["fat"],
+        meal_targets["dinner"]["carbs"],
+        preferences=preferences,
+        allergies=allergies, 
+        cuisine_style=cuisine_style,
+        use_ai=use_ai
+    )
+    
+    # Final validation to ensure each meal has at least one dish
+    if not breakfast.dishes:
+        breakfast = create_fallback_meal("bữa sáng", meal_targets["breakfast"]["calories"], 
+                                        meal_targets["breakfast"]["protein"],
+                                        meal_targets["breakfast"]["fat"], 
+                                        meal_targets["breakfast"]["carbs"])
+    
+    if not lunch.dishes:
+        lunch = create_fallback_meal("bữa trưa", meal_targets["lunch"]["calories"], 
+                                    meal_targets["lunch"]["protein"], 
+                                    meal_targets["lunch"]["fat"], 
+                                    meal_targets["lunch"]["carbs"])
+    
+    if not dinner.dishes:
+        dinner = create_fallback_meal("bữa tối", meal_targets["dinner"]["calories"], 
+                                     meal_targets["dinner"]["protein"], 
+                                     meal_targets["dinner"]["fat"], 
+                                     meal_targets["dinner"]["carbs"])
+    
+    # Calculate daily nutrition
+    day_nutrition = calculate_day_nutrition(breakfast, lunch, dinner)
+    
+    # Create and return the DayMealPlan object
+    return DayMealPlan(
+        day_of_week=day_of_week,
+        breakfast=breakfast,
+        lunch=lunch,
+        dinner=dinner,
+        nutrition=day_nutrition
+    )
+
+def create_fallback_meal(meal_type: str, calories: float, protein: float, fat: float, carbs: float) -> Meal:
+    """Tạo một bữa ăn dự phòng khi không thể tạo bữa ăn thông thường"""
+    print(f"Creating fallback meal for {meal_type}")
+    
+    if "sáng" in meal_type.lower():
+        dish = Dish(
+            name="Bánh mì trứng",
+            ingredients=[
+                Ingredient(name="bánh mì", amount="2 lát"),
+                Ingredient(name="trứng gà", amount="2 quả"),
+                Ingredient(name="gia vị", amount="vừa đủ")
+            ],
+            preparation="Đập trứng vào chảo, chiên vàng. Ăn kèm với bánh mì.",
+            nutrition=NutritionInfo(calories=calories, protein=protein, fat=fat, carbs=carbs)
+        )
+    elif "trưa" in meal_type.lower():
+        dish = Dish(
+            name="Cơm với thịt gà",
+            ingredients=[
+                Ingredient(name="gạo", amount="150g"),
+                Ingredient(name="thịt gà", amount="150g"),
+                Ingredient(name="rau củ", amount="100g")
+            ],
+            preparation="Nấu cơm chín. Thịt gà ướp gia vị, rán chín. Ăn kèm rau củ luộc.",
+            nutrition=NutritionInfo(calories=calories, protein=protein, fat=fat, carbs=carbs)
+        )
+    else:
+        dish = Dish(
+            name="Canh rau củ với thịt bò",
+            ingredients=[
+                Ingredient(name="thịt bò", amount="100g"),
+                Ingredient(name="rau củ tổng hợp", amount="200g"),
+                Ingredient(name="gia vị", amount="vừa đủ")
+            ],
+            preparation="Thịt bò xào chín với gia vị. Rau củ nấu canh. Ăn kèm cơm trắng.",
+            nutrition=NutritionInfo(calories=calories, protein=protein, fat=fat, carbs=carbs)
+        )
+    
+    return Meal(
+        dishes=[dish],
+        nutrition=NutritionInfo(calories=calories, protein=protein, fat=fat, carbs=carbs)
+    )
+
+def generate_weekly_meal_plan(
+    calories_target: int,
+    protein_target: int,
+    fat_target: int,
+    carbs_target: int,
+    preferences: List[str] = None,
+    allergies: List[str] = None,
+    cuisine_style: str = None,
+    use_ai: bool = True
+) -> WeeklyMealPlan:
+    """
+    Generate a weekly meal plan that meets nutritional targets.
+    
+    Args:
+        calories_target: Target calories per day
+        protein_target: Target protein per day (g)
+        fat_target: Target fat per day (g)
+        carbs_target: Target carbs per day (g)
+        preferences: Danh sách sở thích thực phẩm (tùy chọn)
+        allergies: Danh sách dị ứng thực phẩm (tùy chọn)
+        cuisine_style: Phong cách ẩm thực (tùy chọn)
+        use_ai: Có sử dụng AI để tạo món ăn hay không
+        
+    Returns:
+        WeeklyMealPlan object with daily meal plans
+    """
+    print("======================= GENERATING WEEKLY MEAL PLAN =======================")
+    print(f"Targets: calories={calories_target}, protein={protein_target}, fat={fat_target}, carbs={carbs_target}")
+    print(f"Preferences: {preferences}")
+    print(f"Allergies: {allergies}")
+    print(f"Cuisine style: {cuisine_style}")
+    print(f"Using AI: {use_ai}")
+    
+    # Generate meal plan for each day of the week
+    days = []
+    for day in DAYS_OF_WEEK:
+        print(f"\n----- Generating plan for {day} -----")
+        day_plan = generate_day_meal_plan(
+            day, calories_target, protein_target, fat_target, carbs_target,
+            preferences=preferences, allergies=allergies, cuisine_style=cuisine_style, use_ai=use_ai
+        )
+        
+        # Verify this day has dishes
+        has_dishes = False
+        if (day_plan.breakfast and day_plan.breakfast.dishes and len(day_plan.breakfast.dishes) > 0 or
+            day_plan.lunch and day_plan.lunch.dishes and len(day_plan.lunch.dishes) > 0 or
+            day_plan.dinner and day_plan.dinner.dishes and len(day_plan.dinner.dishes) > 0):
+            has_dishes = True
+        
+        print(f"Day {day} has dishes: {has_dishes}")
+        print(f"Breakfast dishes: {len(day_plan.breakfast.dishes)}")
+        print(f"Lunch dishes: {len(day_plan.lunch.dishes)}")
+        print(f"Dinner dishes: {len(day_plan.dinner.dishes)}")
+        
+        days.append(day_plan)
+    
+    # Create and return the WeeklyMealPlan object
+    weekly_plan = WeeklyMealPlan(days=days)
+    
+    print("\n----- Weekly Plan Summary -----")
+    total_dishes = 0
+    for day in weekly_plan.days:
+        day_dishes = (
+            len(day.breakfast.dishes if day.breakfast else []) + 
+            len(day.lunch.dishes if day.lunch else []) + 
+            len(day.dinner.dishes if day.dinner else [])
+        )
+        total_dishes += day_dishes
+        print(f"Day {day.day_of_week}: {day_dishes} dishes")
+    
+    print(f"Total dishes across all days: {total_dishes}")
+    print("======================= WEEKLY MEAL PLAN GENERATED =======================")
+    
+    return weekly_plan
+
+def replace_day_meal_plan(
+    current_weekly_plan: Optional[WeeklyMealPlan],
+    replace_request: ReplaceDayRequest,
+    preferences: List[str] = None,
+    allergies: List[str] = None,
+    cuisine_style: str = None,
+    use_ai: bool = True
+) -> DayMealPlan:
+    """
+    Replace a specific day's meal plan in a weekly plan.
+    
+    Args:
+        current_weekly_plan: Current weekly meal plan (optional)
+        replace_request: Request with day and nutrition targets
+        preferences: Danh sách sở thích thực phẩm (tùy chọn)
+        allergies: Danh sách dị ứng thực phẩm (tùy chọn)
+        cuisine_style: Phong cách ẩm thực (tùy chọn)
+        use_ai: Có sử dụng AI để tạo món ăn hay không
+        
+    Returns:
+        DayMealPlan object with the new meal plan for the day
+    """
+    # Generate a new meal plan for the day
+    new_day_plan = generate_day_meal_plan(
+        replace_request.day_of_week,
+        replace_request.calories_target,
+        replace_request.protein_target,
+        replace_request.fat_target,
+        replace_request.carbs_target,
+        preferences=preferences,
+        allergies=allergies,
+        cuisine_style=cuisine_style,
+        use_ai=use_ai
+    )
+    
+    # If there's an existing weekly plan, update it
+    if current_weekly_plan:
+        for i, day in enumerate(current_weekly_plan.days):
+            if day.day_of_week == replace_request.day_of_week:
+                current_weekly_plan.days[i] = new_day_plan
+                break
+    
+    return new_day_plan

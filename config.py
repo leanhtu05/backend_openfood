@@ -10,8 +10,8 @@ class Config:
     
     # API keys
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY")
-    NUTRITIONIX_APP_ID: str = os.getenv("NUTRITIONIX_APP_ID", "f837778f")
-    NUTRITIONIX_API_KEY: str = os.getenv("NUTRITIONIX_API_KEY", "90d57371717961de0084daee6fe94f14")
+    NUTRITIONIX_APP_ID: str = os.getenv("NUTRITIONIX_APP_ID")
+    NUTRITIONIX_API_KEY: str = os.getenv("NUTRITIONIX_API_KEY")
     USDA_API_KEY: str = os.getenv("USDA_API_KEY")
     
     # Firebase

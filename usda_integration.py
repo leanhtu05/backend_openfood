@@ -11,7 +11,10 @@ from config import config
 # Từ điển ánh xạ từ tiếng Việt sang tiếng Anh cho các loại thực phẩm phổ biến
 VI_TO_EN_FOOD_DICT = {
     # Ngũ cốc
-    "gạo": "rice",
+    "gạo": "rice",        # Raw rice
+    "cơm": "rice",        # Cooked rice
+    "cơm trắng": "white rice",
+    "cơm gạo lứt": "brown rice",
     "bánh mì": "bread",
     "mì": "noodle",
     "bún": "rice noodle",
@@ -132,7 +135,8 @@ VI_TO_EN_FOOD_DICT = {
     "bánh xèo": "vietnamese pancake",
     "gỏi cuốn": "spring roll",
     "chả giò": "fried spring roll",
-    "cơm tấm": "broken rice"
+    "cơm tấm": "broken rice",
+    "cơm rang": "fried rice", # Fried rice - added for more specific translation than general extension rule
 }
 
 # Thêm các từ đồng nghĩa phổ biến

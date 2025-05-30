@@ -46,32 +46,79 @@ from openai import OpenAI
 import firebase_admin
 from firebase_admin import credentials, auth
 
-# Initialize Firebase Admin (nếu chưa được khởi tạo)
+# Initialize Firebase Admin SDK
+# Đảm bảo các import cần thiết đã có ở đầu file:
+# import firebase_admin
+# from firebase_admin import credentials
+# import os
+# import json
+# from config import config # Đảm bảo config được import
+
 try:
     firebase_app = firebase_admin.get_app()
-    print("Firebase Admin SDK đã được khởi tạo trước đó")
-except ValueError:
-    # Thử tìm service account file
-    service_account_paths = [
-        "firebase-credentials.json",
-        "firebase-service-account.json",
-        os.path.join(os.path.dirname(__file__), "firebase-credentials.json"),
-    ]
-    
+    print("Firebase Admin SDK đã được khởi tạo trước đó.")
+except ValueError:  # Nghĩa là chưa có app nào được khởi tạo
+    print("Đang khởi tạo Firebase Admin SDK...")
     cred = None
-    for path in service_account_paths:
-        if os.path.exists(path):
-            print(f"Tìm thấy file credentials tại: {path}")
-            cred = credentials.Certificate(path)
-            break
+    initialized_method = ""
+
+    # 1. Ưu tiên biến môi trường FIREBASE_SERVICE_ACCOUNT_JSON
+    firebase_service_account_json_str = os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON')
+    if firebase_service_account_json_str:
+        try:
+            service_account_info = json.loads(firebase_service_account_json_str)
+            cred = credentials.Certificate(service_account_info)
+            initialized_method = "FIREBASE_SERVICE_ACCOUNT_JSON environment variable"
+        except Exception as e:
+            print(f"Lỗi khi parse FIREBASE_SERVICE_ACCOUNT_JSON: {e}")
+
+    # 2. Nếu không có biến môi trường, thử tải từ FIREBASE_CREDENTIALS_PATH trong config
+    if cred is None and hasattr(config, 'FIREBASE_CREDENTIALS_PATH') and config.FIREBASE_CREDENTIALS_PATH and os.path.exists(config.FIREBASE_CREDENTIALS_PATH):
+        try:
+            cred = credentials.Certificate(config.FIREBASE_CREDENTIALS_PATH)
+            initialized_method = f"file: {config.FIREBASE_CREDENTIALS_PATH}"
+        except Exception as e:
+            print(f"Lỗi khi tải credentials từ {config.FIREBASE_CREDENTIALS_PATH}: {e}")
     
+    # 3. Nếu vẫn không có, thử các đường dẫn mặc định (giữ lại logic cũ của bạn một phần)
     if cred is None:
-        # Sử dụng application default credentials
-        print("Không tìm thấy file credentials, sử dụng application default credentials")
-        cred = credentials.ApplicationDefault()
-    
-    firebase_admin.initialize_app(cred)
-    print("Firebase Admin SDK đã được khởi tạo thành công")
+        default_paths = [
+            "firebase-credentials.json",
+            "firebase-service-account.json",
+            os.path.join(os.path.dirname(__file__), "firebase-credentials.json"),
+        ]
+        for path in default_paths:
+            if os.path.exists(path):
+                try:
+                    cred = credentials.Certificate(path)
+                    initialized_method = f"default file path: {path}"
+                    break
+                except Exception as e:
+                    print(f"Lỗi khi tải credentials từ {path}: {e}")
+
+    # 4. Cuối cùng, nếu không có file nào, thử Application Default Credentials
+    if cred is None:
+        try:
+            cred = credentials.ApplicationDefault()
+            initialized_method = "Application Default Credentials"
+        except Exception as e:
+            print(f"Không thể lấy Application Default Credentials: {e}")
+            # raise ValueError("Không thể khởi tạo Firebase: Không tìm thấy credentials hợp lệ.") # Bỏ comment nếu muốn dừng hẳn
+
+    if cred:
+        try:
+            firebase_admin.initialize_app(cred, {
+                'projectId': config.FIREBASE_PROJECT_ID, 
+                'storageBucket': config.FIREBASE_STORAGE_BUCKET
+            })
+            print(f"Firebase Admin SDK initialized successfully using {initialized_method}.")
+            print(f"Project ID: {firebase_admin.get_app().project_id}, Storage Bucket: {config.FIREBASE_STORAGE_BUCKET}")
+        except Exception as e:
+            print(f"Lỗi khi gọi firebase_admin.initialize_app: {e}")
+            # raise e # Bỏ comment nếu muốn dừng hẳn
+    else:
+        print("Không thể khởi tạo Firebase Admin SDK: Không tìm thấy credentials hợp lệ.")
+        # raise ValueError("Không thể khởi tạo Firebase: Không tìm thấy credentials hợp lệ.") # Bỏ comment nếu muốn dừng hẳn
 
 # Create FastAPI app
 app = FastAPI(

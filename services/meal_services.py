@@ -551,7 +551,8 @@ def generate_weekly_meal_plan(
     preferences: List[str] = None,
     allergies: List[str] = None,
     cuisine_style: str = None,
-    use_ai: bool = True
+    use_ai: bool = True,
+    use_tdee: bool = True  # Thêm tham số use_tdee
 ) -> WeeklyMealPlan:
     """
     Generate a weekly meal plan that meets nutritional targets.

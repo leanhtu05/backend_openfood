@@ -269,7 +269,12 @@ def generate_weekly_plan(
     calories: float = 2000, 
     protein: float = 120, 
     fat: float = 70, 
-    carbs: float = 250
+    carbs: float = 250,
+    preferences: List[str] = None,
+    allergies: List[str] = None,
+    cuisine_style: str = None,
+    use_ai: bool = True,
+    use_tdee: bool = True
 ) -> Dict:
     """Tạo kế hoạch cho cả tuần"""
     days = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ Nhật"]

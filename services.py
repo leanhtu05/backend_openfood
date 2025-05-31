@@ -905,20 +905,17 @@ def generate_meal_plan(
         # Tạo kế hoạch ăn uống
         print(f"Tạo kế hoạch ăn uống với mục tiêu: calories={calories_target}, protein={protein_target}, fat={fat_target}, carbs={carbs_target}")
         
-        # Tạo kế hoạch ăn uống (giả sử đây là phần code hiện tại của bạn)
-        meal_plan = create_meal_plan_with_ai(
+        # Tạo kế hoạch ăn uống sử dụng hàm generate_weekly_meal_plan đã được định nghĩa
+        meal_plan = generate_weekly_meal_plan(
             calories_target=calories_target,
             protein_target=protein_target,
             fat_target=fat_target,
             carbs_target=carbs_target,
             preferences=preferences,
             allergies=allergies,
-            cuisine_style=cuisine_style
-        ) if use_ai else create_meal_plan(
-            calories_target=calories_target,
-            protein_target=protein_target,
-            fat_target=fat_target,
-            carbs_target=carbs_target
+            cuisine_style=cuisine_style,
+            use_ai=use_ai,
+            use_tdee=use_tdee  # Truyền tham số use_tdee
         )
         
         # Thêm đoạn code mới: Đảm bảo đa dạng món ăn nếu được yêu cầu

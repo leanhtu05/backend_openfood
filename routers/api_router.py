@@ -223,8 +223,8 @@ async def generate_meal_plan_internal(
             preferences=[],  # Optional preferences
             allergies=[],    # Optional allergies
             cuisine_style=None,  # Optional cuisine style
-            use_ai=use_ai,
-            use_tdee=use_tdee  # Thêm tham số use_tdee
+            use_ai=use_ai
+            # Đã xóa tham số use_tdee để tránh lỗi
         )
         
         generation_time = time.time() - start_time

@@ -26,7 +26,7 @@ router = APIRouter(prefix="/api", tags=["API"])
 class ReplaceMealRequest(BaseModel):
     """Request model để thay thế một bữa ăn trong kế hoạch"""
     day_of_week: str = Field(..., description="Ngày trong tuần cần thay đổi (Thứ 2, Thứ 3, etc)")
-    meal_type: str = Field(..., description="Loại bữa ăn cần thay đổi (breakfast, lunch, dinner)")
+    meal_type: str = Field(..., description="Loại bữa ăn cần thay đổi (breakfast, lunch, dinner, snack)")
     calories_target: Optional[float] = Field(None, description="Mục tiêu calories cho bữa ăn (kcal)")
     protein_target: Optional[float] = Field(None, description="Mục tiêu protein cho bữa ăn (g)")
     fat_target: Optional[float] = Field(None, description="Mục tiêu chất béo cho bữa ăn (g)")
@@ -214,6 +214,21 @@ async def generate_meal_plan_internal(
         print(f"Generating meal plan for user: {user_id}")
         start_time = time.time()
         
+        # Get user profile data for personalization
+        user_data = None
+        try:
+            user_profile = firestore_service.get_user(user_id)
+            if user_profile:
+                user_data = {
+                    'gender': user_profile.get('gender', 'unknown'),
+                    'age': user_profile.get('age', 30),
+                    'goal': user_profile.get('goal', 'unknown'),
+                    'activity_level': user_profile.get('activity_level', 'unknown')
+                }
+                print(f"Using user profile data for personalization: {user_data}")
+        except Exception as e:
+            print(f"Error getting user profile for personalization: {str(e)}")
+        
         # Generate meal plan
         meal_plan = services.generate_weekly_meal_plan(
             calories_target=calories,
@@ -223,8 +238,9 @@ async def generate_meal_plan_internal(
             preferences=[],  # Optional preferences
             allergies=[],    # Optional allergies
             cuisine_style=None,  # Optional cuisine style
-            use_ai=use_ai
-            # Đã xóa tham số use_tdee để tránh lỗi
+            use_ai=use_ai,
+            use_tdee=use_tdee,
+            user_data=user_data
         )
         
         generation_time = time.time() - start_time
@@ -340,6 +356,21 @@ async def replace_day(
                 detail=f"Day '{replace_request.day_of_week}' not found in the current meal plan."
             )
         
+        # Get user profile data for personalization
+        user_data = None
+        try:
+            user_profile = firestore_service.get_user(user_id)
+            if user_profile:
+                user_data = {
+                    'gender': user_profile.get('gender', 'unknown'),
+                    'age': user_profile.get('age', 30),
+                    'goal': user_profile.get('goal', 'unknown'),
+                    'activity_level': user_profile.get('activity_level', 'unknown')
+                }
+                print(f"Using user profile data for personalization: {user_data}")
+        except Exception as e:
+            print(f"Error getting user profile for personalization: {str(e)}")
+        
         # Replace the day's meal plan
         new_day_plan = services.replace_day_meal_plan(
             meal_plan, 
@@ -347,7 +378,8 @@ async def replace_day(
             preferences=preferences,
             allergies=allergies,
             cuisine_style=cuisine_style,
-            use_ai=use_ai
+            use_ai=use_ai,
+            user_data=user_data
         )
         
         # Save the updated meal plan
@@ -441,13 +473,16 @@ async def replace_meal(
             "trưa": "lunch",
             "bữa tối": "dinner",
             "buổi tối": "dinner",
-            "tối": "dinner"
+            "tối": "dinner",
+            "bữa phụ": "snack",
+            "buổi phụ": "snack",
+            "phụ": "snack"
         }
         
         # Nếu meal_type là tiếng Việt, chuyển đổi sang tiếng Anh
         meal_type = meal_type_mapping.get(meal_type_raw, meal_type_raw)
         
-        if meal_type not in ["breakfast", "lunch", "dinner"]:
+        if meal_type not in ["breakfast", "lunch", "dinner", "snack"]:
             raise HTTPException(
                 status_code=400,
                 detail=f"Loại bữa ăn không hợp lệ: {meal_type_raw}"
@@ -517,7 +552,7 @@ async def replace_meal(
         except Exception as e:
             print(f"Lỗi khi phân bổ dinh dưỡng: {str(e)}")
             # Phân bổ thủ công nếu có lỗi
-            meal_ratios = {"breakfast": 0.25, "lunch": 0.40, "dinner": 0.35}
+            meal_ratios = {"breakfast": 0.25, "lunch": 0.40, "dinner": 0.35, "snack": 0.15}
             ratio = meal_ratios.get(meal_type, 0.33)
             meal_targets = {
                 "calories": int(daily_targets["calories"] * ratio),
@@ -526,10 +561,31 @@ async def replace_meal(
                 "carbs": int(daily_targets["carbs"] * ratio)
             }
             print(f"Phân bổ thủ công cho bữa {meal_type}: {meal_targets}")
-        
+            
+            # Điều chỉnh giảm mục tiêu cho bữa ăn phụ nếu tỉ lệ cao
+            if meal_type == "snack" and ratio > 0.15:
+                for key in meal_targets:
+                    meal_targets[key] = int(meal_targets[key] * 0.6)  # Giảm xuống còn 60% so với phân bổ ban đầu
+                print(f"Đã điều chỉnh giảm cho bữa phụ: {meal_targets}")
+                
         # Reset used_dishes_tracker để tránh trùng lặp món ăn
         from services.meal_tracker import reset_tracker
         reset_tracker()  # Reset toàn bộ tracker để đảm bảo tính đa dạng tối đa
+        
+        # Get user profile data for personalized meal generation
+        user_data = None
+        try:
+            user_profile = firestore_service.get_user(user_id)
+            if user_profile:
+                user_data = {
+                    'gender': user_profile.get('gender', 'unknown'),
+                    'age': user_profile.get('age', 30),
+                    'goal': user_profile.get('goal', 'unknown'),
+                    'activity_level': user_profile.get('activity_level', 'unknown')
+                }
+                print(f"Using user profile data for personalization: {user_data}")
+        except Exception as e:
+            print(f"Error getting user profile for personalization: {str(e)}")
         
         # Tạo bữa ăn mới
         # Ưu tiên sử dụng use_ai từ request thay vì từ query parameter
@@ -546,7 +602,8 @@ async def replace_meal(
             allergies=allergies,
             cuisine_style=cuisine_style,
             use_ai=use_ai_value,
-            day_of_week=day_of_week  # Thêm day_of_week để tăng tính đa dạng
+            day_of_week=day_of_week,  # Thêm day_of_week để tăng tính đa dạng
+            user_data=user_data  # Add user profile data for personalization
         )
         
         # Cập nhật bữa ăn trong kế hoạch
@@ -556,6 +613,15 @@ async def replace_meal(
             current_plan.days[day_index].lunch = new_meal
         elif meal_type == "dinner":
             current_plan.days[day_index].dinner = new_meal
+        elif meal_type == "snack":
+            # Check if snack field exists in the day plan
+            if not hasattr(current_plan.days[day_index], 'snack'):
+                # Add snack field to the day plan
+                # Using setattr to dynamically add a new attribute
+                setattr(current_plan.days[day_index], 'snack', new_meal)
+            else:
+                # Update existing snack field
+                current_plan.days[day_index].snack = new_meal
         
         # Lưu kế hoạch ăn cập nhật
         storage_manager.save_meal_plan(current_plan, user_id)

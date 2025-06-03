@@ -171,7 +171,8 @@ class GroqService:
         preferences: List[str] = None,
         allergies: List[str] = None,
         cuisine_style: str = None,
-        use_ai: bool = True  # Parameter to disable AI
+        use_ai: bool = True,  # Parameter to disable AI
+        user_data: Dict = None  # Add parameter for user data
     ) -> List[Dict]:
         """
         Generate meal suggestions using LLaMA 3 via Groq
@@ -186,6 +187,7 @@ class GroqService:
             allergies: List of food allergies (optional)
             cuisine_style: Cuisine style (optional)
             use_ai: Whether to use AI or use fallback data
+            user_data: Dictionary containing user demographic and goal info (optional)
             
         Returns:
             List of meal suggestions as dictionaries
@@ -222,6 +224,10 @@ class GroqService:
             cache_key += f"_allergies:{'|'.join(allergies)}"
         if cuisine_style:
             cache_key += f"_cuisine:{cuisine_style}"
+        if user_data:
+            # Add user data to cache key
+            user_data_str = "_".join([f"{k}:{v}" for k, v in user_data.items() if k in ['gender', 'age', 'goal', 'activity_level']])
+            cache_key += f"_user:{user_data_str}"
         
         # Check cache
         if cache_key in self.cache:
@@ -239,6 +245,20 @@ class GroqService:
         allergies_str = ", ".join(allergies) if allergies else "none"
         cuisine_style_str = cuisine_style if cuisine_style else "no specific requirement"
 
+        # Extract user data information
+        user_info = ""
+        if user_data:
+            gender = user_data.get('gender', 'unknown')
+            age = user_data.get('age', 'unknown')
+            goal = user_data.get('goal', 'unknown')
+            activity_level = user_data.get('activity_level', 'unknown')
+            
+            user_info = f"""
+- User gender: {gender}
+- User age: {age}
+- User goal: {goal}
+- User activity level: {activity_level}"""
+
         # Optimize prompt for LLaMA 3
         prompt = f"""You are a nutrition expert, please suggest 5 Vietnamese meals for {meal_type} with the following criteria:
 - Total calories: {calories_target}kcal
@@ -247,7 +267,7 @@ class GroqService:
 - Carbohydrate amount: {carbs_target}g
 - Preferences: {preferences_str}
 - Allergies (avoid): {allergies_str}
-- Cuisine style: {cuisine_style_str}
+- Cuisine style: {cuisine_style_str}{user_info}
 
 IMPORTANT REQUIREMENTS:
 1. Write ALL meal names and descriptions in Vietnamese language
@@ -255,6 +275,12 @@ IMPORTANT REQUIREMENTS:
 3. Write detailed preparation instructions in Vietnamese with step-by-step cooking guide
 4. Make sure to create DIFFERENT meals than usual. Be creative and diverse.
 5. DO NOT include day names in meal names (no "Thứ 2", "Thứ 3", etc.)
+6. Consider the user's specific goals and requirements:
+   - For weight loss goals: Focus on filling, high-fiber, protein-rich, lower calorie options
+   - For muscle gain goals: Focus on protein-rich, nutrient-dense meals
+   - For general health: Focus on balanced, nutritious meals with variety
+   - Adjust spice levels and complexity based on user age
+   - Consider activity level for portion sizes and recovery nutrients
 
 Please return the result exactly in the following JSON format:
 ```json
@@ -266,6 +292,7 @@ Please return the result exactly in the following JSON format:
       {{"name": "Ingredient name", "amount": "Amount", "calories": 100, "protein": 10, "fat": 5, "carbs": 15}},
       ...
     ],
+    "instructions": ["Step 1...", "Step 2...", "Step 3..."],
     "total_nutrition": {{"calories": 400, "protein": 20, "fat": 15, "carbs": 45}}
   }},
   ...

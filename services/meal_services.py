@@ -143,7 +143,8 @@ def generate_meal(
     allergies: List[str] = None,
     cuisine_style: str = None,
     use_ai: bool = True,
-    day_of_week: str = None
+    day_of_week: str = None,
+    user_data: Dict = None  # Add user_data parameter
 ) -> Meal:
     """
     Generate a meal with dishes that meet nutritional targets.
@@ -159,6 +160,7 @@ def generate_meal(
         cuisine_style: Phong cách ẩm thực (tùy chọn)
         use_ai: Có sử dụng AI để tạo món ăn hay không
         day_of_week: Ngày trong tuần (để tránh trùng lặp món ăn)
+        user_data: Dictionary containing user demographic and goal info (optional)
         
     Returns:
         Meal object with dishes and nutritional information
@@ -166,6 +168,8 @@ def generate_meal(
     print(f"==== GENERATING MEAL: {meal_type} for {day_of_week or 'unknown day'} ====")
     print(f"Targets: cal={target_calories}, protein={target_protein}, fat={target_fat}, carbs={target_carbs}")
     print(f"Using AI: {use_ai}")
+    if user_data:
+        print(f"User data: gender={user_data.get('gender')}, age={user_data.get('age')}, goal={user_data.get('goal')}")
     
     dishes = []
     
@@ -228,8 +232,7 @@ def generate_meal(
                 allergies=allergies,
                 cuisine_style=cuisine_style,
                 use_ai=use_ai,
-                day_of_week=day_of_week,  # Thêm ngày vào để đa dạng hóa kết quả
-                random_seed=random_seed   # Thêm seed ngẫu nhiên dựa trên thời gian
+                user_data=user_data  # Add user data for personalization
             )
             
             print(f"AI returned {len(ai_dish_dicts) if ai_dish_dicts else 0} dishes")
@@ -401,10 +404,11 @@ def generate_day_meal_plan(
     preferences: List[str] = None,
     allergies: List[str] = None,
     cuisine_style: str = None,
-    use_ai: bool = True
+    use_ai: bool = True,
+    user_data: Dict = None  # Add user_data parameter
 ) -> DayMealPlan:
     """
-    Generate a daily meal plan that meets nutritional targets.
+    Generate a day meal plan with breakfast, lunch, and dinner.
     
     Args:
         day_of_week: Day of the week
@@ -412,13 +416,14 @@ def generate_day_meal_plan(
         protein_target: Target protein for the day (g)
         fat_target: Target fat for the day (g)
         carbs_target: Target carbs for the day (g)
-        preferences: Danh sách sở thích thực phẩm (tùy chọn)
-        allergies: Danh sách dị ứng thực phẩm (tùy chọn)
-        cuisine_style: Phong cách ẩm thực (tùy chọn)
-        use_ai: Có sử dụng AI để tạo món ăn hay không
+        preferences: Food preferences (optional)
+        allergies: Food allergies to avoid (optional)
+        cuisine_style: Preferred cuisine style (optional)
+        use_ai: Whether to use AI for generation
+        user_data: Dictionary containing user demographic and goal info (optional)
         
     Returns:
-        DayMealPlan object with meals and nutritional information
+        DayMealPlan object with meals for the day
     """
     print(f"==== GENERATING DAY MEAL PLAN FOR {day_of_week} ====")
     print(f"Targets: cal={calories_target}, protein={protein_target}, fat={fat_target}, carbs={carbs_target}")
@@ -440,7 +445,8 @@ def generate_day_meal_plan(
         allergies=allergies,
         cuisine_style=cuisine_style,
         use_ai=use_ai,
-        day_of_week=day_of_week
+        day_of_week=day_of_week,
+        user_data=user_data
     )
     
     lunch = generate_meal(
@@ -453,7 +459,8 @@ def generate_day_meal_plan(
         allergies=allergies,
         cuisine_style=cuisine_style,
         use_ai=use_ai,
-        day_of_week=day_of_week
+        day_of_week=day_of_week,
+        user_data=user_data
     )
     
     dinner = generate_meal(
@@ -466,7 +473,8 @@ def generate_day_meal_plan(
         allergies=allergies, 
         cuisine_style=cuisine_style,
         use_ai=use_ai,
-        day_of_week=day_of_week
+        day_of_week=day_of_week,
+        user_data=user_data
     )
     
     # Final validation to ensure each meal has at least one dish
@@ -552,20 +560,23 @@ def generate_weekly_meal_plan(
     allergies: List[str] = None,
     cuisine_style: str = None,
     use_ai: bool = True,
-    use_tdee: bool = True  # Thêm tham số use_tdee
+    use_tdee: bool = True,  # Thêm tham số use_tdee
+    user_data: Dict = None  # Add user_data parameter
 ) -> WeeklyMealPlan:
     """
-    Generate a weekly meal plan that meets nutritional targets.
+    Generate a weekly meal plan with daily meals that meet nutritional targets.
     
     Args:
         calories_target: Target calories per day
         protein_target: Target protein per day (g)
         fat_target: Target fat per day (g)
         carbs_target: Target carbs per day (g)
-        preferences: Danh sách sở thích thực phẩm (tùy chọn)
-        allergies: Danh sách dị ứng thực phẩm (tùy chọn)
-        cuisine_style: Phong cách ẩm thực (tùy chọn)
-        use_ai: Có sử dụng AI để tạo món ăn hay không
+        preferences: Food preferences (optional)
+        allergies: Food allergies to avoid (optional)
+        cuisine_style: Preferred cuisine style (optional)
+        use_ai: Whether to use AI for generation
+        use_tdee: Whether to use TDEE for calorie adjustment
+        user_data: Dictionary containing user demographic and goal info (optional)
         
     Returns:
         WeeklyMealPlan object with daily meal plans
@@ -602,7 +613,8 @@ def generate_weekly_meal_plan(
         
         day_plan = generate_day_meal_plan(
             day, day_calories, day_protein, day_fat, day_carbs,
-            preferences=preferences, allergies=allergies, cuisine_style=cuisine_style, use_ai=use_ai
+            preferences=preferences, allergies=allergies, cuisine_style=cuisine_style, use_ai=use_ai,
+            user_data=user_data
         )
         
         # Reset random seed
@@ -635,7 +647,8 @@ def generate_weekly_meal_plan(
             # Tạo lại kế hoạch ngày với mục tiêu chính xác
             day_plan = generate_day_meal_plan(
                 day, calories_target, protein_target, fat_target, carbs_target,
-                preferences=preferences, allergies=allergies, cuisine_style=cuisine_style, use_ai=use_ai
+                preferences=preferences, allergies=allergies, cuisine_style=cuisine_style, use_ai=use_ai,
+                user_data=user_data
             )
             
             print(f"Regenerated day {day} calories: {day_plan.nutrition.calories:.1f}")
@@ -683,21 +696,23 @@ def replace_day_meal_plan(
     preferences: List[str] = None,
     allergies: List[str] = None,
     cuisine_style: str = None,
-    use_ai: bool = True
+    use_ai: bool = True,
+    user_data: Dict = None  # Add user_data parameter
 ) -> DayMealPlan:
     """
-    Replace a specific day's meal plan in a weekly plan.
+    Replace a specific day in the meal plan with a new day plan.
     
     Args:
-        current_weekly_plan: Current weekly meal plan (optional)
+        current_weekly_plan: Current weekly meal plan
         replace_request: Request with day and nutrition targets
-        preferences: Danh sách sở thích thực phẩm (tùy chọn)
-        allergies: Danh sách dị ứng thực phẩm (tùy chọn)
-        cuisine_style: Phong cách ẩm thực (tùy chọn)
-        use_ai: Có sử dụng AI để tạo món ăn hay không
+        preferences: Food preferences (optional)
+        allergies: Food allergies to avoid (optional)
+        cuisine_style: Preferred cuisine style (optional)
+        use_ai: Whether to use AI for generation
+        user_data: Dictionary containing user demographic and goal info (optional)
         
     Returns:
-        DayMealPlan object with the new meal plan for the day
+        New DayMealPlan for the specified day
     """
     # Clear the used dishes for this specific day to ensure new variety
     reset_tracker()
@@ -712,7 +727,8 @@ def replace_day_meal_plan(
         preferences=preferences,
         allergies=allergies,
         cuisine_style=cuisine_style,
-        use_ai=use_ai
+        use_ai=use_ai,
+        user_data=user_data
     )
     
     # If there's an existing weekly plan, update it

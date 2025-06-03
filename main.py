@@ -183,9 +183,11 @@ except:
 # Chat API models
 class ChatMessage(BaseModel):
     message: str
+    user_id: str = "anonymous"
 
 class ChatResponse(BaseModel):
     reply: str
+    chat_id: str = ""
 
 # Thêm các router vào ứng dụng
 app.include_router(firestore_router)
@@ -691,7 +693,7 @@ async def chat(message: ChatMessage):
             messages=[
                 {
                     "role": "system", 
-                    "content": "Bạn là trợ lý ẩm thực thông minh, chuyên tư vấn món ăn theo nhu cầu người dùng"
+                    "content": "Bạn là trợ lý ẩm thực thông minh, chuyên tư vấn món ăn theo nhu cầu người dùng. Hãy trả lời bằng tiếng Việt."
                 },
                 {
                     "role": "user", 
@@ -704,12 +706,78 @@ async def chat(message: ChatMessage):
         # Trích xuất phản hồi từ AI
         ai_reply = completion.choices[0].message.content
         
-        # Trả về kết quả dạng JSON
-        return ChatResponse(reply=ai_reply)
+        # Lưu tin nhắn vào Firebase
+        try:
+            from firebase_admin import firestore
+            db = firestore.client()
+            
+            # Tạo dữ liệu chat
+            chat_data = {
+                "user_id": message.user_id if hasattr(message, 'user_id') else "anonymous",
+                "user_message": message.message,
+                "ai_reply": ai_reply,
+                "timestamp": datetime.now().isoformat(),
+                "model": "llama3-8b-8192"
+            }
+            
+            # Tạo ID cho chat
+            import uuid
+            chat_id = str(uuid.uuid4())
+            
+            # Lưu vào Firestore
+            db.collection("chat_history").document(chat_id).set(chat_data)
+            print(f"Đã lưu chat với ID: {chat_id}")
+            
+            # Trả về kết quả dạng JSON với chat_id
+            return {"reply": ai_reply, "chat_id": chat_id}
+            
+        except Exception as firebase_error:
+            print(f"Lỗi khi lưu chat vào Firebase: {str(firebase_error)}")
+            # Vẫn trả về phản hồi ngay cả khi lưu vào Firebase thất bại
+            return ChatResponse(reply=ai_reply)
         
     except Exception as e:
         print(f"Lỗi khi xử lý chat: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Đã xảy ra lỗi: {str(e)}")
+
+# Thêm endpoint lấy lịch sử chat
+@app.get("/chat/history", tags=["Chat API"])
+async def get_chat_history(
+    user_id: str = Query(..., description="ID của người dùng"),
+    limit: int = Query(10, description="Số lượng tin nhắn tối đa trả về")
+):
+    """
+    Lấy lịch sử chat của một người dùng
+    
+    Parameters:
+    - user_id: ID của người dùng
+    - limit: Số lượng tin nhắn tối đa trả về
+    
+    Returns:
+    - Danh sách các cuộc hội thoại
+    """
+    try:
+        from firebase_admin import firestore
+        db = firestore.client()
+        
+        # Truy vấn Firestore
+        chats = (db.collection("chat_history")
+                .where("user_id", "==", user_id)
+                .limit(limit)
+                .get())
+        
+        # Chuyển đổi kết quả thành danh sách
+        chat_list = []
+        for chat in chats:
+            chat_data = chat.to_dict()
+            chat_data["id"] = chat.id
+            chat_list.append(chat_data)
+        
+        return {"history": chat_list, "count": len(chat_list)}
+        
+    except Exception as e:
+        print(f"Lỗi khi lấy lịch sử chat: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Đã xảy ra lỗi khi lấy lịch sử chat: {str(e)}")
 
 # Endpoint /meal-plan/{user_id} đã được xử lý trong api_router
 

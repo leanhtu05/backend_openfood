@@ -282,6 +282,10 @@ IMPORTANT REQUIREMENTS:
    - Adjust spice levels and complexity based on user age
    - Consider activity level for portion sizes and recovery nutrients
 
+7. CRITICAL: Format preparation instructions as an ARRAY of separate steps. Do NOT return preparation as a single string.
+   CORRECT FORMAT: "instructions": ["Step 1: Wash vegetables", "Step 2: Cook rice", "Step 3: Mix ingredients"]
+   INCORRECT FORMAT: "instructions": "Step 1: Wash vegetables. Step 2: Cook rice. Step 3: Mix ingredients"
+
 Please return the result exactly in the following JSON format:
 ```json
 [
@@ -292,7 +296,7 @@ Please return the result exactly in the following JSON format:
       {{"name": "Ingredient name", "amount": "Amount", "calories": 100, "protein": 10, "fat": 5, "carbs": 15}},
       ...
     ],
-    "instructions": ["Step 1...", "Step 2...", "Step 3..."],
+    "instructions": ["Step 1: Do this first", "Step 2: Then do this", "Step 3: Finally do this"],
     "total_nutrition": {{"calories": 400, "protein": 20, "fat": 15, "carbs": 45}}
   }},
   ...

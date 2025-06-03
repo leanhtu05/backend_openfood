@@ -831,6 +831,85 @@ def replace_meal(request: Dict) -> Dict:
         "new_meal": new_meal
     }
 
+def _process_preparation_steps(preparation):
+    """
+    Phân tích chuỗi hướng dẫn nấu ăn thành danh sách các bước riêng biệt
+    
+    Args:
+        preparation: Chuỗi hướng dẫn nấu ăn hoặc danh sách các bước
+        
+    Returns:
+        List[str]: Danh sách các bước hướng dẫn
+    """
+    # Nếu đã là danh sách, trả về nguyên dạng
+    if isinstance(preparation, list):
+        return preparation
+    
+    # Nếu là chuỗi, cần tách thành các bước
+    if isinstance(preparation, str):
+        # Tìm các bước với regex
+        import re
+        
+        # Tìm các mẫu như "Bước 1:", "Bước 2:", "Step 1:", "Step 2:"
+        step_pattern = re.compile(r'(Bước \d+[:.]\s*|Step \d+[:.]\s*)')
+        
+        # Tìm tất cả các vị trí xuất hiện của các mẫu
+        matches = list(step_pattern.finditer(preparation))
+        
+        # Nếu tìm thấy ít nhất 1 bước
+        if matches:
+            steps = []
+            # Tách chuỗi theo các vị trí bắt đầu của các bước
+            for i in range(len(matches)):
+                start_pos = matches[i].start()
+                # Nếu là bước cuối cùng, lấy đến hết chuỗi
+                if i == len(matches) - 1:
+                    step_text = preparation[start_pos:].strip()
+                # Nếu không phải bước cuối, lấy đến đầu bước tiếp theo
+                else:
+                    end_pos = matches[i+1].start()
+                    step_text = preparation[start_pos:end_pos].strip()
+                
+                steps.append(step_text)
+            return steps
+        
+        # Nếu không tìm thấy mẫu, tách theo dấu xuống dòng hoặc dấu chấm
+        steps = re.split(r'[\n\r]+|(?<=\.)\s+(?=[A-Z1-9])', preparation)
+        steps = [step.strip() for step in steps if step.strip()]
+        
+        # Nếu vẫn không tách được, trả về chuỗi gốc trong một danh sách
+        if not steps:
+            return [preparation]
+        return steps
+    
+    # Trường hợp khác, trả về danh sách rỗng
+    return []
+
+def _process_meal_data(meal_data):
+    """
+    Xử lý dữ liệu bữa ăn trước khi lưu vào cơ sở dữ liệu
+    
+    Args:
+        meal_data: Dữ liệu bữa ăn
+    
+    Returns:
+        Dict: Dữ liệu bữa ăn đã được xử lý
+    """
+    if not isinstance(meal_data, dict):
+        return meal_data
+    
+    # Xử lý hướng dẫn nấu ăn thành danh sách các bước
+    if 'preparation' in meal_data and meal_data['preparation']:
+        meal_data['preparation'] = _process_preparation_steps(meal_data['preparation'])
+    
+    # Tương tự với instructions nếu có
+    if 'instructions' in meal_data and meal_data['instructions']:
+        meal_data['instructions'] = _process_preparation_steps(meal_data['instructions'])
+    
+    # Xử lý các trường khác nếu cần
+    
+    return meal_data
+
 def generate_meal_plan(
     user_id: str,
     calories_target: float = 1500.0,  # Giảm mặc định xuống 1500 kcal
@@ -933,8 +1012,13 @@ def generate_meal_plan(
             new_diversity_rate = MealDiversityService.check_meal_diversity(meal_plan)
             print(f"📊 Tỷ lệ trùng lặp sau khi đa dạng hóa: {new_diversity_rate:.2f}")
         
-        # Lưu kế hoạch ăn uống vào Firestore
-        # ... existing code ...
+        # Trước khi trả về kết quả hoặc lưu vào DB, xử lý dữ liệu bữa ăn
+        if 'days' in meal_plan:
+            for day in meal_plan['days']:
+                for meal_type in ['breakfast', 'lunch', 'dinner']:
+                    if meal_type in day and 'dishes' in day[meal_type]:
+                        for i, dish in enumerate(day[meal_type]['dishes']):
+                            day[meal_type]['dishes'][i] = _process_meal_data(dish)
         
         return meal_plan
     except Exception as e:

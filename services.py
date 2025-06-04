@@ -61,6 +61,10 @@ def generate_dish(recipe_dict: Dict) -> Dish:
     else:
         print(f"WARNING: No ingredients found for dish {recipe_dict.get('name', 'Unnamed')}")
     
+    # Process preparation steps
+    preparation_raw = recipe_dict.get("preparation", "Không có hướng dẫn chi tiết.")
+    preparation_steps = _process_preparation_steps(preparation_raw)
+    
     # Get nutrition information for the dish
     try:
         # Kiểm tra xem recipe_dict đã có thông tin dinh dưỡng chưa
@@ -134,7 +138,7 @@ def generate_dish(recipe_dict: Dict) -> Dish:
     return Dish(
         name=recipe_dict.get("name", "Món ăn không tên"),
         ingredients=ingredients,
-        preparation=recipe_dict.get("preparation", "Không có hướng dẫn chi tiết."),
+        preparation=preparation_steps,
         nutrition=dish_nutrition
     )
 

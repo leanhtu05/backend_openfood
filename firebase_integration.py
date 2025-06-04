@@ -208,22 +208,27 @@ class FirebaseIntegration:
             meal_plan_dict['user_id'] = user_id
             meal_plan_dict['timestamp'] = timestamp
             
+            # Kiểm tra và đảm bảo trường preparation trong mỗi dish không bị mất
+            for day in meal_plan_dict.get('days', []):
+                for meal_type in ['breakfast', 'lunch', 'dinner']:
+                    meal = day.get(meal_type, {})
+                    for dish in meal.get('dishes', []):
+                        if 'preparation' in dish:
+                            # Đảm bảo preparation là một danh sách
+                            from services import _process_preparation_steps
+                            if not isinstance(dish['preparation'], list):
+                                print(f"[FIREBASE] Processing preparation for dish {dish.get('name')} to list format")
+                                dish['preparation'] = _process_preparation_steps(dish['preparation'])
+                            print(f"[FIREBASE] Dish {dish.get('name')} has preparation instructions: {dish['preparation'][:2] if isinstance(dish['preparation'], list) else dish['preparation'][:30]}...")
+                        else:
+                            print(f"[FIREBASE] WARNING: Dish {dish.get('name')} missing preparation instructions!")
+            
             # Lưu vào Firestore
             try:
                 print("[FIREBASE] Saving to Firestore meal_plans collection...")
                 meal_plans_ref = self.db.collection('meal_plans')
                 doc_ref = meal_plans_ref.document()
                 
-                # Kiểm tra và đảm bảo trường preparation trong mỗi dish không bị mất
-                for day in meal_plan_dict.get('days', []):
-                    for meal_type in ['breakfast', 'lunch', 'dinner']:
-                        meal = day.get(meal_type, {})
-                        for dish in meal.get('dishes', []):
-                            if 'preparation' in dish:
-                                print(f"[FIREBASE] Dish {dish.get('name')} has preparation instructions: {dish['preparation'][:30]}...")
-                            else:
-                                print(f"[FIREBASE] WARNING: Dish {dish.get('name')} missing preparation instructions!")
-                                
                 doc_ref.set(meal_plan_dict)
                 doc_id = doc_ref.id
                 print(f"[FIREBASE] Successfully saved to meal_plans with ID: {doc_id}")
@@ -275,6 +280,18 @@ class FirebaseIntegration:
             if not data or 'days' not in data or not data['days']:
                 print(f"Invalid meal plan data for user {user_id}")
                 return None
+            
+            # Đảm bảo trường preparation trong mỗi dish đều là List[str]
+            from services import _process_preparation_steps
+            for day in data.get('days', []):
+                for meal_type in ['breakfast', 'lunch', 'dinner']:
+                    meal = day.get(meal_type, {})
+                    for dish in meal.get('dishes', []):
+                        if 'preparation' in dish:
+                            # Chuyển đổi preparation thành list nếu là string
+                            if not isinstance(dish['preparation'], list):
+                                dish['preparation'] = _process_preparation_steps(dish['preparation'])
+                                print(f"Converted preparation for dish {dish.get('name')} from string to list")
             
             try:
                 # Convert dictionary to WeeklyMealPlan object
@@ -347,7 +364,21 @@ class FirebaseIntegration:
         try:
             doc = self.db.collection('meal_plans').document(plan_id).get()
             if doc.exists:
-                return doc.to_dict()
+                data = doc.to_dict()
+                
+                # Đảm bảo trường preparation trong mỗi dish đều là List[str]
+                from services import _process_preparation_steps
+                for day in data.get('days', []):
+                    for meal_type in ['breakfast', 'lunch', 'dinner']:
+                        meal = day.get(meal_type, {})
+                        for dish in meal.get('dishes', []):
+                            if 'preparation' in dish:
+                                # Chuyển đổi preparation thành list nếu là string
+                                if not isinstance(dish['preparation'], list):
+                                    dish['preparation'] = _process_preparation_steps(dish['preparation'])
+                                    print(f"Converted preparation for dish {dish.get('name')} from string to list")
+                
+                return data
             else:
                 print(f"Meal plan {plan_id} not found")
                 return None

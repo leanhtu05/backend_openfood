@@ -249,7 +249,8 @@ class GroqService:
         cuisine_style: str = None,
         use_ai: bool = True,  # Parameter to disable AI
         day_of_week: str = None,  # Thêm ngày để tăng tính đa dạng
-        random_seed: int = None  # Thêm random seed để tăng tính đa dạng
+        random_seed: int = None,  # Thêm random seed để tăng tính đa dạng
+        user_data: Dict = None  # Add parameter for user data
     ) -> List[Dict]:
         """
         Generate meal suggestions based on nutritional targets and preferences
@@ -266,6 +267,7 @@ class GroqService:
             use_ai: Whether to use AI for generation
             day_of_week: Day of the week (optional, for diversity)
             random_seed: Random seed (optional, for diversity)
+            user_data: Dictionary containing user demographic and goal info (optional)
             
         Returns:
             List of meal suggestion dictionaries
@@ -305,6 +307,10 @@ class GroqService:
             cache_key += f"_day={day_of_week}"
         if random_seed:
             cache_key += f"_seed={random_seed}"
+        if user_data:
+            # Add user data to cache key
+            user_data_str = "_".join([f"{k}:{v}" for k, v in user_data.items() if k in ['gender', 'age', 'goal', 'activity_level']])
+            cache_key += f"_user:{user_data_str}"
         
         # Thêm thời gian hiện tại vào cache key để đảm bảo luôn có kết quả mới
         current_time = int(time.time() / 300)  # Thay đổi mỗi 5 phút
@@ -318,7 +324,7 @@ class GroqService:
         # Chuẩn bị prompt
         prompt = self._prepare_meal_prompt(
             calories_target, protein_target, fat_target, carbs_target,
-            meal_type, preferences, allergies, cuisine_style, day_of_week, random_seed
+            meal_type, preferences, allergies, cuisine_style, day_of_week, random_seed, user_data
         )
         
         # Tăng số lần thử lại lên 5 để đảm bảo có kết quả
@@ -559,7 +565,8 @@ class GroqService:
         allergies: List[str] = None,
         cuisine_style: str = None,
         day_of_week: str = None,
-        random_seed: int = None
+        random_seed: int = None,
+        user_data: Dict = None
     ) -> str:
         """
         Chuẩn bị prompt cho AI để tạo gợi ý món ăn
@@ -575,6 +582,7 @@ class GroqService:
             cuisine_style: Phong cách ẩm thực (tùy chọn)
             day_of_week: Ngày trong tuần (tùy chọn)
             random_seed: Seed ngẫu nhiên (tùy chọn)
+            user_data: Dictionary containing user demographic and goal info (optional)
             
         Returns:
             str: Prompt cho AI
@@ -590,6 +598,20 @@ class GroqService:
             diversity_str = f"\n- Random seed: {random_seed}"
         if day_of_week:
             diversity_str += f"\n- Day of week: {day_of_week}"
+            
+        # Extract user data information
+        user_info = ""
+        if user_data:
+            gender = user_data.get('gender', 'unknown')
+            age = user_data.get('age', 'unknown')
+            goal = user_data.get('goal', 'unknown')
+            activity_level = user_data.get('activity_level', 'unknown')
+            
+            user_info = f"""
+- User gender: {gender}
+- User age: {age}
+- User goal: {goal}
+- User activity level: {activity_level}"""
         
         # Tối ưu hóa prompt cho LLaMA 3
         prompt = f"""You are a nutrition expert, please suggest 3-4 Vietnamese meals for {meal_type}{day_str} with the following criteria:
@@ -599,7 +621,7 @@ class GroqService:
 - Carbohydrate amount: {carbs_target}g
 - Preferences: {preferences_str}
 - Allergies (avoid): {allergies_str}
-- Cuisine style: {cuisine_style_str}{diversity_str}
+- Cuisine style: {cuisine_style_str}{diversity_str}{user_info}
 
 IMPORTANT REQUIREMENTS:
 1. Write ALL meal names and descriptions in Vietnamese language
@@ -607,6 +629,12 @@ IMPORTANT REQUIREMENTS:
 3. Write preparation instructions in Vietnamese with detailed cooking steps
 4. Make sure to create DIFFERENT meals than usual. Be creative and diverse.
 5. DO NOT include day names in meal names (no "Thứ 2", "Thứ 3", etc.)
+6. Consider the user's specific goals and requirements:
+   - For weight loss goals: Focus on filling, high-fiber, protein-rich, lower calorie options
+   - For muscle gain goals: Focus on protein-rich, nutrient-dense meals
+   - For general health: Focus on balanced, nutritious meals with variety
+   - Adjust spice levels and complexity based on user age
+   - Consider activity level for portion sizes and recovery nutrients
 
 Your response MUST be a valid JSON array without any additional text before or after.
 Format your response like this EXACTLY:

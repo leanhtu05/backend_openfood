@@ -78,12 +78,16 @@ class TDEENutritionService:
             )
         
         # Điều chỉnh calories dựa trên mục tiêu
-        if goal == 'lose_weight':
-            # Giảm 20% TDEE để giảm cân
-            calories = int(tdee * 0.8)
-        elif goal == 'gain_weight':
-            # Tăng 15% TDEE để tăng cân
-            calories = int(tdee * 1.15)
+        if 'lose' in goal.lower() or 'giảm' in goal.lower():
+            # Đảm bảo calories luôn nhỏ hơn TDEE khi giảm cân
+            # Giảm tối thiểu 300 calo hoặc 15% TDEE, tùy thuộc giá trị nào lớn hơn
+            min_deficit = max(300, int(tdee * 0.15))
+            calories = tdee - min_deficit
+        elif 'gain' in goal.lower() or 'tăng' in goal.lower():
+            # Đảm bảo calories luôn lớn hơn TDEE khi tăng cân
+            # Tăng tối thiểu 300 calo hoặc 15% TDEE, tùy thuộc giá trị nào lớn hơn
+            min_surplus = max(300, int(tdee * 0.15))
+            calories = tdee + min_surplus
         else:  # maintain
             # Giữ nguyên TDEE để duy trì cân nặng
             calories = tdee

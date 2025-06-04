@@ -916,7 +916,7 @@ def _process_meal_data(meal_data):
 
 def generate_meal_plan(
     user_id: str,
-    calories_target: float = 1500.0,  # Giảm mặc định xuống 1500 kcal
+    calories_target: float = 1500.0,  # Giá trị mặc định khi không có TDEE
     protein_target: float = 90.0,     # Điều chỉnh protein
     fat_target: float = 50.0,         # Điều chỉnh fat
     carbs_target: float = 187.5,      # Điều chỉnh carbs
@@ -965,9 +965,9 @@ def generate_meal_plan(
                     # Lấy mục tiêu dinh dưỡng từ profile người dùng
                     calories, protein, fat, carbs = tdee_nutrition_service.get_nutrition_targets_from_user_profile(user_profile)
                     
-                    print(f"Mục tiêu dinh dưỡng dựa trên TDEE: calories={calories}, protein={protein}, fat={fat}, carbs={carbs}")
+                    print(f"Mục tiêu dinh dưỡng hàng ngày: {{'calories': {calories}, 'protein': {protein}, 'fat': {fat}, 'carbs': {carbs}}}")
                     
-                    # Cập nhật các giá trị mục tiêu
+                    # Cập nhật các giá trị mục tiêu - luôn sử dụng giá trị từ TDEE khi use_tdee=true
                     calories_target = calories
                     protein_target = protein
                     fat_target = fat
@@ -975,15 +975,14 @@ def generate_meal_plan(
             except Exception as e:
                 print(f"Lỗi khi lấy thông tin TDEE: {str(e)}")
                 print("Sử dụng giá trị mặc định")
-        
-        # Đảm bảo calories không vượt quá 1500 nếu không có thông tin TDEE
-        if not use_tdee and calories_target > 1500:
-            print(f"Giới hạn calories từ {calories_target} xuống 1500")
-            calories_target = 1500
+        # Chỉ giới hạn calories khi KHÔNG sử dụng TDEE
+        elif calories_target > 2500:  # Nếu không sử dụng TDEE, đặt giới hạn cao hơn là 2500
+            print(f"Giới hạn calories từ {calories_target} xuống 2500 (không sử dụng TDEE)")
+            calories_target = 2500
             # Điều chỉnh các giá trị khác theo tỷ lệ
-            protein_target = 90
-            fat_target = 50
-            carbs_target = 187.5
+            protein_target = 150
+            fat_target = 83
+            carbs_target = 250
         
         # Tạo kế hoạch ăn uống
         print(f"Tạo kế hoạch ăn uống với mục tiêu: calories={calories_target}, protein={protein_target}, fat={fat_target}, carbs={carbs_target}")

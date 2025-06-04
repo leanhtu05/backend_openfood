@@ -14,10 +14,10 @@ router = APIRouter(prefix="/api/meal-plan", tags=["Meal Plan"])
 # Model cho request tạo kế hoạch ăn
 class MealPlanRequest(BaseModel):
     user_id: str
-    calories_target: float = 1500.0  # Giảm mặc định xuống 1500 kcal
-    protein_target: float = 90.0     # Điều chỉnh protein
-    fat_target: float = 50.0         # Điều chỉnh fat
-    carbs_target: float = 187.5      # Điều chỉnh carbs
+    calories_target: float = 2000.0  # Giá trị mặc định hợp lý, sẽ được điều chỉnh dựa trên TDEE nếu use_tdee=True
+    protein_target: float = 120.0    # Giá trị mặc định sẽ được điều chỉnh dựa trên TDEE
+    fat_target: float = 67.0         # Giá trị mặc định sẽ được điều chỉnh dựa trên TDEE
+    carbs_target: float = 225.0      # Giá trị mặc định sẽ được điều chỉnh dựa trên TDEE
     preferences: Optional[str] = None
     allergies: Optional[str] = None
     cuisine_style: Optional[str] = None
@@ -175,10 +175,6 @@ async def replace_meal_endpoint(
         # Chỉ reset loại bữa ăn cần thay thế
         if meal_type in ["breakfast", "lunch", "dinner"]:
             used_dishes_tracker[meal_type] = set()
-        
-        # Điều chỉnh calories nếu quá cao
-        if request.get("calories_target", 0) > 1500:
-            request["calories_target"] = 1500
         
         # Gọi service để thay thế bữa ăn
         result = services.replace_meal(request)

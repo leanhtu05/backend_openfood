@@ -23,7 +23,7 @@ Việc loại bỏ các endpoint trùng lặp giúp API dễ bảo trì hơn và
 from models import (
     NutritionTarget, ReplaceDayRequest, WeeklyMealPlan, DayMealPlan,
     GenerateWeeklyMealRequest, GenerateWeeklyMealResponse, ReplaceDayResponse, ReplaceWeekResponse,
-    TokenPayload, AuthRequest, UserResponse, AuthResponse
+    TokenPayload, AuthRequest, UserResponse, AuthResponse, FoodRecognitionResponse
 )
 import services
 from storage_manager import storage_manager

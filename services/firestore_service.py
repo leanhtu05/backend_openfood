@@ -1414,6 +1414,39 @@ class FirestoreService:
             traceback.print_exc()
             return []
 
+    def get_or_create_user(self, user_id: str) -> Dict[str, Any]:
+        """
+        Lấy thông tin người dùng từ Firestore hoặc tạo mới nếu chưa tồn tại
+        
+        Args:
+            user_id: ID của người dùng
+            
+        Returns:
+            Thông tin người dùng
+        """
+        try:
+            # Kiểm tra xem người dùng đã tồn tại chưa
+            user_data = self.get_user(user_id)
+            
+            if not user_data:
+                # Tạo người dùng mới với thông tin cơ bản
+                user_data = {
+                    "user_id": user_id,
+                    "created_at": datetime.now().isoformat(),
+                    "updated_at": datetime.now().isoformat()
+                }
+                
+                # Tạo người dùng mới trong Firestore
+                self.create_user(user_id, user_data)
+                print(f"Created new user with ID: {user_id}")
+            
+            return user_data
+        except Exception as e:
+            print(f"Error in get_or_create_user: {str(e)}")
+            traceback.print_exc()
+            # Trả về dict rỗng trong trường hợp lỗi
+            return {"user_id": user_id}
+
     def add_food_log(self, user_id: str, food_log_data: dict) -> str:
         """
         Thêm bản ghi nhận diện thực phẩm vào Firestore

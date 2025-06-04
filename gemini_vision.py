@@ -42,7 +42,7 @@ class GeminiVisionService:
                 genai.configure(api_key=self.api_key)
                 
                 # Get Gemini Vision model
-                self.model = genai.GenerativeModel('gemini-pro-vision')
+                self.model = genai.GenerativeModel('gemini-1.5-flash-latest')
                 
                 print("Gemini Vision service initialized successfully")
                 print("=== GEMINI VISION SERVICE INITIALIZED ===\n")

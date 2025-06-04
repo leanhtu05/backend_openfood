@@ -1,5 +1,6 @@
 from typing import List, Dict, Optional, Any
 from pydantic import BaseModel, Field, EmailStr
+from datetime import datetime
 
 # Input models
 class NutritionTarget(BaseModel):
@@ -94,3 +95,29 @@ class AuthResponse(BaseModel):
     user: UserResponse
     message: str = "Login successful"
     status: str = "success"
+
+# Food Recognition Models
+class RecognizedFood(BaseModel):
+    """Model cho thông tin món ăn đã nhận diện"""
+    food_name: str = Field(..., description="Tên món ăn đã nhận diện")
+    confidence: float = Field(..., description="Độ tin cậy của nhận diện (0-1)")
+    nutrition: Optional[NutritionInfo] = Field(None, description="Thông tin dinh dưỡng của món ăn")
+    portion_size: Optional[str] = Field(None, description="Khẩu phần ước tính")
+    image_url: Optional[str] = Field(None, description="URL của hình ảnh đã lưu")
+
+class FoodRecognitionResponse(BaseModel):
+    """Model phản hồi sau khi nhận diện thực phẩm"""
+    recognized_foods: List[RecognizedFood] = Field(..., description="Danh sách các món ăn đã nhận diện")
+    message: str = Field("Food recognition successful", description="Thông báo trạng thái")
+    raw_analysis: Optional[Dict[str, Any]] = Field(None, description="Phân tích thô từ Gemini")
+    timestamp: str = Field(..., description="Thời gian nhận diện")
+
+class FoodLogEntry(BaseModel):
+    """Model để lưu trữ bản ghi thực phẩm vào Firestore"""
+    user_id: str = Field(..., description="ID của người dùng")
+    recognized_foods: List[RecognizedFood] = Field(..., description="Danh sách các món ăn đã nhận diện")
+    meal_type: str = Field(..., description="Loại bữa ăn (breakfast, lunch, dinner, snack)")
+    image_url: str = Field(..., description="URL của hình ảnh đã lưu")
+    timestamp: str = Field(..., description="Thời gian nhận diện")
+    date: str = Field(..., description="Ngày ghi nhận (YYYY-MM-DD)")
+    total_nutrition: NutritionInfo = Field(..., description="Tổng dinh dưỡng của bữa ăn")

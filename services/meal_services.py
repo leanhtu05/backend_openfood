@@ -717,7 +717,108 @@ def replace_day_meal_plan(
     # Clear the used dishes for this specific day to ensure new variety
     reset_tracker()
     
-    # Generate a new meal plan for the day
+    # Scale down the daily nutrition targets based on meal type
+    if replace_request.meal_type:
+        print(f"Scaling down daily nutrition targets for specific meal: {replace_request.meal_type}")
+        # Get the distribution of nutrition targets for all meals
+        meal_targets = distribute_nutrition_targets(
+            replace_request.calories_target,
+            replace_request.protein_target,
+            replace_request.fat_target,
+            replace_request.carbs_target
+        )
+        
+        # Get the specific meal target based on meal_type
+        meal_type = replace_request.meal_type.lower()
+        if "breakfast" in meal_type or "sáng" in meal_type:
+            meal_specific_targets = meal_targets["breakfast"]
+            print(f"Using breakfast targets: {meal_specific_targets}")
+        elif "lunch" in meal_type or "trưa" in meal_type:
+            meal_specific_targets = meal_targets["lunch"]  
+            print(f"Using lunch targets: {meal_specific_targets}")
+        elif "dinner" in meal_type or "tối" in meal_type:
+            meal_specific_targets = meal_targets["dinner"]
+            print(f"Using dinner targets: {meal_specific_targets}")
+        else:
+            # Default to evenly distributed if meal type is unknown
+            print(f"Unknown meal type: {meal_type}, using evenly distributed targets")
+            meal_specific_targets = {
+                "calories": replace_request.calories_target / 3,
+                "protein": replace_request.protein_target / 3,
+                "fat": replace_request.fat_target / 3,
+                "carbs": replace_request.carbs_target / 3
+            }
+        
+        # Generate meal with scaled targets
+        new_meal = generate_meal(
+            replace_request.meal_type,
+            meal_specific_targets["calories"],
+            meal_specific_targets["protein"],
+            meal_specific_targets["fat"],
+            meal_specific_targets["carbs"],
+            preferences=preferences,
+            allergies=allergies,
+            cuisine_style=cuisine_style,
+            use_ai=use_ai,
+            day_of_week=replace_request.day_of_week,
+            user_data=user_data
+        )
+        
+        # Create a new day meal plan with the replaced meal
+        if current_weekly_plan:
+            # Find the current day plan
+            current_day = None
+            for day in current_weekly_plan.days:
+                if day.day_of_week == replace_request.day_of_week:
+                    current_day = day
+                    break
+                    
+            if current_day:
+                # Create a new day plan with the replaced meal
+                if "breakfast" in meal_type or "sáng" in meal_type:
+                    new_day_plan = DayMealPlan(
+                        day_of_week=replace_request.day_of_week,
+                        breakfast=new_meal,
+                        lunch=current_day.lunch,
+                        dinner=current_day.dinner,
+                        nutrition=calculate_day_nutrition(new_meal, current_day.lunch, current_day.dinner)
+                    )
+                elif "lunch" in meal_type or "trưa" in meal_type:
+                    new_day_plan = DayMealPlan(
+                        day_of_week=replace_request.day_of_week,
+                        breakfast=current_day.breakfast,
+                        lunch=new_meal,
+                        dinner=current_day.dinner,
+                        nutrition=calculate_day_nutrition(current_day.breakfast, new_meal, current_day.dinner)
+                    )
+                elif "dinner" in meal_type or "tối" in meal_type:
+                    new_day_plan = DayMealPlan(
+                        day_of_week=replace_request.day_of_week,
+                        breakfast=current_day.breakfast,
+                        lunch=current_day.lunch,
+                        dinner=new_meal,
+                        nutrition=calculate_day_nutrition(current_day.breakfast, current_day.lunch, new_meal)
+                    )
+                else:
+                    # Default - replace breakfast if meal type unknown
+                    new_day_plan = DayMealPlan(
+                        day_of_week=replace_request.day_of_week,
+                        breakfast=new_meal,
+                        lunch=current_day.lunch,
+                        dinner=current_day.dinner,
+                        nutrition=calculate_day_nutrition(new_meal, current_day.lunch, current_day.dinner)
+                    )
+                
+                # Update the weekly plan with the new day plan
+                for i, day in enumerate(current_weekly_plan.days):
+                    if day.day_of_week == replace_request.day_of_week:
+                        current_weekly_plan.days[i] = new_day_plan
+                        break
+                        
+                return new_day_plan
+    
+    # Original implementation (as fallback) - Generate a new meal plan for the day
+    print("Falling back to generating a complete day meal plan")
     new_day_plan = generate_day_meal_plan(
         replace_request.day_of_week,
         replace_request.calories_target,

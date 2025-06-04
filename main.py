@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, Query, Body, Path, Header, Security
+from fastapi import FastAPI, HTTPException, Depends, Query, Body, Path, Header, Security, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Dict, Optional, List, Any
@@ -39,12 +39,18 @@ from usda_integration import usda_api
 from routers import firestore_router, api_router, compat_router, meal_plan_router
 
 # Thêm import cho chat API
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from openai import OpenAI
 
 # Firebase Admin SDK
 import firebase_admin
 from firebase_admin import credentials, auth
+
+# Import Food Recognition
+from food_recognition_service import food_recognition_service
+
+# Import Firebase Storage
+from firebase_storage_service import firebase_storage_service
 
 # Initialize Firebase Admin SDK
 # Đảm bảo các import cần thiết đã có ở đầu file:
@@ -107,18 +113,24 @@ except ValueError:  # Nghĩa là chưa có app nào được khởi tạo
 
     if cred:
         try:
-            firebase_admin.initialize_app(cred, {
-                'projectId': config.FIREBASE_PROJECT_ID, 
-                'storageBucket': config.FIREBASE_STORAGE_BUCKET
-            })
+            # Lấy cấu hình Firebase từ config
+            firebase_config = config.get_firebase_config()
+            firebase_admin.initialize_app(cred, firebase_config)
+            
             print(f"Firebase Admin SDK initialized successfully using {initialized_method}.")
-            print(f"Project ID: {firebase_admin.get_app().project_id}, Storage Bucket: {config.FIREBASE_STORAGE_BUCKET}")
+            print(f"Project ID: {firebase_admin.get_app().project_id}, Storage Bucket: {firebase_config['storageBucket']}")
+            
+            # Kiểm tra kết nối với Storage
+            print("Testing Firebase Storage connection...")
+            if firebase_storage_service.check_connection():
+                print("Successfully connected to Firebase Storage!")
+            else:
+                print("WARNING: Could not connect to Firebase Storage!")
         except Exception as e:
             print(f"Lỗi khi gọi firebase_admin.initialize_app: {e}")
             # raise e # Bỏ comment nếu muốn dừng hẳn
     else:
         print("Không thể khởi tạo Firebase Admin SDK: Không tìm thấy credentials hợp lệ.")
-        # raise ValueError("Không thể khởi tạo Firebase: Không tìm thấy credentials hợp lệ.") # Bỏ comment nếu muốn dừng hẳn
 
 # Create FastAPI app
 app = FastAPI(
@@ -798,6 +810,248 @@ async def redirect_to_api_sync(
     print(f"Dữ liệu nhận được: {json.dumps(data, indent=2)[:500]}...")
     # Sử dụng status_code=307 để đảm bảo phương thức POST và body được giữ nguyên khi chuyển hướng
     return RedirectResponse(url=redirect_url, status_code=307)
+
+# Food Recognition API models
+class FoodRecognitionRequest(BaseModel):
+    meal_type: str = Field("snack", description="Loại bữa ăn (breakfast, lunch, dinner, snack)")
+    save_to_firebase: bool = Field(True, description="Lưu kết quả vào Firebase")
+
+@app.post("/api/food/recognize", response_model=FoodRecognitionResponse, tags=["Food Recognition"])
+async def recognize_food(
+    meal_type: str = Form("snack", description="Loại bữa ăn (breakfast, lunch, dinner, snack)"),
+    save_to_firebase: bool = Form(True, description="Lưu kết quả vào Firebase"),
+    image: UploadFile = File(..., description="Ảnh thực phẩm cần nhận diện"),
+    user: TokenPayload = Depends(get_current_user)
+):
+    """
+    Nhận diện thực phẩm từ ảnh sử dụng Gemini Vision Pro
+    
+    Parameters:
+    - meal_type: Loại bữa ăn (breakfast, lunch, dinner, snack)
+    - save_to_firebase: Lưu kết quả vào Firebase
+    - image: File ảnh cần nhận diện
+    
+    Returns:
+    - Kết quả nhận diện thực phẩm
+    """
+    try:
+        # Kiểm tra Gemini Vision service có khả dụng không
+        if not food_recognition_service.available:
+            raise HTTPException(
+                status_code=503,
+                detail="Dịch vụ nhận diện thực phẩm không khả dụng. Hãy đảm bảo GEMINI_API_KEY đã được cấu hình."
+            )
+        
+        # Kiểm tra nếu file không phải ảnh
+        if not image.content_type.startswith("image/"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"File tải lên phải là ảnh, không phải {image.content_type}"
+            )
+        
+        # Đọc dữ liệu ảnh
+        image_data = await image.read()
+        
+        # Gọi service để nhận diện thực phẩm
+        result = await food_recognition_service.recognize_food_from_image(
+            image_data=image_data,
+            user_id=user.uid,
+            meal_type=meal_type,
+            save_to_firebase=save_to_firebase
+        )
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error recognizing food: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Lỗi nhận diện thực phẩm: {str(e)}")
+
+@app.get("/api/food/logs", tags=["Food Recognition"])
+async def get_food_logs(
+    limit: int = Query(20, description="Số lượng bản ghi tối đa"),
+    user_id: str = Query("default", description="ID của người dùng"),
+    user: TokenPayload = Depends(get_current_user)
+):
+    """
+    Lấy danh sách các bản ghi nhận diện thực phẩm của người dùng
+    
+    Parameters:
+    - limit: Số lượng bản ghi tối đa trả về
+    - user_id: ID của người dùng
+    
+    Returns:
+    - Danh sách các bản ghi nhận diện thực phẩm
+    """
+    try:
+        # Sử dụng user_id từ token nếu không có user_id được chỉ định
+        if user_id == "default":
+            user_id = user.uid
+            
+        # Kiểm tra quyền truy cập
+        if user_id != user.uid and not user.is_admin:
+            raise HTTPException(
+                status_code=403,
+                detail="Không có quyền xem bản ghi của người dùng khác"
+            )
+        
+        # Lấy danh sách bản ghi
+        from services.firestore_service import firestore_service
+        logs = firestore_service.get_food_logs(user_id, limit)
+        
+        return {
+            "user_id": user_id,
+            "count": len(logs),
+            "logs": logs
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi khi lấy bản ghi thực phẩm: {str(e)}")
+
+@app.get("/api/food/logs/{date}", tags=["Food Recognition"])
+async def get_food_logs_by_date(
+    date: str = Path(..., description="Ngày theo định dạng YYYY-MM-DD"),
+    user_id: str = Query("default", description="ID của người dùng"),
+    user: TokenPayload = Depends(get_current_user)
+):
+    """
+    Lấy danh sách các bản ghi nhận diện thực phẩm của người dùng theo ngày
+    
+    Parameters:
+    - date: Ngày theo định dạng YYYY-MM-DD
+    - user_id: ID của người dùng
+    
+    Returns:
+    - Danh sách các bản ghi nhận diện thực phẩm cho ngày đó
+    """
+    try:
+        # Sử dụng user_id từ token nếu không có user_id được chỉ định
+        if user_id == "default":
+            user_id = user.uid
+            
+        # Kiểm tra quyền truy cập
+        if user_id != user.uid and not user.is_admin:
+            raise HTTPException(
+                status_code=403,
+                detail="Không có quyền xem bản ghi của người dùng khác"
+            )
+            
+        # Validate date format
+        try:
+            datetime.strptime(date, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(
+                status_code=400, 
+                detail="Định dạng ngày không hợp lệ. Sử dụng YYYY-MM-DD."
+            )
+        
+        # Lấy danh sách bản ghi theo ngày
+        from services.firestore_service import firestore_service
+        logs = firestore_service.get_food_logs_by_date(user_id, date)
+        
+        return {
+            "user_id": user_id,
+            "date": date,
+            "count": len(logs),
+            "logs": logs
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi khi lấy bản ghi thực phẩm: {str(e)}")
+
+@app.delete("/api/food/logs/{log_id}", tags=["Food Recognition"])
+async def delete_food_log(
+    log_id: str = Path(..., description="ID của bản ghi cần xóa"),
+    user_id: str = Query("default", description="ID của người dùng"),
+    user: TokenPayload = Depends(get_current_user)
+):
+    """
+    Xóa một bản ghi nhận diện thực phẩm
+    
+    Parameters:
+    - log_id: ID của bản ghi cần xóa
+    - user_id: ID của người dùng
+    
+    Returns:
+    - Thông báo kết quả
+    """
+    try:
+        # Sử dụng user_id từ token nếu không có user_id được chỉ định
+        if user_id == "default":
+            user_id = user.uid
+            
+        # Kiểm tra quyền truy cập
+        if user_id != user.uid and not user.is_admin:
+            raise HTTPException(
+                status_code=403,
+                detail="Không có quyền xóa bản ghi của người dùng khác"
+            )
+        
+        # Xóa bản ghi
+        from services.firestore_service import firestore_service
+        success = firestore_service.delete_food_log(user_id, log_id)
+        
+        if success:
+            return {"message": f"Đã xóa bản ghi {log_id} thành công"}
+        else:
+            raise HTTPException(status_code=404, detail=f"Không tìm thấy bản ghi {log_id}")
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi khi xóa bản ghi thực phẩm: {str(e)}")
+
+@app.get("/api/food/check-availability", tags=["Food Recognition"])
+async def check_food_recognition_availability():
+    """
+    Kiểm tra trạng thái khả dụng của dịch vụ nhận diện thực phẩm
+    
+    Returns:
+    - Thông tin về trạng thái khả dụng của dịch vụ
+    """
+    try:
+        return {
+            "gemini_vision_available": food_recognition_service.gemini_available,
+            "firebase_storage_available": food_recognition_service.firebase_storage_available,
+            "firestore_available": food_recognition_service.firestore_available,
+            "service_available": food_recognition_service.available,
+            "status": "available" if food_recognition_service.available else "unavailable"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+# Thêm endpoint test Firebase Storage
+@app.get("/api/storage/test", tags=["Firebase Storage"])
+async def test_firebase_storage():
+    """
+    Kiểm tra kết nối đến Firebase Storage
+    
+    Returns:
+        Dict: Thông tin về kết nối Firebase Storage
+    """
+    bucket_name = firebase_storage_service.bucket_name if firebase_storage_service.available else None
+    connection_ok = firebase_storage_service.check_connection()
+    
+    # Lấy danh sách files
+    files = firebase_storage_service.list_files(max_results=5) if connection_ok else []
+    
+    return {
+        "service_available": firebase_storage_service.available,
+        "connection_ok": connection_ok,
+        "bucket_name": bucket_name,
+        "sample_files": files[:5] if files else [],
+        "status": "ok" if connection_ok else "error"
+    }
 
 if __name__ == "__main__":
     import uvicorn

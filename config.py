@@ -17,7 +17,7 @@ class Config:
     # Firebase
     FIREBASE_CREDENTIALS_PATH: str = os.getenv("FIREBASE_CREDENTIALS_PATH", "firebase-credentials.json")
     USE_FIREBASE: bool = os.getenv("USE_FIREBASE", "False").lower() in ('true', 'yes', '1')
-    FIREBASE_PROJECT_ID: Optional[str] = os.getenv("FIREBASE_PROJECT_ID")
+    FIREBASE_PROJECT_ID: Optional[str] = os.getenv("FIREBASE_PROJECT_ID", "food-ai-96ef6")
     FIREBASE_STORAGE_BUCKET: Optional[str] = os.getenv("FIREBASE_STORAGE_BUCKET", "food-ai-96ef6.appspot.com")
     
     # Storage
@@ -59,10 +59,21 @@ class Config:
         os.makedirs(cls.DATA_DIR, exist_ok=True)
         os.makedirs(cls.MEAL_PLANS_DIR, exist_ok=True)
         os.makedirs(cls.CACHE_DIR, exist_ok=True)
+        
+    @classmethod
+    def get_firebase_config(cls) -> Dict[str, Any]:
+        """Lấy cấu hình Firebase dưới dạng dictionary"""
+        return {
+            "projectId": cls.FIREBASE_PROJECT_ID,
+            "storageBucket": cls.FIREBASE_STORAGE_BUCKET
+        }
 
 # Tạo các thư mục cần thiết
 Config.create_dirs()
 
 # Export singleton
 config = Config() 
-FIREBASE_STORAGE_BUCKET = "food-ai-96ef6.appspot.com"
+
+# Export constants for easy access
+FIREBASE_STORAGE_BUCKET = config.FIREBASE_STORAGE_BUCKET
+FIREBASE_PROJECT_ID = config.FIREBASE_PROJECT_ID

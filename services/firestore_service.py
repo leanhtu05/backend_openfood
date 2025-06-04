@@ -1414,5 +1414,127 @@ class FirestoreService:
             traceback.print_exc()
             return []
 
+    def add_food_log(self, user_id: str, food_log_data: dict) -> str:
+        """
+        Thêm bản ghi nhận diện thực phẩm vào Firestore
+        
+        Args:
+            user_id: ID của người dùng
+            food_log_data: Dữ liệu bản ghi thực phẩm
+            
+        Returns:
+            ID của document đã tạo
+        """
+        if not self.db:
+            print("Firestore service not available")
+            return None
+            
+        try:
+            # Đảm bảo người dùng tồn tại trong Firestore
+            self.get_or_create_user(user_id)
+            
+            # Thêm bản ghi vào collection food_logs
+            food_logs_ref = self.db.collection('users').document(user_id).collection('food_logs')
+            doc_ref = food_logs_ref.add(food_log_data)
+            
+            # Lấy ID của document mới
+            doc_id = doc_ref[1].id
+            print(f"Food log added with ID: {doc_id}")
+            
+            return doc_id
+        except Exception as e:
+            print(f"Error adding food log: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def get_food_logs(self, user_id: str, limit: int = 20) -> list:
+        """
+        Lấy danh sách các bản ghi thực phẩm của người dùng
+        
+        Args:
+            user_id: ID của người dùng
+            limit: Số lượng bản ghi tối đa trả về
+            
+        Returns:
+            Danh sách các bản ghi thực phẩm
+        """
+        if not self.db:
+            print("Firestore service not available")
+            return []
+            
+        try:
+            # Lấy các bản ghi, sắp xếp theo thời gian giảm dần
+            food_logs_ref = self.db.collection('users').document(user_id).collection('food_logs')
+            query = food_logs_ref.order_by('timestamp', direction='DESCENDING').limit(limit)
+            
+            logs = []
+            for doc in query.stream():
+                log_data = doc.to_dict()
+                log_data['id'] = doc.id
+                logs.append(log_data)
+                
+            return logs
+        except Exception as e:
+            print(f"Error getting food logs: {str(e)}")
+            return []
+            
+    def get_food_logs_by_date(self, user_id: str, date: str) -> list:
+        """
+        Lấy danh sách các bản ghi thực phẩm của người dùng theo ngày cụ thể
+        
+        Args:
+            user_id: ID của người dùng
+            date: Ngày dạng YYYY-MM-DD
+            
+        Returns:
+            Danh sách các bản ghi thực phẩm cho ngày đó
+        """
+        if not self.db:
+            print("Firestore service not available")
+            return []
+            
+        try:
+            # Lấy các bản ghi cho ngày cụ thể
+            food_logs_ref = self.db.collection('users').document(user_id).collection('food_logs')
+            query = food_logs_ref.where('date', '==', date).order_by('timestamp')
+            
+            logs = []
+            for doc in query.stream():
+                log_data = doc.to_dict()
+                log_data['id'] = doc.id
+                logs.append(log_data)
+                
+            return logs
+        except Exception as e:
+            print(f"Error getting food logs by date: {str(e)}")
+            return []
+            
+    def delete_food_log(self, user_id: str, log_id: str) -> bool:
+        """
+        Xóa một bản ghi thực phẩm
+        
+        Args:
+            user_id: ID của người dùng
+            log_id: ID của bản ghi cần xóa
+            
+        Returns:
+            True nếu xóa thành công, False nếu thất bại
+        """
+        if not self.db:
+            print("Firestore service not available")
+            return False
+            
+        try:
+            # Xóa bản ghi
+            doc_ref = self.db.collection('users').document(user_id).collection('food_logs').document(log_id)
+            doc_ref.delete()
+            print(f"Food log {log_id} deleted successfully")
+            
+            return True
+        except Exception as e:
+            print(f"Error deleting food log: {str(e)}")
+            return False
+
 # Singleton instance
 firestore_service = FirestoreService() 

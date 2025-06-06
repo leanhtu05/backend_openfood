@@ -17,9 +17,6 @@ from auth_utils import get_current_user, security, ensure_user_in_firestore, get
 # Import DAYS_OF_WEEK từ utils
 from utils import DAYS_OF_WEEK
 
-# Import groq_service từ groq_integration_direct
-from groq_integration_direct import groq_service
-
 # Thiết lập logger
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -27,6 +24,18 @@ if not logger.handlers:
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
     logger.addHandler(handler)
+
+# Thêm các import còn thiếu
+try:
+    # Import groq_service từ groq_integration_direct
+    from groq_integration_direct import groq_service
+except ImportError:
+    logger.warning("Không thể import groq_service từ groq_integration_direct. Tạo một dịch vụ giả lập.")
+    # Tạo một dịch vụ giả lập nếu không thể import
+    class DummyGroqService:
+        def chat(self, *args, **kwargs):
+            return {"choices": [{"message": {"content": "Dịch vụ AI không khả dụng"}}]}
+    groq_service = DummyGroqService()
 
 """
 LƯU Ý VỀ CÁC ENDPOINT ĐÃ LOẠI BỎ:

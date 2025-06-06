@@ -113,3 +113,44 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
             detail=f"Invalid authentication credentials: {str(e)}",
             headers={"WWW-Authenticate": "Bearer"}
         ) 
+
+# Dependency để xác thực người dùng từ token nhưng không bắt buộc
+async def get_optional_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Security(security, auto_error=False)) -> Optional[TokenPayload]:
+    """
+    Verify Firebase ID Token và trả về thông tin người dùng, hoặc None nếu không có token
+    
+    Args:
+        credentials: HTTP Authorization header với Bearer token (tùy chọn)
+        
+    Returns:
+        Optional[TokenPayload]: Thông tin người dùng từ token hoặc None
+    """
+    if not credentials:
+        return None
+        
+    token = credentials.credentials
+    try:
+        # Verify the token using Firebase Admin SDK
+        decoded_token = auth.verify_id_token(token, check_revoked=False, clock_skew_seconds=60)
+        
+        # Tạo TokenPayload từ thông tin đã decode
+        user_payload = TokenPayload(
+            uid=decoded_token["uid"],
+            email=decoded_token.get("email"),
+            name=decoded_token.get("name"),
+            email_verified=decoded_token.get("email_verified", False),
+            picture=decoded_token.get("picture"),
+            auth_time=decoded_token.get("auth_time"),
+            exp=decoded_token.get("exp"),
+            iat=decoded_token.get("iat"),
+            role=decoded_token.get("role", "user")  # Mặc định là "user" nếu không có role
+        )
+        
+        # Tự động đảm bảo người dùng tồn tại trong Firestore
+        ensure_user_in_firestore(user_payload.uid, user_payload)
+        
+        return user_payload
+    except Exception as e:
+        # Không raise exception, chỉ trả về None
+        print(f"Invalid or missing authentication token: {str(e)}")
+        return None 

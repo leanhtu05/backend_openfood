@@ -18,7 +18,7 @@ class Config:
     FIREBASE_CREDENTIALS_PATH: str = os.getenv("FIREBASE_CREDENTIALS_PATH", "firebase-credentials.json")
     USE_FIREBASE: bool = os.getenv("USE_FIREBASE", "False").lower() in ('true', 'yes', '1')
     FIREBASE_PROJECT_ID: Optional[str] = os.getenv("FIREBASE_PROJECT_ID", "food-ai-96ef6")
-    FIREBASE_STORAGE_BUCKET: Optional[str] = os.getenv("FIREBASE_STORAGE_BUCKET", "food-ai-96ef6.appspot.com")
+    FIREBASE_STORAGE_BUCKET: Optional[str] = os.getenv("FIREBASE_STORAGE_BUCKET", "food-ai-96ef6.firebasestorage.app")
     
     # Storage
     DATA_DIR: str = os.getenv("DATA_DIR", "data")

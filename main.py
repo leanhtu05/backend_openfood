@@ -6,6 +6,27 @@ import time
 import os
 import json
 from datetime import datetime
+import logging
+
+# Import config từ module config
+from config import config
+
+# Import get_optional_current_user từ auth_utils
+from auth_utils import get_current_user, security, ensure_user_in_firestore, get_optional_current_user
+
+# Import DAYS_OF_WEEK từ utils
+from utils import DAYS_OF_WEEK
+
+# Import groq_service từ groq_integration_direct
+from groq_integration_direct import groq_service
+
+# Thiết lập logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    logger.addHandler(handler)
 
 """
 LƯU Ý VỀ CÁC ENDPOINT ĐÃ LOẠI BỎ:

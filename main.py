@@ -1154,7 +1154,15 @@ async def generate_meal_plan(
             
             # Continue with the rest of your code...
         
-        # Similar updates for other endpoints...
+        # Return a placeholder response for now
+        return {"message": "Meal plan generation is in progress"}
+        
+    except Exception as e:
+        # Handle exceptions
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generating meal plan: {str(e)}"
+        )
 
 # Cập nhật endpoint thay thế một ngày
 @app.post("/api/replace-day", tags=["Meal Plan"])
@@ -1206,7 +1214,15 @@ async def replace_day(
             user_data=user_data
         )
         
-        # Continue with lunch, dinner, etc...
+        # Return a placeholder response for now
+        return {"message": f"Day replacement for {day_of_week} is in progress"}
+    
+    except Exception as e:
+        # Handle exceptions
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error replacing day: {str(e)}"
+        )
 
 # Cập nhật endpoint thay thế một bữa ăn cụ thể
 @app.post("/api/meal-plan/replace-meal", tags=["Meal Plan"])
@@ -1259,7 +1275,15 @@ async def replace_meal(
             user_data=user_data
         )
         
-        # Continue with updating meal plan...
+        # Return a placeholder response for now
+        return {"message": f"Replacement for {meal_type} on {day_of_week} is in progress"}
+    
+    except Exception as e:
+        # Handle exceptions
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error replacing meal: {str(e)}"
+        )
 
 if __name__ == "__main__":
     import uvicorn

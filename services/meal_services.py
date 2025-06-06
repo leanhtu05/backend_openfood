@@ -947,3 +947,41 @@ def replace_meal(
                 break
     
     return new_day_plan
+
+def replace_day_meal_plan(
+    current_weekly_plan: Optional[WeeklyMealPlan],
+    replace_request: ReplaceDayRequest,
+    preferences: List[str] = None,
+    allergies: List[str] = None,
+    cuisine_style: str = None,
+    use_ai: bool = True,
+    user_data: Dict = None
+) -> DayMealPlan:
+    """
+    Thay thế kế hoạch ăn cho một ngày cụ thể.
+    Hàm này hoạt động như một wrapper cho hàm replace_meal để đảm bảo tương thích.
+    
+    Args:
+        current_weekly_plan: Kế hoạch tuần hiện tại
+        replace_request: Yêu cầu thay thế ngày với mục tiêu dinh dưỡng
+        preferences: Món ăn ưa thích (tùy chọn)
+        allergies: Dị ứng thực phẩm cần tránh (tùy chọn)
+        cuisine_style: Phong cách ẩm thực (tùy chọn)
+        use_ai: Có sử dụng AI để tạo món ăn không
+        user_data: Thông tin người dùng (tùy chọn)
+        
+    Returns:
+        DayMealPlan: Kế hoạch ăn mới cho ngày được chỉ định
+    """
+    print("Gọi hàm replace_day_meal_plan() -> gọi tiếp hàm replace_meal()")
+    
+    # Gọi hàm replace_meal với các tham số tương tự
+    return replace_meal(
+        current_weekly_plan=current_weekly_plan,
+        replace_request=replace_request,
+        preferences=preferences,
+        allergies=allergies,
+        cuisine_style=cuisine_style,
+        use_ai=use_ai,
+        user_data=user_data
+    )

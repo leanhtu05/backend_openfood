@@ -126,6 +126,30 @@ except ValueError:  # Nghĩa là chưa có app nào được khởi tạo
                 print("Successfully connected to Firebase Storage!")
             else:
                 print("WARNING: Could not connect to Firebase Storage!")
+                
+                # Nếu không thể kết nối, kiểm tra và cố gắng sửa cấu hình storageBucket
+                if not firebase_config.get('storageBucket'):
+                    # Thử thiết lập storageBucket mặc định nếu chưa có
+                    default_bucket = "food-ai-96ef6.appspot.com"
+                    print(f"Attempting to set default storage bucket: {default_bucket}")
+                    
+                    try:
+                        # Tạo cấu hình mới với storageBucket
+                        updated_config = firebase_config.copy()
+                        updated_config['storageBucket'] = default_bucket
+                        
+                        # Khởi tạo lại app với cấu hình mới
+                        firebase_admin.delete_app(firebase_admin.get_app())
+                        firebase_admin.initialize_app(cred, updated_config)
+                        print(f"Reinitialized Firebase with storage bucket: {default_bucket}")
+                        
+                        # Kiểm tra lại kết nối
+                        if firebase_storage_service.check_connection():
+                            print("Successfully connected to Firebase Storage after reconfiguration!")
+                        else:
+                            print("Still unable to connect to Firebase Storage after reconfiguration.")
+                    except Exception as storage_error:
+                        print(f"Error setting default storage bucket: {storage_error}")
         except Exception as e:
             print(f"Lỗi khi gọi firebase_admin.initialize_app: {e}")
             # raise e # Bỏ comment nếu muốn dừng hẳn

@@ -1,4 +1,4 @@
-from fastapi import HTTPException, Security
+from fastapi import HTTPException, Security, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional
 import firebase_admin
@@ -8,6 +8,9 @@ from datetime import datetime
 
 # Security scheme
 security = HTTPBearer()
+
+# Security scheme cho trường hợp không bắt buộc (optional)
+reusable_oauth2_optional = HTTPBearer(auto_error=False)
 
 # Hàm tiện ích để tự động tạo người dùng trong Firestore nếu chưa tồn tại
 def ensure_user_in_firestore(user_id: str, user_info: TokenPayload = None) -> bool:
@@ -115,7 +118,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
         ) 
 
 # Dependency để xác thực người dùng từ token nhưng không bắt buộc
-async def get_optional_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Security(security, auto_error=False)) -> Optional[TokenPayload]:
+async def get_optional_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(reusable_oauth2_optional)) -> Optional[TokenPayload]:
     """
     Verify Firebase ID Token và trả về thông tin người dùng, hoặc None nếu không có token
     

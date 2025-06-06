@@ -2,7 +2,7 @@ from typing import List, Dict, Optional
 import random
 from models import (
     NutritionTarget, ReplaceDayRequest, DayMealPlan, WeeklyMealPlan,
-    Dish, Meal, NutritionInfo, Ingredient
+    Dish, Meal, NutritionInfo, Ingredient, DishType, VietnamRegion
 )
 from utils import (
     DAYS_OF_WEEK, SAMPLE_RECIPES, calculate_meal_nutrition,
@@ -33,12 +33,98 @@ except ImportError:
 # Sử dụng phiên bản API đã tối ưu
 nutritionix_api = nutritionix_optimized_api
 
-def generate_dish(recipe_dict: Dict) -> Dish:
+def determine_dish_type(dish_name: str) -> str:
+    """
+    Xác định loại món dựa trên tên món ăn.
+    
+    Args:
+        dish_name: Tên món ăn
+        
+    Returns:
+        Loại món ăn
+    """
+    dish_name_lower = dish_name.lower()
+    
+    # Xác định món súp/canh
+    if any(keyword in dish_name_lower for keyword in ['súp', 'canh', 'soup']):
+        return DishType.SOUP
+    
+    # Xác định món tráng miệng
+    if any(keyword in dish_name_lower for keyword in ['chè', 'bánh', 'dessert', 'tráng miệng', 'ngọt', 'trái cây']):
+        if 'bánh mì' in dish_name_lower:  # Bánh mì là món chính
+            return DishType.MAIN
+        return DishType.DESSERT
+    
+    # Xác định món khai vị
+    if any(keyword in dish_name_lower for keyword in ['khai vị', 'appetizer', 'salad', 'gỏi', 'cuốn']):
+        return DishType.APPETIZER
+    
+    # Xác định món phụ
+    if any(keyword in dish_name_lower for keyword in ['xào', 'luộc', 'hấp', 'kho', 'rau']):
+        # Nếu có từ chính như cơm, bún, phở thì vẫn là món chính
+        if any(main in dish_name_lower for main in ['cơm', 'bún', 'phở', 'mì', 'miến', 'cháo']):
+            return DishType.MAIN
+        return DishType.SIDE
+    
+    # Mặc định là món chính
+    return DishType.MAIN
+
+def determine_region(dish_name: str, user_data: dict = None) -> str:
+    """
+    Xác định vùng miền của món ăn dựa trên tên và thông tin người dùng.
+    
+    Args:
+        dish_name: Tên món ăn
+        user_data: Thông tin người dùng
+        
+    Returns:
+        Vùng miền của món ăn
+    """
+    dish_name_lower = dish_name.lower()
+    
+    # Ưu tiên xác định từ profile người dùng nếu có
+    if user_data and 'region' in user_data:
+        user_region = user_data.get('region', '').lower()
+        if 'bắc' in user_region or 'north' in user_region:
+            return VietnamRegion.NORTH
+        elif 'trung' in user_region or 'central' in user_region:
+            return VietnamRegion.CENTRAL
+        elif 'nam' in user_region or 'south' in user_region:
+            return VietnamRegion.SOUTH
+        elif 'tây nguyên' in user_region or 'highland' in user_region:
+            return VietnamRegion.HIGHLANDER
+    
+    # Xác định từ tên món ăn
+    # Món miền Bắc
+    if any(keyword in dish_name_lower for keyword in ['bắc', 'hà nội', 'thái bình', 'phở', 'bún chả', 'chả cá', 'bún thang']):
+        return VietnamRegion.NORTH
+    
+    # Món miền Trung
+    if any(keyword in dish_name_lower for keyword in ['huế', 'đà nẵng', 'quảng', 'miền trung', 'bún bò', 'cơm hến', 'bánh xèo miền trung']):
+        return VietnamRegion.CENTRAL
+    
+    # Món miền Nam
+    if any(keyword in dish_name_lower for keyword in ['sài gòn', 'nam', 'hồ chí minh', 'hủ tiếu', 'bún mắm', 'cá lóc', 'cơm tấm']):
+        return VietnamRegion.SOUTH
+    
+    # Món Tây Nguyên
+    if any(keyword in dish_name_lower for keyword in ['tây nguyên', 'buôn', 'đắk', 'gia lai', 'kon tum', 'thịt rừng', 'cơm lam']):
+        return VietnamRegion.HIGHLANDER
+    
+    # Món nước ngoài
+    if any(keyword in dish_name_lower for keyword in ['pizza', 'pasta', 'sushi', 'kimchi', 'burger', 'taco', 'spaghetti']):
+        return VietnamRegion.FOREIGN
+    
+    # Mặc định là miền Bắc nếu không xác định được
+    return VietnamRegion.NORTH
+
+def generate_dish(recipe_dict: Dict, user_data: Dict = None) -> Dish:
     """
     Generate a Dish object from a recipe dictionary.
     
     Args:
         recipe_dict: Dictionary with dish recipe information
+        user_data: Thông tin người dùng để xác định vùng miền
         
     Returns:
         Dish object with nutritional information
@@ -125,12 +211,23 @@ def generate_dish(recipe_dict: Dict) -> Dish:
     
     print(f"Final dish nutrition: cal={dish_nutrition.calories}, protein={dish_nutrition.protein}, fat={dish_nutrition.fat}, carbs={dish_nutrition.carbs}")
     
+    # Xác định loại món và vùng miền
+    dish_name = recipe_dict.get("name", "Món ăn không tên")
+    dish_type = recipe_dict.get("dish_type", determine_dish_type(dish_name))
+    region = recipe_dict.get("region", determine_region(dish_name, user_data))
+    
+    # Lấy URL hình ảnh nếu có
+    image_url = recipe_dict.get("image_url", None)
+    
     # Create and return the Dish object
     return Dish(
-        name=recipe_dict.get("name", "Món ăn không tên"),
+        name=dish_name,
         ingredients=ingredients,
         preparation=recipe_dict.get("preparation", "Không có hướng dẫn chi tiết."),
-        nutrition=dish_nutrition
+        nutrition=dish_nutrition,
+        dish_type=dish_type,
+        region=region,
+        image_url=image_url
     )
 
 def generate_meal(
@@ -260,7 +357,7 @@ def generate_meal(
                         dish_dict["name"] = re.sub(r'\s*\([Tt]hứ\s+\d+\)\s*|\s*\([Cc]hủ\s+[Nn]hật\)\s*', '', dish_dict["name"]).strip()
                 
                 # Chuyển đổi kết quả từ LLaMA thành Dish objects
-                dishes = [generate_dish(dish_dict) for dish_dict in ai_dish_dicts]
+                dishes = [generate_dish(dish_dict, user_data) for dish_dict in ai_dish_dicts]
                 print(f"Successfully created {len(dishes)} dishes from AI for {meal_type}")
                 
                 # Track used dish names
@@ -306,7 +403,7 @@ def generate_meal(
         )
         
         # Convert to Dish objects
-        dishes = [generate_dish(dish_dict) for dish_dict in adjusted_dish_dicts]
+        dishes = [generate_dish(dish_dict, user_data) for dish_dict in adjusted_dish_dicts]
         print(f"Generated {len(dishes)} random dishes for {meal_type}")
         
         # Track used dish names
@@ -366,7 +463,7 @@ def generate_meal(
                     "carbs": target_carbs
                 }
             }
-        dishes = [generate_dish(basic_dish)]
+        dishes = [generate_dish(basic_dish, user_data)]
         print(f"Created fallback dish: {basic_dish['name']}")
         
         # Track used dish names
@@ -690,7 +787,7 @@ def generate_weekly_meal_plan(
     
     return weekly_plan
 
-def replace_day_meal_plan(
+def replace_meal(
     current_weekly_plan: Optional[WeeklyMealPlan],
     replace_request: ReplaceDayRequest,
     preferences: List[str] = None,
@@ -707,7 +804,7 @@ def replace_day_meal_plan(
         replace_request: Request with day and nutrition targets
         preferences: Food preferences (optional)
         allergies: Food allergies to avoid (optional)
-        cuisine_style: Preferred cuisine style (optional)
+        cuisine_style: Cuisine style (optional)
         use_ai: Whether to use AI for generation
         user_data: Dictionary containing user demographic and goal info (optional)
         
@@ -716,6 +813,16 @@ def replace_day_meal_plan(
     """
     # Clear the used dishes for this specific day to ensure new variety
     reset_tracker()
+    
+    # Reset cache trong Groq service để đảm bảo luôn tạo mới
+    if use_ai and AI_SERVICE and AI_AVAILABLE:
+        try:
+            # Xoá cache để luôn tạo món mới
+            print("🔄 Đang xóa cache để tạo món mới...")
+            AI_SERVICE.clear_cache()
+            print("✅ Đã xóa cache AI thành công")
+        except Exception as e:
+            print(f"⚠️ Không thể xóa cache AI: {e}")
     
     # Scale down the daily nutrition targets based on meal type
     if replace_request.meal_type:

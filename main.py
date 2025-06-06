@@ -1053,6 +1053,214 @@ async def test_firebase_storage():
         "status": "ok" if connection_ok else "error"
     }
 
+# Cập nhật model cho yêu cầu tạo kế hoạch ăn
+class MealPlanRequest(BaseModel):
+    user_id: str = "default"
+    calories_target: int = 2000
+    protein_target: int = 120
+    fat_target: int = 65
+    carbs_target: int = 250
+    use_ai: bool = True
+    preferences: Optional[List[str]] = None
+    allergies: Optional[List[str]] = None
+    cuisine_style: Optional[str] = None
+    diet_restrictions: Optional[List[str]] = None
+    diet_preference: Optional[str] = None
+    health_conditions: Optional[List[str]] = None
+    fiber_target: Optional[int] = None
+    sugar_target: Optional[int] = None
+    sodium_target: Optional[int] = None
+
+@app.post("/api/meal-plan/generate", tags=["Meal Plan"])
+async def generate_meal_plan(
+    meal_plan_request: MealPlanRequest,
+    user: Optional[TokenPayload] = Depends(get_optional_current_user)
+):
+    try:
+        # Extract request data
+        user_id = meal_plan_request.user_id
+        calories_target = meal_plan_request.calories_target
+        protein_target = meal_plan_request.protein_target
+        fat_target = meal_plan_request.fat_target
+        carbs_target = meal_plan_request.carbs_target
+        use_ai = meal_plan_request.use_ai
+        preferences = meal_plan_request.preferences or []
+        allergies = meal_plan_request.allergies or []
+        cuisine_style = meal_plan_request.cuisine_style
+        diet_restrictions = meal_plan_request.diet_restrictions or []
+        diet_preference = meal_plan_request.diet_preference
+        health_conditions = meal_plan_request.health_conditions or []
+        fiber_target = meal_plan_request.fiber_target
+        sugar_target = meal_plan_request.sugar_target
+        sodium_target = meal_plan_request.sodium_target
+        
+        # Create user_data dictionary with all relevant health information
+        user_data = {
+            "allergies": allergies,
+            "diet_restrictions": diet_restrictions,
+            "diet_preference": diet_preference,
+            "health_conditions": health_conditions,
+            "fiber_target": fiber_target,
+            "sugar_target": sugar_target,
+            "sodium_target": sodium_target
+        }
+        
+        # Log received data for debugging
+        logger.info(f"Generating meal plan for user {user_id}")
+        logger.info(f"Nutrition targets: {calories_target}cal, {protein_target}g protein, {fat_target}g fat, {carbs_target}g carbs")
+        logger.info(f"Health info: allergies={allergies}, health_conditions={health_conditions}, diet_restrictions={diet_restrictions}")
+        
+        # Generate weekly meal plan
+        weekly_plan = {}
+        for day in DAYS_OF_WEEK:
+            breakfast_meals = groq_service.generate_meal_suggestions(
+                calories_target=int(calories_target * 0.25),  # 25% of calories for breakfast
+                protein_target=int(protein_target * 0.25),
+                fat_target=int(fat_target * 0.25),
+                carbs_target=int(carbs_target * 0.25),
+                meal_type="breakfast",
+                preferences=preferences,
+                allergies=allergies,
+                cuisine_style=cuisine_style,
+                use_ai=use_ai,
+                user_data=user_data  # Pass all health-related data
+            )
+            
+            lunch_meals = groq_service.generate_meal_suggestions(
+                calories_target=int(calories_target * 0.35),  # 35% of calories for lunch
+                protein_target=int(protein_target * 0.35),
+                fat_target=int(fat_target * 0.35),
+                carbs_target=int(carbs_target * 0.35),
+                meal_type="lunch",
+                preferences=preferences,
+                allergies=allergies,
+                cuisine_style=cuisine_style,
+                use_ai=use_ai,
+                user_data=user_data  # Pass all health-related data
+            )
+            
+            dinner_meals = groq_service.generate_meal_suggestions(
+                calories_target=int(calories_target * 0.40),  # 40% of calories for dinner
+                protein_target=int(protein_target * 0.40),
+                fat_target=int(fat_target * 0.40),
+                carbs_target=int(carbs_target * 0.40),
+                meal_type="dinner",
+                preferences=preferences,
+                allergies=allergies,
+                cuisine_style=cuisine_style,
+                use_ai=use_ai,
+                user_data=user_data  # Pass all health-related data
+            )
+            
+            # Continue with the rest of your code...
+        
+        # Similar updates for other endpoints...
+
+# Cập nhật endpoint thay thế một ngày
+@app.post("/api/replace-day", tags=["Meal Plan"])
+async def replace_day(
+    meal_plan_request: MealPlanRequest,
+    user: Optional[TokenPayload] = Depends(get_optional_current_user)
+):
+    try:
+        # Extract data from request
+        user_id = meal_plan_request.user_id
+        day_of_week = meal_plan_request.day_of_week
+        calories_target = meal_plan_request.calories_target
+        protein_target = meal_plan_request.protein_target
+        fat_target = meal_plan_request.fat_target
+        carbs_target = meal_plan_request.carbs_target
+        use_ai = meal_plan_request.use_ai
+        preferences = meal_plan_request.preferences or []
+        allergies = meal_plan_request.allergies or []
+        cuisine_style = meal_plan_request.cuisine_style
+        diet_restrictions = meal_plan_request.diet_restrictions or []
+        diet_preference = meal_plan_request.diet_preference
+        health_conditions = meal_plan_request.health_conditions or []
+        fiber_target = meal_plan_request.fiber_target
+        sugar_target = meal_plan_request.sugar_target
+        sodium_target = meal_plan_request.sodium_target
+        
+        # Create user_data dictionary with all relevant health information
+        user_data = {
+            "allergies": allergies,
+            "diet_restrictions": diet_restrictions,
+            "diet_preference": diet_preference,
+            "health_conditions": health_conditions,
+            "fiber_target": fiber_target,
+            "sugar_target": sugar_target,
+            "sodium_target": sodium_target
+        }
+        
+        # Generate new meals for the day
+        breakfast_meals = groq_service.generate_meal_suggestions(
+            calories_target=int(calories_target * 0.25),
+            protein_target=int(protein_target * 0.25),
+            fat_target=int(fat_target * 0.25),
+            carbs_target=int(carbs_target * 0.25),
+            meal_type="breakfast",
+            preferences=preferences,
+            allergies=allergies,
+            cuisine_style=cuisine_style,
+            use_ai=use_ai,
+            user_data=user_data
+        )
+        
+        # Continue with lunch, dinner, etc...
+
+# Cập nhật endpoint thay thế một bữa ăn cụ thể
+@app.post("/api/meal-plan/replace-meal", tags=["Meal Plan"])
+async def replace_meal(
+    meal_plan_request: MealPlanRequest,
+    user: Optional[TokenPayload] = Depends(get_optional_current_user)
+):
+    try:
+        # Extract data from request
+        user_id = meal_plan_request.user_id
+        day_of_week = meal_plan_request.day_of_week
+        meal_type = meal_plan_request.meal_type
+        calories_target = meal_plan_request.calories_target
+        protein_target = meal_plan_request.protein_target
+        fat_target = meal_plan_request.fat_target
+        carbs_target = meal_plan_request.carbs_target
+        use_ai = meal_plan_request.use_ai
+        preferences = meal_plan_request.preferences or []
+        allergies = meal_plan_request.allergies or []
+        cuisine_style = meal_plan_request.cuisine_style
+        diet_restrictions = meal_plan_request.diet_restrictions or []
+        diet_preference = meal_plan_request.diet_preference
+        health_conditions = meal_plan_request.health_conditions or []
+        fiber_target = meal_plan_request.fiber_target
+        sugar_target = meal_plan_request.sugar_target
+        sodium_target = meal_plan_request.sodium_target
+        
+        # Create user_data dictionary with all relevant health information
+        user_data = {
+            "allergies": allergies,
+            "diet_restrictions": diet_restrictions,
+            "diet_preference": diet_preference,
+            "health_conditions": health_conditions,
+            "fiber_target": fiber_target,
+            "sugar_target": sugar_target,
+            "sodium_target": sodium_target
+        }
+        
+        # Generate new meal
+        new_meals = groq_service.generate_meal_suggestions(
+            calories_target=calories_target,
+            protein_target=protein_target,
+            fat_target=fat_target,
+            carbs_target=carbs_target,
+            meal_type=meal_type,
+            preferences=preferences,
+            allergies=allergies,
+            cuisine_style=cuisine_style,
+            use_ai=use_ai,
+            user_data=user_data
+        )
+        
+        # Continue with updating meal plan...
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

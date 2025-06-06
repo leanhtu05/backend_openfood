@@ -119,5 +119,109 @@ class FoodRecognitionService:
         
         return recognition_response
         
+    async def add_dish_to_meal_log(
+        user_id: str,
+        meal_type: str,
+        dish: Dict,
+        replace_existing: bool = False
+    ) -> bool:
+        """
+        Thêm một món ăn vào bản ghi bữa ăn hiện tại
+        
+        Args:
+            user_id: ID của người dùng
+            meal_type: Loại bữa ăn (breakfast, lunch, dinner, snack)
+            dish: Thông tin món ăn
+            replace_existing: Có thay thế bản ghi hiện tại không
+            
+        Returns:
+            True nếu thành công, False nếu không
+        """
+        try:
+            print(f"Adding dish to meal log: {dish.get('name', 'Unknown')} for {user_id} - {meal_type}")
+            
+            # Lấy ngày hiện tại
+            today = datetime.now().strftime("%Y-%m-%d")
+            
+            # Tạo đối tượng RecognizedFood từ dữ liệu món ăn
+            recognized_food = RecognizedFood(
+                food_name=dish.get('name', 'Unknown dish'),
+                confidence=1.0,  # Đây là món ăn được chọn nên tin cậy cao
+                nutrition=NutritionInfo(
+                    calories=dish.get('nutrition', {}).get('calories', 0),
+                    protein=dish.get('nutrition', {}).get('protein', 0),
+                    fat=dish.get('nutrition', {}).get('fat', 0),
+                    carbs=dish.get('nutrition', {}).get('carbs', 0)
+                ),
+                portion_size=dish.get('portion_size', '1 serving'),
+                image_url=dish.get('image_url', None),
+                dish_type=dish.get('dish_type', 'main'),
+                region=dish.get('region', 'north')
+            )
+            
+            # Lấy bản ghi hiện tại của ngày hôm nay nếu có
+            current_logs = firestore_service.get_food_logs_by_date(user_id, today)
+            
+            # Lọc bản ghi theo loại bữa ăn
+            meal_logs = [log for log in current_logs if log.get('meal_type', '') == meal_type]
+            
+            if meal_logs and not replace_existing:
+                # Đã có bản ghi cho bữa ăn này - thêm món mới vào
+                log_id = meal_logs[0].get('id')
+                existing_foods = meal_logs[0].get('recognized_foods', [])
+                
+                # Kiểm tra xem món ăn đã tồn tại chưa
+                food_exists = False
+                for food in existing_foods:
+                    if food.get('food_name') == recognized_food.food_name:
+                        food_exists = True
+                        break
+                
+                if not food_exists:
+                    # Chỉ thêm vào nếu chưa có món này
+                    existing_foods.append(recognized_food.dict())
+                    
+                    # Tính toán lại tổng dinh dưỡng
+                    total_nutrition = {
+                        'calories': sum(food.get('nutrition', {}).get('calories', 0) for food in existing_foods),
+                        'protein': sum(food.get('nutrition', {}).get('protein', 0) for food in existing_foods),
+                        'fat': sum(food.get('nutrition', {}).get('fat', 0) for food in existing_foods),
+                        'carbs': sum(food.get('nutrition', {}).get('carbs', 0) for food in existing_foods)
+                    }
+                    
+                    # Cập nhật bản ghi
+                    return firestore_service.update_food_log(
+                        user_id=user_id,
+                        log_id=log_id,
+                        recognized_foods=existing_foods,
+                        total_nutrition=total_nutrition
+                    )
+            else:
+                # Tạo bản ghi mới
+                timestamp = datetime.now().isoformat()
+                
+                # Tạo dữ liệu bản ghi
+                log_entry = {
+                    'user_id': user_id,
+                    'recognized_foods': [recognized_food.dict()],
+                    'meal_type': meal_type,
+                    'image_url': dish.get('image_url', ''),
+                    'timestamp': timestamp,
+                    'date': today,
+                    'total_nutrition': {
+                        'calories': recognized_food.nutrition.calories,
+                        'protein': recognized_food.nutrition.protein,
+                        'fat': recognized_food.nutrition.fat,
+                        'carbs': recognized_food.nutrition.carbs
+                    }
+                }
+                
+                # Lưu vào Firestore
+                return firestore_service.add_food_log(log_entry)
+            
+        except Exception as e:
+            print(f"Error adding dish to meal log: {e}")
+            return False
+
 # Create singleton instance
 food_recognition_service = FoodRecognitionService() 

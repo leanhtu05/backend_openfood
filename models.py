@@ -27,11 +27,30 @@ class NutritionInfo(BaseModel):
     fat: float
     carbs: float
 
+# Enum for dish type
+class DishType:
+    MAIN = "main"
+    SIDE = "side"
+    SOUP = "soup"
+    DESSERT = "dessert"
+    APPETIZER = "appetizer"
+
+# Enum for Vietnamese regions
+class VietnamRegion:
+    NORTH = "north"
+    CENTRAL = "central"
+    SOUTH = "south"
+    HIGHLANDER = "highlander"
+    FOREIGN = "foreign"
+
 class Dish(BaseModel):
     name: str
     ingredients: List[Ingredient]
     preparation: List[str]
     nutrition: NutritionInfo
+    dish_type: str = DishType.MAIN  # Default to main dish
+    region: str = VietnamRegion.NORTH  # Default to northern region
+    image_url: Optional[str] = None
 
 class Meal(BaseModel):
     dishes: List[Dish]
@@ -104,6 +123,8 @@ class RecognizedFood(BaseModel):
     nutrition: Optional[NutritionInfo] = Field(None, description="Thông tin dinh dưỡng của món ăn")
     portion_size: Optional[str] = Field(None, description="Khẩu phần ước tính")
     image_url: Optional[str] = Field(None, description="URL của hình ảnh đã lưu")
+    dish_type: Optional[str] = Field(DishType.MAIN, description="Loại món ăn")
+    region: Optional[str] = Field(VietnamRegion.NORTH, description="Vùng miền")
 
 class FoodRecognitionResponse(BaseModel):
     """Model phản hồi sau khi nhận diện thực phẩm"""

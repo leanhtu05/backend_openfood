@@ -3,8 +3,12 @@ import json
 import time
 import threading
 import random
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Any
 from models import NutritionInfo, Dish, Ingredient
+from datetime import datetime
+import logging
+from groq import Groq
+import requests
 
 # Import fallback data
 from fallback_meals import FALLBACK_MEALS
@@ -17,150 +21,84 @@ except ImportError:
     print("Groq client package not installed. Using fallback mode.")
     GROQ_AVAILABLE = False
 
+# Cấu hình logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Các hằng số
+DAYS_OF_WEEK = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ Nhật"]
+DEFAULT_MODEL = "llama3-70b-8192"  # Hoặc model Groq khác bạn muốn sử dụng
+
 class RateLimiter:
-    """Manages API rate limits"""
+    """Simple rate limiter to prevent API overuse."""
     
     def __init__(self, requests_per_minute: int = 60, requests_per_day: int = 1000):
-        """
-        Initialize rate limiter
-        
-        Args:
-            requests_per_minute: Maximum requests per minute
-            requests_per_day: Maximum requests per day
-        """
         self.requests_per_minute = requests_per_minute
         self.requests_per_day = requests_per_day
-        self.minute_requests = 0
-        self.day_requests = 0
-        self.minute_reset_time = time.time() + 60  # Reset after 1 minute
-        self.day_reset_time = time.time() + 86400  # Reset after 1 day
-        self.lock = threading.Lock()
+        self.request_timestamps = []
+        self.daily_request_count = 0
+        self.day_start = datetime.now().date()
     
     def can_make_request(self) -> Tuple[bool, int]:
         """
-        Check if a request can be made
+        Check if a request can be made based on rate limits.
         
         Returns:
-            Tuple[bool, int]: (Can make request, wait time in seconds)
+            Tuple of (can_request: bool, wait_time: int)
         """
-        with self.lock:
-            current_time = time.time()
-            
-            # Reset minute counter if needed
-            if current_time > self.minute_reset_time:
-                self.minute_requests = 0
-                self.minute_reset_time = current_time + 60
-            
-            # Reset day counter if needed
-            if current_time > self.day_reset_time:
-                self.day_requests = 0
-                self.day_reset_time = current_time + 86400
-            
-            # Check limits
-            if self.minute_requests < self.requests_per_minute and self.day_requests < self.requests_per_day:
-                self.minute_requests += 1
-                self.day_requests += 1
-                return True, 0
-            
-            # Calculate wait time
-            wait_time = min(
-                self.minute_reset_time - current_time,
-                self.day_reset_time - current_time
-            )
-            
-            # Add jitter to avoid thundering herd
-            wait_time += random.uniform(1, 5)
-            
-            return False, max(1, int(wait_time))
+        # Reset daily count if it's a new day
+        current_day = datetime.now().date()
+        if current_day != self.day_start:
+            self.day_start = current_day
+            self.daily_request_count = 0
+        
+        # Check daily limit
+        if self.daily_request_count >= self.requests_per_day:
+            seconds_in_day = 24 * 60 * 60
+            return False, seconds_in_day
+        
+        # Check per-minute limit
+        current_time = time.time()
+        
+        # Remove timestamps older than 1 minute
+        minute_ago = current_time - 60
+        self.request_timestamps = [ts for ts in self.request_timestamps if ts > minute_ago]
+        
+        # Check if we've hit the per-minute limit
+        if len(self.request_timestamps) >= self.requests_per_minute:
+            oldest = min(self.request_timestamps)
+            wait_time = int(60 - (current_time - oldest)) + 1
+            return False, wait_time
+        
+        return True, 0
+    
+    def record_request(self):
+        """Record that a request was made."""
+        self.request_timestamps.append(time.time())
+        self.daily_request_count += 1
 
 class GroqService:
-    """Integration service with LLaMA 3 via Groq for intelligent meal planning"""
+    """Service to interact with Groq API for meal planning."""
     
     def __init__(self, api_key: str = os.getenv("GROQ_API_KEY")):
         """
-        Initialize Groq service with API key
+        Initialize Groq service.
         
         Args:
-            api_key: Groq API key, from environment variable if not provided
+            api_key: Groq API key
         """
-        self.api_key = api_key
-        self.available = GROQ_AVAILABLE and api_key is not None
+        self._api_key = api_key or os.getenv("GROQ_API_KEY")
+        if not self._api_key:
+            raise ValueError("Groq API key is required. Set GROQ_API_KEY environment variable.")
         
-        # Initialize cache and rate limiter
-        self.cache = {}
-        self.rate_limiter = RateLimiter(requests_per_minute=60, requests_per_day=1000)
-        self.max_retries = 3
+        self._client = Groq(api_key=self._api_key)
+        self._model = DEFAULT_MODEL
+        self._cache = {}  # Simple in-memory cache
+        self._rate_limiter = RateLimiter()
         
-        # Add variables to track quota status
-        self.quota_exceeded = False
-        self.quota_reset_time = None
-        
-        # Default model using LLaMA 3
-        self.default_model = "llama3-8b-8192"
-        self.client = None
-        self.model = self.default_model
-        
-        if self.available:
-            try:
-                print("\n=== INITIALIZING GROQ SERVICE ===")
-                print(f"API Key: {'***' + self.api_key[-4:] if self.api_key else 'None'}")
-                
-                # Initialize client simply (Groq 0.4.0 version)
-                try:
-                    # FIXED: Use dynamic import to get the class and initialize without proxies
-                    from importlib import import_module
-                    groq_module = import_module('groq')
-                    self.client = groq_module.Groq(api_key=self.api_key)
-                except Exception as e:
-                    print(f"Error initializing Groq client: {str(e)}")
-                    self.available = False
-                    return
-                
-                # Priority list of models to try
-                self.preferred_models = [
-                    "llama3-70b-8192",  # LLaMA 3 70B - Strongest model
-                    "llama3-8b-8192",   # LLaMA 3 8B - Balance of speed and performance
-                    "mixtral-8x7b-32768"  # Mixtral - Fallback if LLaMA is not available
-                ]
-                
-                # Check available models
-                if self.client:
-                    try:
-                        print("Fetching available models...")
-                        models = self.client.models.list()
-                        available_models = [model.id for model in models.data]
-                        
-                        print("Available models:")
-                        for model_name in available_models:
-                            print(f"- {model_name}")
-                        
-                        # Find first available preferred model
-                        selected_model = None
-                        for model_name in self.preferred_models:
-                            if model_name in available_models:
-                                selected_model = model_name
-                                break
-                        
-                        # If no preferred model found, use default model
-                        if not selected_model:
-                            selected_model = self.default_model
-                        
-                        self.model = selected_model
-                        print(f"Using model: {self.model}")
-                        
-                    except Exception as e:
-                        print(f"Error fetching models: {str(e)}")
-                        print(f"Using default model: {self.default_model}")
-                        self.model = self.default_model
-                
-                print("Groq initialization successful")
-                print("=== GROQ SERVICE INITIALIZED ===\n")
-            except Exception as e:
-                print(f"ERROR initializing Groq: {str(e)}")
-                import traceback
-                traceback.print_exc()
-                self.available = False
-        
+        # Log successful initialization
+        logger.info("GroqService initialized successfully")
+    
     def generate_meal_suggestions(
         self,
         calories_target: int,
@@ -175,269 +113,364 @@ class GroqService:
         user_data: Dict = None  # Add parameter for user data
     ) -> List[Dict]:
         """
-        Generate meal suggestions using LLaMA 3 via Groq
+        Generate meal suggestions based on nutritional targets and preferences.
         
         Args:
-            calories_target: Calorie target
-            protein_target: Protein target (g)
-            fat_target: Fat target (g)
-            carbs_target: Carbs target (g)
-            meal_type: Meal type (breakfast, lunch, dinner)
-            preferences: List of food preferences (optional)
-            allergies: List of food allergies (optional)
-            cuisine_style: Cuisine style (optional)
-            use_ai: Whether to use AI or use fallback data
-            user_data: Dictionary containing user demographic and goal info (optional)
+            calories_target: Target calories for the meal
+            protein_target: Target protein in grams
+            fat_target: Target fat in grams
+            carbs_target: Target carbs in grams
+            meal_type: Type of meal (breakfast, lunch, dinner, snack)
+            preferences: List of food preferences
+            allergies: List of food allergies
+            cuisine_style: Preferred cuisine style
+            use_ai: Whether to use AI or fallback to static data
+            user_data: Additional user data including health conditions
             
         Returns:
-            List of meal suggestions as dictionaries
+            List of meal suggestions
         """
-        # Check if AI is disabled or quota exceeded
-        if not use_ai or self.quota_exceeded:
-            # Check if quota has been reset
-            if self.quota_exceeded and self.quota_reset_time:
-                current_time = time.time()
-                if current_time > self.quota_reset_time:
-                    print("Quota reset time has passed. Trying to use API again.")
-                    self.quota_exceeded = False
-                    self.quota_reset_time = None
-                else:
-                    print(f"Quota exceeded. Using fallback data. Reset in: {int(self.quota_reset_time - current_time)} seconds")
-                    return self._fallback_meal_suggestions(meal_type)
-            elif not use_ai:
-                print("AI usage turned off. Using fallback data.")
-                return self._fallback_meal_suggestions(meal_type)
-            else:
-                print("Quota exceeded. Using fallback data.")
-                return self._fallback_meal_suggestions(meal_type)
-                
-        # If AI is not available
-        if not self.available:
-            print("Groq API not available. Using fallback data.")
+        # Normalize meal type
+        meal_type = meal_type.lower()
+        
+        # Log function call
+        logger.info(f"Generating meal suggestions for {meal_type} with targets: {calories_target}cal, {protein_target}g protein")
+        
+        # If AI is disabled, return fallback meals
+        if not use_ai:
+            logger.info("AI generation disabled, using fallback meals")
             return self._fallback_meal_suggestions(meal_type)
+        
+        # Check if we can make a request (rate limiting)
+        can_request, wait_time = self._rate_limiter.can_make_request()
+        if not can_request:
+            logger.warning(f"Rate limit exceeded, wait {wait_time}s. Using fallback meals.")
+            return self._fallback_meal_suggestions(meal_type)
+        
+        # Extract health-related information from user_data
+        health_conditions = []
+        diet_restrictions = []
+        diet_preference = None
+        fiber_target = None
+        sugar_target = None
+        sodium_target = None
+        
+        if user_data:
+            health_conditions = user_data.get("health_conditions", [])
+            diet_restrictions = user_data.get("diet_restrictions", [])
+            diet_preference = user_data.get("diet_preference")
+            fiber_target = user_data.get("fiber_target")
+            sugar_target = user_data.get("sugar_target")
+            sodium_target = user_data.get("sodium_target")
+            
+            # If allergies is empty in main args but exists in user_data, use that
+            if not allergies and "allergies" in user_data:
+                allergies = user_data.get("allergies", [])
+        
+        # Ensure lists are not None
+        preferences = preferences or []
+        allergies = allergies or []
+        health_conditions = health_conditions or []
+        diet_restrictions = diet_restrictions or []
         
         # Create cache key
         cache_key = f"{meal_type}_{calories_target}_{protein_target}_{fat_target}_{carbs_target}"
         if preferences:
-            cache_key += f"_prefs:{'|'.join(preferences)}"
+            cache_key += f"_pref_{'_'.join(sorted(preferences))}"
         if allergies:
-            cache_key += f"_allergies:{'|'.join(allergies)}"
+            cache_key += f"_allergy_{'_'.join(sorted(allergies))}"
         if cuisine_style:
-            cache_key += f"_cuisine:{cuisine_style}"
-        if user_data:
-            # Add user data to cache key
-            user_data_str = "_".join([f"{k}:{v}" for k, v in user_data.items() if k in ['gender', 'age', 'goal', 'activity_level']])
-            cache_key += f"_user:{user_data_str}"
+            cache_key += f"_cuisine_{cuisine_style}"
+        if health_conditions:
+            cache_key += f"_health_{'_'.join(sorted(health_conditions))}"
+        if diet_restrictions:
+            cache_key += f"_diet_{'_'.join(sorted(diet_restrictions))}"
+        if diet_preference:
+            cache_key += f"_dietpref_{diet_preference}"
         
         # Check cache
-        if cache_key in self.cache:
-            print(f"Using cached meal suggestions for: {cache_key}")
-            return self.cache[cache_key]
-        
-        # Check rate limit
-        can_request, wait_time = self.rate_limiter.can_make_request()
-        if not can_request:
-            print(f"Rate limit reached. Using fallback data. Try again in {wait_time} seconds.")
-            return self._fallback_meal_suggestions(meal_type)
-        
-        # Create prompt for LLaMA
-        preferences_str = ", ".join(preferences) if preferences else "none"
-        allergies_str = ", ".join(allergies) if allergies else "none"
-        cuisine_style_str = cuisine_style if cuisine_style else "no specific requirement"
-
-        # Extract user data information
-        user_info = ""
-        if user_data:
-            gender = user_data.get('gender', 'unknown')
-            age = user_data.get('age', 'unknown')
-            goal = user_data.get('goal', 'unknown')
-            activity_level = user_data.get('activity_level', 'unknown')
-            
-            user_info = f"""
-- User gender: {gender}
-- User age: {age}
-- User goal: {goal}
-- User activity level: {activity_level}"""
-
-        # Optimize prompt for LLaMA 3
-        prompt = f"""You are a nutrition expert, please suggest 5 Vietnamese meals for {meal_type} with the following criteria:
-- Total calories: {calories_target}kcal
-- Protein amount: {protein_target}g
-- Fat amount: {fat_target}g
-- Carbohydrate amount: {carbs_target}g
-- Preferences: {preferences_str}
-- Allergies (avoid): {allergies_str}
-- Cuisine style: {cuisine_style_str}{user_info}
-
-IMPORTANT REQUIREMENTS:
-1. Write ALL meal names and descriptions in Vietnamese language
-2. Include Vietnamese ingredients with Vietnamese names
-3. Write detailed preparation instructions in Vietnamese with step-by-step cooking guide
-4. Make sure to create DIFFERENT meals than usual. Be creative and diverse.
-5. DO NOT include day names in meal names (no "Thứ 2", "Thứ 3", etc.)
-6. Consider the user's specific goals and requirements:
-   - For weight loss goals: Focus on filling, high-fiber, protein-rich, lower calorie options
-   - For muscle gain goals: Focus on protein-rich, nutrient-dense meals
-   - For general health: Focus on balanced, nutritious meals with variety
-   - Adjust spice levels and complexity based on user age
-   - Consider activity level for portion sizes and recovery nutrients
-
-7. CRITICAL: Format preparation instructions as an ARRAY of separate steps. Do NOT return preparation as a single string.
-   CORRECT FORMAT: "instructions": ["Step 1: Wash vegetables", "Step 2: Cook rice", "Step 3: Mix ingredients"]
-   INCORRECT FORMAT: "instructions": "Step 1: Wash vegetables. Step 2: Cook rice. Step 3: Mix ingredients"
-
-Please return the result exactly in the following JSON format:
-```json
-[
-  {{
-    "name": "Meal name",
-    "description": "Brief description of the meal",
-    "ingredients": [
-      {{"name": "Ingredient name", "amount": "Amount", "calories": 100, "protein": 10, "fat": 5, "carbs": 15}},
-      ...
-    ],
-    "instructions": ["Step 1: Do this first", "Step 2: Then do this", "Step 3: Finally do this"],
-    "total_nutrition": {{"calories": 400, "protein": 20, "fat": 15, "carbs": 45}}
-  }},
-  ...
-]
-```
-
-Ensure that the nutrition data for each meal is appropriate for the goals and the total of all ingredients matches the total nutrition for each meal.
-Return EXACTLY the JSON format above without adding any other content.
-"""
+        if cache_key in self._cache:
+            logger.info(f"Cache hit for key: {cache_key}")
+            return self._cache[cache_key]
         
         try:
-            # Call Groq API
-            for attempt in range(self.max_retries):
-                try:
-                    print(f"Making request to Groq API, attempt {attempt + 1}/{self.max_retries}")
-                    
-                    response = self.client.chat.completions.create(
-                        model=self.model,
-                        messages=[{"role": "user", "content": prompt}],
-                        temperature=0.7,
-                        max_tokens=2000,
-                        top_p=0.95
-                    )
-                    
-                    # Extract JSON result from response
-                    result_text = response.choices[0].message.content.strip()
-                    
-                    # Extract JSON from result (may have other characters)
-                    json_start = result_text.find("[")
-                    json_end = result_text.rfind("]") + 1
-                    
-                    if json_start >= 0 and json_end > json_start:
-                        json_str = result_text[json_start:json_end]
-                        try:
-                            meal_data = json.loads(json_str)
-                            
-                            # Validate meal data
-                            if isinstance(meal_data, list) and len(meal_data) > 0:
-                                # Add more detailed checks to ensure valid data
-                                valid_meals = []
-                                for meal in meal_data:
-                                    if (isinstance(meal, dict) and 
-                                        'name' in meal and 
-                                        'ingredients' in meal and 
-                                        isinstance(meal['ingredients'], list)):
-                                        
-                                        # If preparation is missing, add a default description
-                                        if 'preparation' not in meal or not meal['preparation']:
-                                            meal['preparation'] = f"Prepare {meal['name']} with the listed ingredients."
-                                        
-                                        # Ensure ingredients is not empty
-                                        if not meal['ingredients']:
-                                            meal['ingredients'] = [{'name': 'Main ingredient', 'amount': '100g'}]
-                                        
-                                        valid_meals.append(meal)
-                                
-                                if valid_meals:
-                                    # Save to cache
-                                    self.cache[cache_key] = valid_meals
-                                    return valid_meals
-                                else:
-                                    print("No valid meals in the result from AI. Using fallback data.")
-                        except json.JSONDecodeError:
-                            print(f"Error parsing JSON from LLaMA response. Attempt {attempt + 1}")
-                    
-                    # If valid data couldn't be extracted, try again
-                    print(f"Invalid response format. Retrying... ({attempt + 1}/{self.max_retries})")
-                    time.sleep(2)
-                    
-                except Exception as e:
-                    print(f"Error calling Groq API: {str(e)} - Attempt {attempt + 1}/{self.max_retries}")
-                    if "quota exceeded" in str(e).lower():
-                        print("API quota exceeded")
-                        self.quota_exceeded = True
-                        self.quota_reset_time = time.time() + 3600  # Try again after 1 hour
-                        break
-                    time.sleep(2)
+            # Generate prompt
+            prompt = self._generate_meal_prompt(
+                calories_target=calories_target,
+                protein_target=protein_target,
+                fat_target=fat_target,
+                carbs_target=carbs_target,
+                meal_type=meal_type,
+                preferences=preferences,
+                allergies=allergies,
+                cuisine_style=cuisine_style,
+                health_conditions=health_conditions,
+                diet_restrictions=diet_restrictions,
+                diet_preference=diet_preference,
+                fiber_target=fiber_target,
+                sugar_target=sugar_target,
+                sodium_target=sodium_target
+            )
             
-            # If no result after all attempts
-            print("Failed to get valid response from Groq API after multiple attempts. Using fallback data.")
-            return self._fallback_meal_suggestions(meal_type)
+            # Make API call
+            completion = self._client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": "You are a nutrition expert specializing in meal planning."},
+                    {"role": "user", "content": prompt}
+                ],
+                model=self._model,
+                temperature=0.5,
+                max_tokens=1000,
+                response_format={"type": "json_object"}
+            )
+            
+            # Parse response
+            response_text = completion.choices[0].message.content
+            response_json = json.loads(response_text)
+            
+            # Process meals
+            if "meals" in response_json:
+                meals = response_json["meals"]
+                
+                # Update cache
+                self._cache[cache_key] = meals
+                self._rate_limiter.record_request()
+                
+                return meals
+            else:
+                logger.error("Response format error: 'meals' key missing")
+                return self._fallback_meal_suggestions(meal_type)
                 
         except Exception as e:
-            print(f"Error generating meal suggestions: {str(e)}")
+            logger.error(f"Error generating meal suggestions: {str(e)}")
             return self._fallback_meal_suggestions(meal_type)
     
+    def _generate_meal_prompt(
+        self,
+        calories_target: int,
+        protein_target: int,
+        fat_target: int,
+        carbs_target: int,
+        meal_type: str,
+        preferences: List[str],
+        allergies: List[str],
+        cuisine_style: str = None,
+        health_conditions: List[str] = None,
+        diet_restrictions: List[str] = None,
+        diet_preference: str = None,
+        fiber_target: int = None,
+        sugar_target: int = None,
+        sodium_target: int = None
+    ) -> str:
+        """Generate a prompt for meal suggestions based on parameters."""
+        prompt = f"""Generate 2 unique meal suggestions for {meal_type} with the following nutritional targets:
+- Calories: {calories_target} calories
+- Protein: {protein_target} grams
+- Fat: {fat_target} grams
+- Carbohydrates: {carbs_target} grams
+"""
+
+        # Add additional nutrition targets if provided
+        if fiber_target:
+            prompt += f"- Fiber: {fiber_target} grams\n"
+        if sugar_target:
+            prompt += f"- Sugar: maximum {sugar_target} grams\n"
+        if sodium_target:
+            prompt += f"- Sodium: maximum {sodium_target} mg\n"
+
+        # Add dietary preferences
+        if preferences:
+            prompt += f"\nFood preferences: {', '.join(preferences)}"
+        
+        # Add cuisine style
+        if cuisine_style:
+            prompt += f"\nPreferred cuisine style: {cuisine_style}"
+        
+        # Add diet preference (vegetarian, vegan, etc.)
+        if diet_preference:
+            prompt += f"\nDiet preference: {diet_preference}"
+        
+        # Add dietary restrictions
+        if diet_restrictions:
+            prompt += f"\nDietary restrictions: {', '.join(diet_restrictions)}"
+        
+        # Add allergies with STRONG EMPHASIS
+        if allergies:
+            prompt += f"\n\nIMPORTANT - FOOD ALLERGIES - DO NOT INCLUDE THESE INGREDIENTS: {', '.join(allergies)}"
+        
+        # Add health conditions with CLEAR GUIDANCE
+        if health_conditions:
+            prompt += f"\n\nIMPORTANT - HEALTH CONDITIONS TO CONSIDER: {', '.join(health_conditions)}"
+            prompt += "\nAdjust the meal suggestions to be appropriate for these health conditions by:"
+            prompt += "\n- For diabetes: lower glycemic index foods, limit simple carbs"
+            prompt += "\n- For hypertension: lower sodium options"
+            prompt += "\n- For heart disease: heart-healthy fats, low saturated fat"
+            prompt += "\n- For kidney disease: controlled phosphorus, potassium, and protein"
+            prompt += "\n- For celiac disease: strictly gluten-free options"
+        
+        # Additional instructions for better structured output
+        prompt += """
+
+Please respond with a JSON object with the following structure:
+{
+  "meals": [
+    {
+      "name": "Meal name",
+      "ingredients": ["ingredient 1", "ingredient 2", ...],
+      "recipe": "Step-by-step preparation instructions",
+      "nutrition": {
+        "calories": calories value,
+        "protein": protein in grams,
+        "fat": fat in grams,
+        "carbs": carbs in grams,
+        "fiber": fiber in grams (if available),
+        "sugar": sugar in grams (if available),
+        "sodium": sodium in mg (if available)
+      }
+    },
+    ...
+  ]
+}
+
+Ensure that each meal:
+1. Is appropriate for the specified meal type and meets the nutritional targets
+2. Avoids ALL allergens and dietary restrictions completely
+3. Is suitable for the health conditions listed
+4. Includes detailed ingredients with approximate amounts
+5. Provides clear preparation instructions
+6. Has complete nutritional information
+"""
+        # Log prompt for debugging
+        logger.debug(f"Generated prompt: {prompt}")
+        return prompt
+    
     def _get_fallback_meals(self, meal_type: str) -> List[Dict]:
-        """
-        Get fallback meal data
+        """Get fallback meals for when AI generation fails."""
+        fallback_meals = {
+            "breakfast": [
+                {
+                    "name": "Oatmeal with Fruit and Nuts",
+                    "ingredients": ["1/2 cup rolled oats", "1 cup milk", "1 banana", "1 tbsp honey", "10g almonds"],
+                    "recipe": "Cook oats with milk. Top with sliced banana, honey, and almonds.",
+                    "nutrition": {
+                        "calories": 350,
+                        "protein": 15,
+                        "fat": 10,
+                        "carbs": 50,
+                        "fiber": 5
+                    }
+                },
+                {
+                    "name": "Vegetable Omelette",
+                    "ingredients": ["2 eggs", "30g spinach", "30g bell peppers", "20g onions", "10g cheese", "5ml olive oil"],
+                    "recipe": "Sauté vegetables. Beat eggs and pour over vegetables. Add cheese and fold.",
+                    "nutrition": {
+                        "calories": 300,
+                        "protein": 20,
+                        "fat": 20,
+                        "carbs": 5,
+                        "fiber": 2
+                    }
+                }
+            ],
+            "lunch": [
+                {
+                    "name": "Grilled Chicken Salad",
+                    "ingredients": ["100g chicken breast", "100g mixed greens", "30g cherry tomatoes", "30g cucumber", "10g olive oil", "5g vinegar"],
+                    "recipe": "Grill chicken. Mix with vegetables and dress with olive oil and vinegar.",
+                    "nutrition": {
+                        "calories": 400,
+                        "protein": 35,
+                        "fat": 15,
+                        "carbs": 10,
+                        "fiber": 3
+                    }
+                },
+                {
+                    "name": "Quinoa Bowl with Vegetables",
+                    "ingredients": ["100g quinoa", "100g mixed vegetables", "50g chickpeas", "10g olive oil", "Herbs and spices"],
+                    "recipe": "Cook quinoa. Sauté vegetables. Mix everything together with olive oil and seasonings.",
+                    "nutrition": {
+                        "calories": 450,
+                        "protein": 15,
+                        "fat": 15,
+                        "carbs": 60,
+                        "fiber": 8
+                    }
+                }
+            ],
+            "dinner": [
+                {
+                    "name": "Baked Salmon with Sweet Potato",
+                    "ingredients": ["150g salmon fillet", "150g sweet potato", "100g broccoli", "5g olive oil", "Lemon, herbs"],
+                    "recipe": "Bake salmon with lemon and herbs. Roast sweet potato. Steam broccoli.",
+                    "nutrition": {
+                        "calories": 500,
+                        "protein": 40,
+                        "fat": 20,
+                        "carbs": 30,
+                        "fiber": 6
+                    }
+                },
+                {
+                    "name": "Turkey Stir-fry with Brown Rice",
+                    "ingredients": ["100g turkey breast", "100g mixed vegetables", "50g brown rice", "10g soy sauce", "5g olive oil"],
+                    "recipe": "Cook rice. Stir-fry turkey with vegetables and soy sauce. Serve over rice.",
+                    "nutrition": {
+                        "calories": 450,
+                        "protein": 35,
+                        "fat": 10,
+                        "carbs": 50,
+                        "fiber": 4
+                    }
+                }
+            ],
+            "snack": [
+                {
+                    "name": "Greek Yogurt with Berries",
+                    "ingredients": ["150g Greek yogurt", "50g mixed berries", "10g honey"],
+                    "recipe": "Mix yogurt with berries and drizzle with honey.",
+                    "nutrition": {
+                        "calories": 200,
+                        "protein": 15,
+                        "fat": 5,
+                        "carbs": 20,
+                        "fiber": 3
+                    }
+                },
+                {
+                    "name": "Apple with Almond Butter",
+                    "ingredients": ["1 medium apple", "15g almond butter"],
+                    "recipe": "Slice apple and serve with almond butter for dipping.",
+                    "nutrition": {
+                        "calories": 200,
+                        "protein": 5,
+                        "fat": 10,
+                        "carbs": 25,
+                        "fiber": 5
+                    }
+                }
+            ]
+        }
         
-        Args:
-            meal_type: Meal type (breakfast, lunch, dinner)
-            
-        Returns:
-            List of fallback meals
-        """
-        meal_type_lower = meal_type.lower()
-        
-        if "breakfast" in meal_type_lower or "morning" in meal_type_lower:
-            return FALLBACK_MEALS.get("breakfast", [])
-        elif "lunch" in meal_type_lower or "noon" in meal_type_lower:
-            return FALLBACK_MEALS.get("lunch", [])
-        elif "dinner" in meal_type_lower or "evening" in meal_type_lower:
-            return FALLBACK_MEALS.get("dinner", [])
-        else:
-            # Return a mix of meals
-            all_meals = []
-            for meals_list in FALLBACK_MEALS.values():
-                all_meals.extend(meals_list)
-            
-            # Shuffle the list to get random ones
-            random.shuffle(all_meals)
-            return all_meals[:5]  # Return maximum 5 meals
+        return fallback_meals.get(meal_type.lower(), fallback_meals["snack"])
     
     def _fallback_meal_suggestions(self, meal_type: str) -> List[Dict]:
-        """
-        Return fallback data for meal type
-        
-        Args:
-            meal_type: Meal type
-            
-        Returns:
-            List of fallback meals
-        """
+        """Return fallback meal suggestions."""
+        logger.info(f"Using fallback meals for {meal_type}")
         return self._get_fallback_meals(meal_type)
     
     def clear_cache(self):
-        """Clear cache to force new data creation"""
-        print("Clearing Groq service cache")
-        self.cache = {}
+        """Clear the cache."""
+        self._cache = {}
+        return {"status": "success", "message": "Cache cleared", "cache_size": 0}
     
     def get_cache_info(self):
-        """
-        Get information about the cache
-        
-        Returns:
-            Cache information
-        """
+        """Get information about the cache."""
         return {
-            "num_entries": len(self.cache),
-            "keys": list(self.cache.keys())
+            "status": "success",
+            "cache_size": len(self._cache),
+            "cache_keys": list(self._cache.keys())
         }
 
 # Initialize service singleton

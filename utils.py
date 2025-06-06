@@ -694,6 +694,33 @@ def generate_random_dishes(meal_type: str, count: int = 1, used_dishes: List[str
             
     return selected_dishes
 
-def format_nutrition_value(value: float) -> float:
-    """Format nutrition value to 1 decimal place"""
-    return round(value, 1)
+def format_nutrition_value(value, precision=1):
+    """
+    Làm tròn giá trị dinh dưỡng với độ chính xác phù hợp.
+    
+    Args:
+        value: Giá trị cần làm tròn
+        precision: Số chữ số sau dấu phẩy (mặc định: 1)
+    
+    Returns:
+        Giá trị đã làm tròn phù hợp
+    """
+    if value is None:
+        return 0
+
+    # Chuyển về float để đảm bảo
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return 0
+    
+    # Làm tròn theo logic:
+    # - Giá trị < 1: giữ 2 số thập phân
+    # - Giá trị 1-10: giữ 1 số thập phân
+    # - Giá trị > 10: làm tròn thành số nguyên
+    if value < 1:
+        return round(value, 2)
+    elif value < 10:
+        return round(value, 1)
+    else:
+        return int(round(value))

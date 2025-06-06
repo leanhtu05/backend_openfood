@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 import json
 from pydantic import validator, root_validator
 from datetime import datetime
+from enum import Enum, auto
 
 # Import models from firestore_models
 from models.firestore_models import (
@@ -17,6 +18,22 @@ from models.firestore_models import (
 
 # Import TokenPayload from token module
 from models.token import TokenPayload
+
+# Enum for dish type
+class DishType(str, Enum):
+    MAIN = "main"
+    SIDE = "side"
+    SOUP = "soup"
+    DESSERT = "dessert"
+    APPETIZER = "appetizer"
+
+# Enum for Vietnamese regions
+class VietnamRegion(str, Enum):
+    NORTH = "north"
+    CENTRAL = "central"
+    SOUTH = "south"
+    HIGHLANDER = "highlander"
+    FOREIGN = "foreign"
 
 # Import authentication models
 class AuthRequest(BaseModel):

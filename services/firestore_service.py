@@ -659,9 +659,37 @@ class FirestoreService:
             try:
                 # Chuyển đổi dữ liệu trước khi parse
                 transformed_data = self._transform_meal_plan_data(data)
-                meal_plan = WeeklyMealPlan(**transformed_data)
-                print(f"[DEBUG] Successfully parsed meal plan with {len(meal_plan.days)} days")
-                return meal_plan
+                
+                # Kiểm tra một vài mẫu để xem cấu trúc dữ liệu
+                if 'days' in transformed_data and len(transformed_data['days']) > 0:
+                    day = transformed_data['days'][0]
+                    if 'breakfast' in day and 'dishes' in day['breakfast'] and len(day['breakfast']['dishes']) > 0:
+                        dish = day['breakfast']['dishes'][0]
+                        print(f"[DEBUG] Sample dish after transform: {dish}")
+                        if 'preparation' in dish:
+                            prep = dish['preparation']
+                            print(f"[DEBUG] Transformed preparation type: {type(prep)}, value: {prep}")
+                
+                # Chi tiết lỗi nếu xảy ra validation error
+                try:
+                    from pydantic import ValidationError
+                    result = WeeklyMealPlan(**transformed_data)
+                    print(f"[DEBUG] Successfully parsed meal plan with {len(result.days)} days")
+                    return result
+                except ValidationError as ve:
+                    print(f"[DEBUG] Pydantic validation error: {str(ve)}")
+                    
+                    # In ra mẫu dữ liệu cụ thể để xác định vấn đề
+                    error_fields = str(ve)
+                    if "preparation" in error_fields:
+                        print("[DEBUG] Validation error related to preparation field")
+                        # Tìm và in ra một vài trường preparation để phân tích
+                        self._find_and_print_preparation_fields(transformed_data)
+                    
+                    import traceback
+                    traceback.print_exc()
+                    return None
+                    
             except Exception as e:
                 # Xử lý lỗi validation và in ra để debug
                 print(f"[DEBUG] Error parsing meal plan from latest_meal_plans: {str(e)}")
@@ -677,6 +705,30 @@ class FirestoreService:
             traceback.print_exc()
             return None
 
+    def _find_and_print_preparation_fields(self, data: Dict) -> None:
+        """
+        Tìm và in ra một số trường preparation để phân tích vấn đề
+        
+        Args:
+            data: Dữ liệu meal plan đã được transform
+        """
+        print("[DEBUG] Analyzing preparation fields in the data:")
+        if 'days' not in data:
+            print("[DEBUG] No 'days' field found")
+            return
+            
+        for i, day in enumerate(data['days']):
+            for meal_type in ['breakfast', 'lunch', 'dinner', 'snack']:
+                if meal_type in day and 'dishes' in day[meal_type]:
+                    for j, dish in enumerate(day[meal_type]['dishes']):
+                        if 'preparation' in dish:
+                            prep = dish['preparation']
+                            print(f"[DEBUG] Day {i}, {meal_type}, Dish {j}: preparation={prep} (type={type(prep)})")
+                            # Giới hạn số lượng để tránh in quá nhiều
+                            if i >= 1 and j >= 2:
+                                print("[DEBUG] (more preparation fields omitted)")
+                                return
+
     def _transform_meal_plan_data(self, data: Dict) -> Dict:
         """
         Chuyển đổi dữ liệu meal plan từ Firestore để tương thích với model Pydantic
@@ -690,6 +742,17 @@ class FirestoreService:
         # Tạo bản sao để không ảnh hưởng đến dữ liệu gốc
         transformed = data.copy()
         
+        # In dữ liệu input để debug
+        print(f"[DEBUG] _transform_meal_plan_data input keys: {transformed.keys()}")
+        
+        try:
+            # Hiển thị thông tin về model Dish để debug
+            from models import Dish
+            print(f"[DEBUG] Dish model fields: {[f.name for f in Dish.__fields__.values()]}")
+            print(f"[DEBUG] Dish.preparation field type: {Dish.__fields__['preparation'].type_}")
+        except Exception as e:
+            print(f"[DEBUG] Error inspecting Dish model: {str(e)}")
+        
         # Chỉ xử lý nếu có trường 'days'
         if 'days' in transformed:
             # Xử lý cho từng ngày
@@ -700,13 +763,52 @@ class FirestoreService:
                         # Xử lý từng món ăn trong bữa
                         if 'dishes' in day[meal_type]:
                             for j, dish in enumerate(day[meal_type]['dishes']):
-                                # Xử lý trường preparation - đảm bảo nó là List[str]
+                                # Debug một món ăn cụ thể
+                                if i == 0 and meal_type == 'breakfast' and j == 0:
+                                    print(f"[DEBUG] Sample dish before transform: {dish}")
+                                
+                                # Xử lý trường preparation - Chuyển từ list sang string
                                 if 'preparation' in dish:
-                                    # Nếu preparation là list, giữ nguyên
-                                    # Nếu là string, chuyển thành list với 1 phần tử
-                                    if not isinstance(dish['preparation'], list):
-                                        transformed['days'][i][meal_type]['dishes'][j]['preparation'] = [dish['preparation']]
+                                    prep = dish['preparation']
                                     
+                                    # Ghi lại kiểu dữ liệu ban đầu
+                                    if i == 0 and meal_type == 'breakfast' and j == 0:
+                                        print(f"[DEBUG] Original preparation type: {type(prep)}, value: {prep}")
+                                    
+                                    # Chuyển đổi prep thành string
+                                    if isinstance(prep, list):
+                                        # Kiểm tra xem các phần tử có phải là string không
+                                        prep_list = [str(step) for step in prep]
+                                        # Nối các phần tử thành một string với ký tự xuống dòng
+                                        transformed['days'][i][meal_type]['dishes'][j]['preparation'] = "\n".join(prep_list)
+                                    else:
+                                        # Nếu không phải list, giữ nguyên giá trị (và đảm bảo là string)
+                                        transformed['days'][i][meal_type]['dishes'][j]['preparation'] = str(prep)
+                                
+                                # Kiểm tra các trường bắt buộc khác
+                                required_fields = ['name', 'ingredients', 'nutrition']
+                                for field in required_fields:
+                                    if field not in dish:
+                                        print(f"[DEBUG] Missing required field '{field}' in dish: {dish}")
+                                        # Tạo dữ liệu mặc định
+                                        if field == 'name':
+                                            transformed['days'][i][meal_type]['dishes'][j]['name'] = "Unknown Dish"
+                                        elif field == 'ingredients':
+                                            transformed['days'][i][meal_type]['dishes'][j]['ingredients'] = []
+                                        elif field == 'nutrition':
+                                            transformed['days'][i][meal_type]['dishes'][j]['nutrition'] = {
+                                                "calories": 0, "protein": 0, "fat": 0, "carbs": 0
+                                            }
+            
+            # Ghi lại một mẫu sau khi transform
+            if len(transformed['days']) > 0 and 'breakfast' in transformed['days'][0]:
+                if 'dishes' in transformed['days'][0]['breakfast'] and len(transformed['days'][0]['breakfast']['dishes']) > 0:
+                    dish = transformed['days'][0]['breakfast']['dishes'][0]
+                    print(f"[DEBUG] Sample dish after transform: {dish}")
+                    if 'preparation' in dish:
+                        prep = dish['preparation']
+                        print(f"[DEBUG] Transformed preparation type: {type(prep)}, value: {prep}")
+                        
         return transformed
 
     # ===== EXERCISE METHODS =====

@@ -637,7 +637,9 @@ class FirestoreService:
                     data = results[0].to_dict()
                     if data and 'days' in data:
                         try:
-                            return WeeklyMealPlan(**data)
+                            # Chuyển đổi dữ liệu trước khi parse
+                            transformed_data = self._transform_meal_plan_data(data)
+                            return WeeklyMealPlan(**transformed_data)
                         except Exception as e:
                             print(f"[DEBUG] Error parsing meal plan from meal_plans: {str(e)}")
                             return None
@@ -655,16 +657,57 @@ class FirestoreService:
                 return None
                 
             try:
-                meal_plan = WeeklyMealPlan(**data)
+                # Chuyển đổi dữ liệu trước khi parse
+                transformed_data = self._transform_meal_plan_data(data)
+                meal_plan = WeeklyMealPlan(**transformed_data)
                 print(f"[DEBUG] Successfully parsed meal plan with {len(meal_plan.days)} days")
                 return meal_plan
             except Exception as e:
+                # Xử lý lỗi validation và in ra để debug
                 print(f"[DEBUG] Error parsing meal plan from latest_meal_plans: {str(e)}")
+                
+                # Log chi tiết dữ liệu để debug
+                import json
+                print(f"[DEBUG] Raw data structure: {json.dumps(data)[:1000]}...")
+                
+                # Trả về None nếu không thể chuyển đổi, để backend cũ xử lý
                 return None
         except Exception as e:
             print(f"[DEBUG] Error in get_latest_meal_plan: {str(e)}")
             traceback.print_exc()
             return None
+
+    def _transform_meal_plan_data(self, data: Dict) -> Dict:
+        """
+        Chuyển đổi dữ liệu meal plan từ Firestore để tương thích với model Pydantic
+        
+        Args:
+            data: Dữ liệu meal plan từ Firestore
+            
+        Returns:
+            Dữ liệu đã được chuyển đổi
+        """
+        # Tạo bản sao để không ảnh hưởng đến dữ liệu gốc
+        transformed = data.copy()
+        
+        # Chỉ xử lý nếu có trường 'days'
+        if 'days' in transformed:
+            # Xử lý cho từng ngày
+            for i, day in enumerate(transformed['days']):
+                # Xử lý các bữa ăn trong ngày
+                for meal_type in ['breakfast', 'lunch', 'dinner', 'snack']:
+                    if meal_type in day:
+                        # Xử lý từng món ăn trong bữa
+                        if 'dishes' in day[meal_type]:
+                            for j, dish in enumerate(day[meal_type]['dishes']):
+                                # Xử lý trường preparation - đảm bảo nó là List[str]
+                                if 'preparation' in dish:
+                                    # Nếu preparation là list, giữ nguyên
+                                    # Nếu là string, chuyển thành list với 1 phần tử
+                                    if not isinstance(dish['preparation'], list):
+                                        transformed['days'][i][meal_type]['dishes'][j]['preparation'] = [dish['preparation']]
+                                    
+        return transformed
 
     # ===== EXERCISE METHODS =====
     

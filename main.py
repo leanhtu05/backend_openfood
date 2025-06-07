@@ -1245,6 +1245,10 @@ async def replace_day(
         sugar_target = meal_plan_request.sugar_target
         sodium_target = meal_plan_request.sodium_target
         
+        # Kiểm tra day_of_week
+        if not day_of_week:
+            raise HTTPException(status_code=400, detail="day_of_week là trường bắt buộc")
+            
         # Create user_data dictionary with all relevant health information
         user_data = {
             "allergies": allergies,
@@ -1256,13 +1260,30 @@ async def replace_day(
             "sodium_target": sodium_target
         }
         
-        # Generate new meals for the day
-        breakfast_meals = groq_service.generate_meal_suggestions(
-            calories_target=int(calories_target * 0.25),
-            protein_target=int(protein_target * 0.25),
-            fat_target=int(fat_target * 0.25),
-            carbs_target=int(carbs_target * 0.25),
-            meal_type="breakfast",
+        # Lấy kế hoạch hiện tại của người dùng
+        current_plan = await get_current_meal_plan(user_id, user)
+        if not current_plan:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Không tìm thấy kế hoạch bữa ăn cho người dùng {user_id}"
+            )
+        
+        # Tạo đối tượng ReplaceDayRequest
+        from models import ReplaceDayRequest
+        replace_request = ReplaceDayRequest(
+            day_of_week=day_of_week,
+            meal_type="all",  # Thay thế cả ngày nên meal_type là "all"
+            calories_target=calories_target,
+            protein_target=protein_target,
+            fat_target=fat_target,
+            carbs_target=carbs_target
+        )
+        
+        # Gọi service để thay thế kế hoạch cả ngày
+        import services
+        new_day_plan = services.replace_day_meal_plan(
+            current_weekly_plan=current_plan,
+            replace_request=replace_request,
             preferences=preferences,
             allergies=allergies,
             cuisine_style=cuisine_style,
@@ -1270,10 +1291,42 @@ async def replace_day(
             user_data=user_data
         )
         
-        # Return a placeholder response for now
-        return {"message": f"Day replacement for {day_of_week} is in progress"}
+        # Kiểm tra xem ngày cần thay thế có tồn tại trong kế hoạch không
+        day_found = False
+        for i, day in enumerate(current_plan.days):
+            if day.day_of_week == day_of_week:
+                current_plan.days[i] = new_day_plan
+                day_found = True
+                break
+                
+        if not day_found:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Ngày '{day_of_week}' không có trong kế hoạch"
+            )
+        
+        # Cập nhật kế hoạch trong Firebase
+        from services.firestore_service import firestore_service
+        result = firestore_service.save_meal_plan(user_id, current_plan.dict())
+        
+        if not result:
+            raise HTTPException(
+                status_code=500, 
+                detail="Không thể lưu kế hoạch vào Firestore"
+            )
+            
+        # Trả về kết quả thành công
+        return {
+            "message": f"Đã thay thế kế hoạch cho ngày {day_of_week} thành công",
+            "day_plan": new_day_plan.dict()
+        }
     
     except Exception as e:
+        # Hiển thị chi tiết lỗi trong log để debug
+        import traceback
+        print(f"❌ Error in replace_day: {str(e)}")
+        traceback.print_exc()
+        
         # Handle exceptions
         raise HTTPException(
             status_code=500,

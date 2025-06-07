@@ -960,8 +960,7 @@ def replace_day_meal_plan(
     user_data: Dict = None
 ) -> DayMealPlan:
     """
-    Thay thế kế hoạch ăn cho một ngày cụ thể.
-    Hàm này hoạt động như một wrapper cho hàm replace_meal để đảm bảo tương thích.
+    Tạo ra một kế hoạch ăn mới hoàn toàn cho một ngày cụ thể.
     
     Args:
         current_weekly_plan: Kế hoạch tuần hiện tại
@@ -975,15 +974,33 @@ def replace_day_meal_plan(
     Returns:
         DayMealPlan: Kế hoạch ăn mới cho ngày được chỉ định
     """
-    print("Gọi hàm replace_day_meal_plan() -> gọi tiếp hàm replace_meal()")
+    print(f"Bắt đầu tạo kế hoạch mới cho ngày: {replace_request.day_of_week}")
     
-    # Gọi hàm replace_meal với các tham số tương tự
-    return replace_meal(
-        current_weekly_plan=current_weekly_plan,
-        replace_request=replace_request,
+    # Reset bộ đếm các món ăn đã dùng để đảm bảo có sự đa dạng tối đa cho ngày mới
+    reset_tracker()
+    
+    # Reset cache trong Groq service để đảm bảo luôn tạo mới
+    if use_ai and AI_SERVICE and AI_AVAILABLE:
+        try:
+            # Xoá cache để luôn tạo món mới
+            print("🔄 Đang xóa cache để tạo món mới...")
+            AI_SERVICE.clear_cache()
+            print("✅ Đã xóa cache AI thành công")
+        except Exception as e:
+            print(f"⚠️ Không thể xóa cache AI: {e}")
+    
+    # Gọi hàm tạo kế hoạch cho một ngày
+    new_day_plan = generate_day_meal_plan(
+        day_of_week=replace_request.day_of_week,
+        calories_target=replace_request.calories_target,
+        protein_target=replace_request.protein_target,
+        fat_target=replace_request.fat_target,
+        carbs_target=replace_request.carbs_target,
         preferences=preferences,
         allergies=allergies,
         cuisine_style=cuisine_style,
         use_ai=use_ai,
         user_data=user_data
     )
+    
+    return new_day_plan

@@ -1714,5 +1714,44 @@ class FirestoreService:
             print(f"Error deleting food log: {str(e)}")
             return False
 
+    def save_meal_plan(self, user_id: str, meal_plan_data: Dict) -> bool:
+        """
+        Lưu kế hoạch bữa ăn của người dùng vào Firestore
+        
+        Args:
+            user_id: ID của người dùng
+            meal_plan_data: Dữ liệu kế hoạch bữa ăn (đã được chuyển đổi thành Dict)
+            
+        Returns:
+            bool: True nếu lưu thành công, False nếu thất bại
+        """
+        if not self.initialized:
+            print(f"Firestore not initialized when trying to save meal plan for {user_id}")
+            return False
+            
+        try:
+            print(f"[INFO] Saving meal plan for user: {user_id}")
+            
+            # Lưu vào collection latest_meal_plans
+            latest_ref = self.db.collection('latest_meal_plans').document(user_id)
+            latest_ref.set(meal_plan_data)
+            
+            # Đồng thời lưu vào collection meal_plans với timestamp
+            import time
+            timestamp = int(time.time())
+            history_ref = self.db.collection('meal_plans').document(f"{user_id}_{timestamp}")
+            history_data = meal_plan_data.copy()
+            history_data['user_id'] = user_id
+            history_data['created_at'] = timestamp
+            history_ref.set(history_data)
+            
+            print(f"[INFO] Successfully saved meal plan for user: {user_id}")
+            return True
+        except Exception as e:
+            print(f"[ERROR] Failed to save meal plan for user {user_id}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False
+
 # Singleton instance
 firestore_service = FirestoreService() 

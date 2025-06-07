@@ -1124,6 +1124,8 @@ class MealPlanRequest(BaseModel):
     fiber_target: Optional[int] = None
     sugar_target: Optional[int] = None
     sodium_target: Optional[int] = None
+    day_of_week: Optional[str] = None  # Thêm trường ngày trong tuần
+    meal_type: Optional[str] = None    # Thêm trường loại bữa ăn
 
 @app.post("/api/meal-plan/generate", tags=["Meal Plan"])
 async def generate_meal_plan(

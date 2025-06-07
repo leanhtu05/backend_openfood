@@ -810,7 +810,28 @@ def replace_meal(
         
     Returns:
         New DayMealPlan for the specified day
+        
+    Raises:
+        ValueError: If the weekly meal plan doesn't exist or can't find the specified day
     """
+    # Kiểm tra xem kế hoạch tuần có tồn tại không
+    if current_weekly_plan is None:
+        error_msg = "Không thể thay thế bữa ăn: Kế hoạch ăn tuần không tồn tại"
+        print(f"⚠️ {error_msg}")
+        raise ValueError(error_msg)
+    
+    # Kiểm tra xem ngày cần thay thế có tồn tại trong kế hoạch không
+    day_exists = False
+    for day in current_weekly_plan.days:
+        if day.day_of_week == replace_request.day_of_week:
+            day_exists = True
+            break
+    
+    if not day_exists:
+        error_msg = f"Không thể thay thế bữa ăn: Ngày {replace_request.day_of_week} không tồn tại trong kế hoạch"
+        print(f"⚠️ {error_msg}")
+        raise ValueError(error_msg)
+    
     # Clear the used dishes for this specific day to ensure new variety
     reset_tracker()
     
@@ -924,29 +945,10 @@ def replace_meal(
                         
                 return new_day_plan
     
-    # Original implementation (as fallback) - Generate a new meal plan for the day
-    print("Falling back to generating a complete day meal plan")
-    new_day_plan = generate_day_meal_plan(
-        replace_request.day_of_week,
-        replace_request.calories_target,
-        replace_request.protein_target,
-        replace_request.fat_target,
-        replace_request.carbs_target,
-        preferences=preferences,
-        allergies=allergies,
-        cuisine_style=cuisine_style,
-        use_ai=use_ai,
-        user_data=user_data
-    )
-    
-    # If there's an existing weekly plan, update it
-    if current_weekly_plan:
-        for i, day in enumerate(current_weekly_plan.days):
-            if day.day_of_week == replace_request.day_of_week:
-                current_weekly_plan.days[i] = new_day_plan
-                break
-    
-    return new_day_plan
+    # Trả về lỗi nếu không thể tạo bữa ăn
+    error_msg = f"Không thể thay thế {replace_request.meal_type} cho ngày {replace_request.day_of_week}: Loại bữa ăn không hợp lệ"
+    print(f"⚠️ {error_msg}")
+    raise ValueError(error_msg)
 
 def replace_day_meal_plan(
     current_weekly_plan: Optional[WeeklyMealPlan],

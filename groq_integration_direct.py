@@ -421,9 +421,19 @@ class GroqService:
                 print(f"Adding empty ingredients list to meal: {meal['name']}")
                 meal['ingredients'] = []
                 
-            # If preparation is missing, add a default description
-            if 'preparation' not in meal or not meal['preparation']:
-                meal['preparation'] = f"Prepare {meal['name']} with the listed ingredients."
+            # Kiểm tra và chuyển đổi trường preparation thành List[str]
+            if 'preparation' not in meal:
+                meal['preparation'] = [f"Prepare {meal['name']} with the listed ingredients."]
+            elif isinstance(meal['preparation'], str):
+                # Nếu là chuỗi, chuyển thành danh sách với một phần tử
+                meal['preparation'] = [meal['preparation']]
+            elif isinstance(meal['preparation'], list):
+                # Nếu là danh sách, đảm bảo tất cả các phần tử đều là chuỗi
+                meal['preparation'] = [str(step) for step in meal['preparation']]
+            else:
+                # Nếu là kiểu dữ liệu khác, đặt giá trị mặc định
+                print(f"Invalid preparation format for meal: {meal['name']}, replacing with default")
+                meal['preparation'] = [f"Prepare {meal['name']} with the listed ingredients."]
             
             # Ensure ingredients is not empty
             if not meal['ingredients']:

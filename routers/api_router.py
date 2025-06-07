@@ -360,7 +360,7 @@ async def replace_day(
         if user_id == "default":
             user_id = user.uid
         
-        # Get the current meal plan
+        # Get the current meal plan from Firestore
         meal_plan = firestore_service.get_latest_meal_plan(user_id)
         
         if not meal_plan:
@@ -483,12 +483,13 @@ async def replace_meal(
             replace_request.use_ai = True
             print("Đặt use_ai=True vì không được chỉ định rõ ràng")
         
-        # Lấy kế hoạch ăn hiện tại
+        # Lấy kế hoạch ăn hiện tại từ Firestore
         current_plan = firestore_service.get_latest_meal_plan(user_id)
+        
         if not current_plan:
             raise HTTPException(
-                status_code=404,
-                detail="Không tìm thấy kế hoạch ăn cho người dùng này. Vui lòng tạo kế hoạch ăn trước."
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Không tìm thấy kế hoạch ăn. Vui lòng tạo kế hoạch ăn trước."
             )
         
         # Kiểm tra ngày và bữa ăn hợp lệ
@@ -656,7 +657,7 @@ async def replace_meal(
                 # Update existing snack field
                 current_plan.days[day_index].snack = new_meal
         
-        # Lưu kế hoạch ăn cập nhật
+        # Lưu kế hoạch ăn cập nhật vào cả storage_manager và Firestore
         storage_manager.save_meal_plan(current_plan, user_id)
         
         # Đồng thời lưu vào Firestore để đảm bảo dữ liệu được đồng bộ

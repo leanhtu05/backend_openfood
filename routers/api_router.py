@@ -298,17 +298,25 @@ async def get_user_meal_plan(
         meal_plan = firestore_service.get_latest_meal_plan(user_id)
         
         if not meal_plan:
-            # If not found in Firestore, try to get it from local storage
+            # Nếu không tìm thấy trong Firestore, thử lấy từ bộ nhớ cục bộ
             meal_plan = storage_manager.load_meal_plan(user_id)
             
             if not meal_plan:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"No meal plan found for user {user_id}"
+                    detail=f"Không tìm thấy kế hoạch ăn cho người dùng {user_id}"
                 )
             
-            # Convert to dict if it's a WeeklyMealPlan object
+            # Nếu tìm thấy trong bộ nhớ cục bộ, đồng bộ vào Firestore
             if isinstance(meal_plan, WeeklyMealPlan):
+                try:
+                    # Lưu kế hoạch ăn vào Firestore để đồng bộ
+                    plan_dict = meal_plan.dict()
+                    firestore_service.db.collection('latest_meal_plans').document(user_id).set(plan_dict)
+                    print(f"[DEBUG] Đã đồng bộ kế hoạch ăn từ bộ nhớ cục bộ vào Firestore cho user {user_id}")
+                except Exception as e:
+                    print(f"[WARNING] Không thể đồng bộ kế hoạch ăn vào Firestore: {str(e)}")
+                
                 return {"meal_plan": meal_plan.dict()}
             
         return {"meal_plan": meal_plan}
@@ -353,12 +361,12 @@ async def replace_day(
             user_id = user.uid
         
         # Get the current meal plan
-        meal_plan = storage_manager.load_meal_plan(user_id)
+        meal_plan = firestore_service.get_latest_meal_plan(user_id)
         
         if not meal_plan:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="No meal plan found. Please generate a weekly meal plan first."
+                detail="Không tìm thấy kế hoạch ăn. Vui lòng tạo kế hoạch ăn trước."
             )
         
         # Check if the day exists in the current plan
@@ -539,8 +547,9 @@ async def replace_meal(
                 # Import tdee_nutrition_service
                 from services.tdee_nutrition_service import tdee_nutrition_service
                 
-                # Import firestore_service
-                from services.firestore_service import firestore_service
+                # Không cần import firestore_service vì đã import ở đầu file
+                # Xóa dòng import này để tránh xung đột biến
+                # from services.firestore_service import firestore_service
                 
                 # Lấy thông tin người dùng từ Firestore
                 user_profile = firestore_service.get_user(user_id)

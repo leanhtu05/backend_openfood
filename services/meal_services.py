@@ -220,10 +220,17 @@ def generate_dish(recipe_dict: Dict, user_data: Dict = None) -> Dish:
     image_url = recipe_dict.get("image_url", None)
     
     # Create and return the Dish object
+    preparation = recipe_dict.get("preparation", "Không có hướng dẫn chi tiết.")
+    
+    # Chuyển đổi preparation từ list sang string nếu cần
+    if isinstance(preparation, list):
+        preparation = "\n".join([str(step) for step in preparation])
+        print(f"Converted preparation from list to string")
+    
     return Dish(
         name=dish_name,
         ingredients=ingredients,
-        preparation=recipe_dict.get("preparation", "Không có hướng dẫn chi tiết."),
+        preparation=preparation,
         nutrition=dish_nutrition,
         dish_type=dish_type,
         region=region,

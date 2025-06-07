@@ -1,124 +1,81 @@
-import firebase_admin
-from firebase_admin import credentials, firestore
+import requests
 import json
-import os
-import sys
-from datetime import datetime
+from typing import Dict, Any, List, Optional
 
-# Kiểm tra xem Firebase đã được khởi tạo chưa
-try:
-    app = firebase_admin.get_app()
-    print("Firebase đã được khởi tạo trước đó")
-except ValueError:
-    # Nếu chưa khởi tạo, tìm file credentials
-    cred_paths = [
-        "firebase-credentials.json",
-        os.path.join(os.path.dirname(__file__), "firebase-credentials.json")
-    ]
-    
-    cred = None
-    for path in cred_paths:
-        if os.path.exists(path):
-            print(f"Sử dụng credentials từ: {path}")
-            cred = credentials.Certificate(path)
-            break
-    
-    if cred is None:
-        print("Không tìm thấy file credentials Firebase!")
-        sys.exit(1)
-        
-    firebase_admin.initialize_app(cred)
-    print("Firebase đã được khởi tạo thành công")
+# Thông tin người dùng cần kiểm tra
+USER_ID = "49DhdmJHFAY40eEgaPNEJqGdDQK2"
+SERVER_URL = "http://localhost:8000"  # URL của backend server
 
-# Khởi tạo Firestore client
-db = firestore.client()
-
-def update_user_directly():
-    """Cập nhật thông tin người dùng trực tiếp vào Firestore không qua API"""
+def test_replace_meal_without_token():
+    """
+    Kiểm tra endpoint /api/meal-plan/replace-meal bằng cách truyền user_id trực tiếp 
+    trong query parameters mà không cần token xác thực
+    """
+    print(f"\n=== KIỂM TRA REPLACE MEAL CHO USER {USER_ID} ===\n")
     
-    # Nhập ID người dùng
-    user_id = input("Nhập Firebase UID của người dùng cần cập nhật: ")
-    
-    # Kiểm tra xem người dùng có tồn tại không
-    user_ref = db.collection('users').document(user_id)
-    user_doc = user_ref.get()
-    
-    if not user_doc.exists:
-        print(f"❌ Không tìm thấy người dùng với ID: {user_id}")
-        create_new = input("Bạn có muốn tạo người dùng mới không? (y/n): ")
-        if create_new.lower() != 'y':
-            return
-    else:
-        print(f"✅ Tìm thấy người dùng: {user_id}")
-        user_data = user_doc.to_dict()
-        print(f"Thông tin hiện tại:")
-        print(f"  - Tên: {user_data.get('name', 'Không có')}")
-        print(f"  - Email: {user_data.get('email', 'Không có')}")
-    
-    # Dữ liệu cập nhật
-    update_data = {
-        "name": input("Nhập tên (để trống nếu không muốn cập nhật): ") or None,
-        "age": input("Nhập tuổi (để trống nếu không muốn cập nhật): ") or None,
-        "gender": input("Nhập giới tính (male/female/other, để trống nếu không muốn cập nhật): ") or None,
-        "height": input("Nhập chiều cao (cm, để trống nếu không muốn cập nhật): ") or None,
-        "weight": input("Nhập cân nặng (kg, để trống nếu không muốn cập nhật): ") or None,
-        "goal": input("Nhập mục tiêu (giảm cân/tăng cân/giữ cân, để trống nếu không muốn cập nhật): ") or None,
-        "activityLevel": input("Nhập mức độ hoạt động (low/moderate/high, để trống nếu không muốn cập nhật): ") or None,
-        "updated_at": datetime.now().isoformat()
+    # Tạo request body
+    request_data = {
+        "day_of_week": "Chủ Nhật",
+        "meal_type": "dinner",  # dinner, lunch, breakfast
+        "calories_target": 2468,
+        "protein_target": 185,
+        "fat_target": 82,
+        "carbs_target": 247,
+        "use_ai": True
     }
     
-    # Loại bỏ các trường None
-    update_data = {k: v for k, v in update_data.items() if v is not None}
+    # Gửi request tới API với user_id trong query parameter
+    url = f"{SERVER_URL}/api/meal-plan/replace-meal?user_id={USER_ID}"
+    print(f"📦 URL: {url}")
+    print(f"📦 Dữ liệu gửi đi: {json.dumps(request_data)}")
     
-    # Chuyển đổi các trường số
-    if "age" in update_data and update_data["age"]:
-        try:
-            update_data["age"] = int(update_data["age"])
-        except:
-            print(f"⚠️ Không thể chuyển đổi tuổi thành số nguyên, sẽ bỏ qua trường này")
-            del update_data["age"]
-    
-    if "height" in update_data and update_data["height"]:
-        try:
-            update_data["height"] = float(update_data["height"])
-        except:
-            print(f"⚠️ Không thể chuyển đổi chiều cao thành số thực, sẽ bỏ qua trường này")
-            del update_data["height"]
-    
-    if "weight" in update_data and update_data["weight"]:
-        try:
-            update_data["weight"] = float(update_data["weight"])
-        except:
-            print(f"⚠️ Không thể chuyển đổi cân nặng thành số thực, sẽ bỏ qua trường này")
-            del update_data["weight"]
-    
-    # Hiển thị dữ liệu cập nhật
-    print("\nDữ liệu cập nhật:")
-    print(json.dumps(update_data, indent=2, ensure_ascii=False))
-    
-    # Xác nhận cập nhật
-    confirm = input("\nXác nhận cập nhật? (y/n): ")
-    if confirm.lower() != 'y':
-        print("Đã hủy cập nhật")
-        return
-    
-    # Cập nhật dữ liệu
     try:
-        user_ref.set(update_data, merge=True)
-        print("\n✅ Đã cập nhật thông tin người dùng thành công!")
+        response = requests.post(url, json=request_data)
         
-        # Hiển thị dữ liệu mới
-        print("\nĐang lấy dữ liệu mới...")
-        new_doc = user_ref.get()
-        new_data = new_doc.to_dict()
+        # In thông tin response
+        print(f"📦 Response: {response.status_code} - {response.text}")
         
-        print("\nDữ liệu người dùng sau khi cập nhật:")
-        print(json.dumps(new_data, indent=2, ensure_ascii=False))
-        
+        if response.status_code == 200:
+            # Phân tích dữ liệu trả về
+            data = response.json()
+            
+            # Kiểm tra xem có đúng ngày và loại bữa ăn không
+            if data.get("day_of_week") == request_data["day_of_week"] and data.get("meal_type") == request_data["meal_type"]:
+                print(f"✅ Đã thay thế thành công {request_data['meal_type']} cho {request_data['day_of_week']}")
+                
+                # Kiểm tra xem meal có đúng format không
+                meal = data.get("meal", {})
+                dishes = meal.get("dishes", [])
+                
+                if dishes:
+                    print(f"✅ Bữa ăn mới có {len(dishes)} món")
+                    
+                    # Kiểm tra trường preparation của từng món
+                    for i, dish in enumerate(dishes):
+                        print(f"Món {i+1}: {dish.get('name')}")
+                        
+                        # In ra kiểu dữ liệu của preparation
+                        preparation = dish.get("preparation", "")
+                        print(f"- Preparation (type: {type(preparation).__name__}): {preparation[:50]}...")
+                        
+                        # Kiểm tra xem preparation có phải là chuỗi không
+                        if isinstance(preparation, str):
+                            print(f"✅ Preparation là chuỗi")
+                        elif isinstance(preparation, list):
+                            print(f"❌ Preparation là danh sách: {preparation}")
+                        else:
+                            print(f"❓ Preparation có kiểu dữ liệu không xác định: {type(preparation).__name__}")
+                else:
+                    print(f"❌ Không có món ăn nào trong bữa ăn mới")
+            else:
+                print(f"❌ Dữ liệu trả về không khớp với yêu cầu:")
+                print(f"- Yêu cầu: {request_data['day_of_week']} / {request_data['meal_type']}")
+                print(f"- Nhận được: {data.get('day_of_week')} / {data.get('meal_type')}")
+        else:
+            print(f"❌ Lỗi khi gọi API: {response.status_code} - {response.text}")
     except Exception as e:
-        print(f"\n❌ Lỗi khi cập nhật dữ liệu: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        print(f"❌ Lỗi: {str(e)}")
 
+# Chạy kiểm tra
 if __name__ == "__main__":
-    update_user_directly() 
+    test_replace_meal_without_token() 

@@ -1,6 +1,9 @@
 from services import generate_weekly_meal_plan
 from models import NutritionTarget
 from firebase_integration import firebase
+import requests
+import json
+from typing import Dict, Any, List, Optional
 
 print("\n===== KIỂM TRA VIỆC SỬA LỖI =====")
 
@@ -55,4 +58,94 @@ if meal_plan and meal_plan.days:
 else:
     print("❌ Không tạo được kế hoạch thực đơn")
 
-print("\n===== KẾT THÚC KIỂM TRA =====") 
+print("\n===== KẾT THÚC KIỂM TRA =====")
+
+# Thông tin người dùng cần kiểm tra
+USER_ID = "49DhdmJHFAY40eEgaPNEJqGdDQK2"
+SERVER_URL = "http://localhost:8000"  # URL của backend server
+
+def verify_fix_for_replace_day():
+    """
+    Xác nhận rằng sửa lỗi cho endpoint /api/replace-day hoạt động tốt
+    """
+    print("\n=== KIỂM TRA SỬA LỖI CHO /api/replace-day ===\n")
+    
+    # Dữ liệu gửi đi
+    data = {
+        "user_id": USER_ID,
+        "day_of_week": "Chủ Nhật",
+        "calories_target": 2468,
+        "protein_target": 185,
+        "fat_target": 82,
+        "carbs_target": 247,
+        "use_ai": True,
+        "diet_restrictions": [],
+        "health_conditions": [],
+        "diet_preference": ""
+    }
+    
+    # Đường dẫn tới server FastAPI
+    url = f"{SERVER_URL}/api/replace-day"
+    
+    # Gửi yêu cầu
+    print(f"Gửi yêu cầu đến: {url}")
+    print(f"Dữ liệu gửi đi: {json.dumps(data)}")
+    
+    try:
+        response = requests.post(url, json=data)
+        print(f"Mã trạng thái: {response.status_code}")
+        
+        if response.status_code == 200:
+            print("✅ Sửa lỗi thành công! Endpoint trả về mã 200 OK")
+            response_data = response.json()
+            print(f"Thông báo: {response_data.get('message', '')}")
+        else:
+            print(f"❌ Sửa lỗi chưa hoạt động. Endpoint trả về lỗi: {response.text}")
+    except Exception as e:
+        print(f"❌ Lỗi khi gọi API: {str(e)}")
+
+def verify_fix_for_replace_meal():
+    """
+    Xác nhận rằng sửa lỗi cho endpoint /api/meal-plan/replace-meal hoạt động tốt
+    """
+    print("\n=== KIỂM TRA SỬA LỖI CHO /api/meal-plan/replace-meal ===\n")
+    
+    # Dữ liệu gửi đi
+    data = {
+        "user_id": USER_ID,
+        "day_of_week": "Chủ Nhật",
+        "meal_type": "dinner",
+        "calories_target": 2468,
+        "protein_target": 185,
+        "fat_target": 82,
+        "carbs_target": 247,
+        "use_ai": True,
+        "diet_restrictions": [],
+        "health_conditions": [],
+        "diet_preference": ""
+    }
+    
+    # Đường dẫn tới server FastAPI
+    url = f"{SERVER_URL}/api/meal-plan/replace-meal"
+    
+    # Gửi yêu cầu
+    print(f"Gửi yêu cầu đến: {url}")
+    print(f"Dữ liệu gửi đi: {json.dumps(data)}")
+    
+    try:
+        response = requests.post(url, json=data)
+        print(f"Mã trạng thái: {response.status_code}")
+        
+        if response.status_code == 200:
+            print("✅ Sửa lỗi thành công! Endpoint trả về mã 200 OK")
+            response_data = response.json()
+            print(f"Thông báo: {response_data.get('message', '')}")
+        else:
+            print(f"❌ Sửa lỗi chưa hoạt động. Endpoint trả về lỗi: {response.text}")
+    except Exception as e:
+        print(f"❌ Lỗi khi gọi API: {str(e)}")
+
+# Chạy kiểm tra
+if __name__ == "__main__":
+    verify_fix_for_replace_day()
+    verify_fix_for_replace_meal() 

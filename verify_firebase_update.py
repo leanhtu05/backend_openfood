@@ -4,6 +4,8 @@ import json
 import os
 import sys
 from datetime import datetime
+import requests
+from typing import Dict, Any, List, Optional
 
 # Kiểm tra xem Firebase đã được khởi tạo chưa
 try:
@@ -32,6 +34,10 @@ except ValueError:
 
 # Khởi tạo Firestore client
 db = firestore.client()
+
+# Thông tin người dùng cần kiểm tra
+USER_ID = "49DhdmJHFAY40eEgaPNEJqGdDQK2"
+SERVER_URL = "http://localhost:8000"  # URL của backend server
 
 def verify_user_data(user_id=None):
     """
@@ -119,6 +125,200 @@ def verify_user_data(user_id=None):
         traceback.print_exc()
         return False
 
+def verify_endpoint_urls():
+    """
+    Kiểm tra danh sách các endpoints có sẵn
+    """
+    print("\n=== KIỂM TRA DANH SÁCH ENDPOINT ===\n")
+    
+    try:
+        # Gửi yêu cầu GET đến endpoint gốc để lấy thông tin OpenAPI
+        response = requests.get(f"{SERVER_URL}/openapi.json")
+        
+        if response.status_code == 200:
+            api_docs = response.json()
+            
+            # Lấy danh sách các đường dẫn
+            paths = api_docs.get("paths", {})
+            
+            # Tìm các endpoint liên quan đến meal-plan và replace-day
+            related_endpoints = []
+            for path, methods in paths.items():
+                if "meal-plan" in path or "replace-day" in path or "meal_plan" in path:
+                    for method, details in methods.items():
+                        related_endpoints.append({
+                            "path": path,
+                            "method": method.upper(),
+                            "summary": details.get("summary", "No summary"),
+                            "description": details.get("description", "No description")
+                        })
+            
+            print(f"Tìm thấy {len(related_endpoints)} endpoints liên quan đến meal-plan/replace-day:")
+            for i, endpoint in enumerate(related_endpoints, 1):
+                print(f"{i}. {endpoint['method']} {endpoint['path']}")
+                print(f"   Summary: {endpoint['summary']}")
+        else:
+            print(f"❌ Không thể lấy thông tin OpenAPI: {response.status_code} - {response.text}")
+    except Exception as e:
+        print(f"❌ Lỗi khi kiểm tra endpoints: {str(e)}")
+
+def verify_endpoint_access():
+    """
+    Kiểm tra khả năng truy cập các endpoints liên quan đến meal-plan và replace-day
+    """
+    print("\n=== KIỂM TRA KHẢ NĂNG TRUY CẬP ENDPOINT ===\n")
+    
+    endpoints = [
+        # Endpoint trong main.py
+        {
+            "url": f"{SERVER_URL}/api/replace-day",
+            "method": "POST",
+            "data": {
+                "user_id": USER_ID,
+                "day_of_week": "Chủ Nhật",
+                "calories_target": 2468,
+                "protein_target": 185,
+                "fat_target": 82,
+                "carbs_target": 247,
+                "use_ai": True
+            },
+            "description": "Endpoint replace-day trong main.py"
+        },
+        # Endpoint trong api_router.py
+        {
+            "url": f"{SERVER_URL}/replace-day",
+            "method": "POST",
+            "data": {
+                "user_id": USER_ID,
+                "day_of_week": "Chủ Nhật",
+                "calories_target": 2468,
+                "protein_target": 185,
+                "fat_target": 82,
+                "carbs_target": 247,
+                "use_ai": True
+            },
+            "description": "Endpoint replace-day trong api_router.py"
+        },
+        # Endpoint meal-plan/replace-meal
+        {
+            "url": f"{SERVER_URL}/api/meal-plan/replace-meal",
+            "method": "POST",
+            "data": {
+                "user_id": USER_ID,
+                "day_of_week": "Chủ Nhật",
+                "meal_type": "dinner",
+                "calories_target": 2468,
+                "protein_target": 185,
+                "fat_target": 82,
+                "carbs_target": 247,
+                "use_ai": True
+            },
+            "description": "Endpoint meal-plan/replace-meal trong main.py"
+        },
+        # Endpoint meal-plan/replace-meal với query parameter
+        {
+            "url": f"{SERVER_URL}/meal-plan/replace-meal?user_id={USER_ID}",
+            "method": "POST",
+            "data": {
+                "day_of_week": "Chủ Nhật",
+                "meal_type": "dinner",
+                "calories_target": 2468,
+                "protein_target": 185,
+                "fat_target": 82,
+                "carbs_target": 247,
+                "use_ai": True
+            },
+            "description": "Endpoint meal-plan/replace-meal trong api_router.py"
+        }
+    ]
+    
+    for i, endpoint in enumerate(endpoints, 1):
+        print(f"\n{i}. Kiểm tra {endpoint['description']}")
+        print(f"URL: {endpoint['url']}")
+        print(f"Dữ liệu: {json.dumps(endpoint['data'])}")
+        
+        try:
+            response = requests.request(
+                method=endpoint['method'],
+                url=endpoint['url'],
+                json=endpoint['data']
+            )
+            
+            print(f"Mã trạng thái: {response.status_code}")
+            print(f"Phản hồi: {response.text[:200]}...")
+            
+            if response.status_code == 200:
+                print(f"✅ Truy cập thành công endpoint {endpoint['url']}")
+            else:
+                print(f"❌ Không thể truy cập endpoint {endpoint['url']}")
+        except Exception as e:
+            print(f"❌ Lỗi khi truy cập endpoint {endpoint['url']}: {str(e)}")
+
+def fix_endpoint_issues():
+    """
+    Gợi ý cách sửa vấn đề với endpoints dựa trên kết quả kiểm tra
+    """
+    print("\n=== GỢI Ý SỬA VẤN ĐỀ VỚI ENDPOINTS ===\n")
+    
+    print("Dựa trên kết quả kiểm tra, có thể thực hiện các biện pháp sau:")
+    print("1. Nếu endpoint /api/replace-day trả về lỗi 404 \"Không tìm thấy kế hoạch ăn\":")
+    print("   - Kiểm tra lại phương thức storage_manager.load_meal_plan có đang sử dụng đúng user_id")
+    print("   - Đảm bảo get_current_meal_plan trong main.py truy cập đúng vào Firestore")
+    
+    print("\n2. Nếu Flutter gọi sai endpoint:")
+    print("   - Kiểm tra URL trong mã Flutter, đảm bảo gọi đúng /api/replace-day")
+    print("   - Đảm bảo dữ liệu được gửi đi đúng định dạng")
+    
+    print("\n3. Nếu xác thực là vấn đề:")
+    print("   - Sửa hàm get_optional_current_user để không yêu cầu xác thực")
+    print("   - Thêm bypass cho chế độ phát triển")
+
+def check_specific_user_data():
+    """
+    Kiểm tra dữ liệu cụ thể của user_id từ request Flutter
+    """
+    print(f"\n=== KIỂM TRA DỮ LIỆU CỤ THỂ CỦA USER {USER_ID} ===\n")
+    
+    from services.firestore_service import firestore_service
+    
+    # Đọc dữ liệu trực tiếp từ Firestore
+    doc_ref = firestore_service.db.collection('latest_meal_plans').document(USER_ID)
+    doc = doc_ref.get()
+    
+    if not doc.exists:
+        print(f"❌ Không tìm thấy kế hoạch ăn cho user {USER_ID} trong collection 'latest_meal_plans'")
+        return
+    
+    print(f"✅ Tìm thấy kế hoạch ăn trong collection 'latest_meal_plans'")
+    data = doc.to_dict()
+    
+    # Kiểm tra trường days
+    if 'days' in data:
+        days = data['days']
+        print(f"✅ Document có {len(days)} ngày")
+        
+        # Kiểm tra các ngày trong kế hoạch
+        days_of_week = [day.get('day_of_week', f'Ngày {i+1}') for i, day in enumerate(days)]
+        print(f"Các ngày trong kế hoạch: {days_of_week}")
+        
+        # Kiểm tra ngày Chủ Nhật
+        sunday_exists = any(day.get('day_of_week') == 'Chủ Nhật' for day in days)
+        if sunday_exists:
+            print(f"✅ Tìm thấy ngày 'Chủ Nhật' trong kế hoạch")
+            
+            # Tìm chi tiết về ngày Chủ Nhật
+            for day in days:
+                if day.get('day_of_week') == 'Chủ Nhật':
+                    print(f"Chi tiết ngày Chủ Nhật:")
+                    print(f"- Breakfast: {len(day.get('breakfast', {}).get('dishes', []))} món")
+                    print(f"- Lunch: {len(day.get('lunch', {}).get('dishes', []))} món")
+                    print(f"- Dinner: {len(day.get('dinner', {}).get('dishes', []))} món")
+                    break
+        else:
+            print(f"❌ Không tìm thấy ngày 'Chủ Nhật' trong kế hoạch")
+    else:
+        print(f"❌ Document không có trường 'days'")
+
 if __name__ == "__main__":
     # Kiểm tra xem có tham số dòng lệnh không
     if len(sys.argv) > 1:
@@ -126,4 +326,8 @@ if __name__ == "__main__":
     else:
         user_id = None
     
-    verify_user_data(user_id) 
+    verify_user_data(user_id)
+    verify_endpoint_urls()
+    verify_endpoint_access()
+    check_specific_user_data()
+    fix_endpoint_issues() 

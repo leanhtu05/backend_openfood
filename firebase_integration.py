@@ -214,12 +214,11 @@ class FirebaseIntegration:
                     meal = day.get(meal_type, {})
                     for dish in meal.get('dishes', []):
                         if 'preparation' in dish:
-                            # Đảm bảo preparation là một danh sách
-                            from services import _process_preparation_steps
-                            if not isinstance(dish['preparation'], list):
-                                print(f"[FIREBASE] Processing preparation for dish {dish.get('name')} to list format")
-                                dish['preparation'] = _process_preparation_steps(dish['preparation'])
-                            print(f"[FIREBASE] Dish {dish.get('name')} has preparation instructions: {dish['preparation'][:2] if isinstance(dish['preparation'], list) else dish['preparation'][:30]}...")
+                            # Đảm bảo preparation là một chuỗi
+                            if isinstance(dish['preparation'], list):
+                                print(f"[FIREBASE] Converting preparation for dish {dish.get('name')} to string format")
+                                dish['preparation'] = '\n'.join([str(step) for step in dish['preparation']])
+                            print(f"[FIREBASE] Dish {dish.get('name')} has preparation instructions: {dish['preparation'][:30] if isinstance(dish['preparation'], str) else str(dish['preparation'])[:30]}...")
                         else:
                             print(f"[FIREBASE] WARNING: Dish {dish.get('name')} missing preparation instructions!")
             
@@ -281,17 +280,8 @@ class FirebaseIntegration:
                 print(f"Invalid meal plan data for user {user_id}")
                 return None
             
-            # Đảm bảo trường preparation trong mỗi dish đều là List[str]
-            from services import _process_preparation_steps
-            for day in data.get('days', []):
-                for meal_type in ['breakfast', 'lunch', 'dinner']:
-                    meal = day.get(meal_type, {})
-                    for dish in meal.get('dishes', []):
-                        if 'preparation' in dish:
-                            # Chuyển đổi preparation thành list nếu là string
-                            if not isinstance(dish['preparation'], list):
-                                dish['preparation'] = _process_preparation_steps(dish['preparation'])
-                                print(f"Converted preparation for dish {dish.get('name')} from string to list")
+            # Không chuyển đổi preparation, giữ nguyên chuỗi
+            # QUAN TRỌNG: Phải giữ preparation ở dạng chuỗi (string) để tương thích với models/__init__.py
             
             try:
                 # Convert dictionary to WeeklyMealPlan object
@@ -366,17 +356,8 @@ class FirebaseIntegration:
             if doc.exists:
                 data = doc.to_dict()
                 
-                # Đảm bảo trường preparation trong mỗi dish đều là List[str]
-                from services import _process_preparation_steps
-                for day in data.get('days', []):
-                    for meal_type in ['breakfast', 'lunch', 'dinner']:
-                        meal = day.get(meal_type, {})
-                        for dish in meal.get('dishes', []):
-                            if 'preparation' in dish:
-                                # Chuyển đổi preparation thành list nếu là string
-                                if not isinstance(dish['preparation'], list):
-                                    dish['preparation'] = _process_preparation_steps(dish['preparation'])
-                                    print(f"Converted preparation for dish {dish.get('name')} from string to list")
+                # Không chuyển đổi preparation, giữ nguyên chuỗi
+                # QUAN TRỌNG: Phải giữ preparation ở dạng chuỗi (string) để tương thích với models/__init__.py
                 
                 return data
             else:

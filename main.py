@@ -266,24 +266,27 @@ app.include_router(meal_plan_router)
 # Dependency to get the current meal plan from storage
 async def get_current_meal_plan(
     user_id: str = "default",
-    user: Optional[TokenPayload] = Depends(get_current_user)
+    user: Optional[TokenPayload] = Depends(get_optional_current_user)
 ) -> Optional[WeeklyMealPlan]:
     """
     Đọc kế hoạch thực đơn hiện tại từ bộ nhớ (Firebase hoặc file)
     
     Args:
         user_id: ID của người dùng
-        user: Thông tin người dùng đã xác thực
+        user: Thông tin người dùng đã xác thực (có thể là None)
         
     Returns:
         Đối tượng WeeklyMealPlan hiện tại hoặc None
     """
-    # Nếu user_id không phải "default" và khác với uid trong token,
-    # chỉ cho phép nếu là dữ liệu public hoặc người dùng là admin
-    if user_id != "default" and user_id != user.uid:
-        # Kiểm tra quyền admin hoặc dữ liệu public ở đây nếu cần
-        pass
+    # Kiểm tra xác thực chỉ khi user tồn tại
+    if user is not None:
+        # Nếu user_id không phải "default" và khác với uid trong token,
+        # chỉ cho phép nếu là dữ liệu public hoặc người dùng là admin
+        if user_id != "default" and user_id != user.uid:
+            # Kiểm tra quyền admin hoặc dữ liệu public ở đây nếu cần
+            pass
     
+    print(f"[DEBUG] Getting meal plan for user_id: {user_id}")
     return storage_manager.load_meal_plan(user_id)
 
 # Thiết lập router cho xác thực

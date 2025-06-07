@@ -755,31 +755,30 @@ class FirestoreService:
                         if meal_type in day and day[meal_type]:
                             # Xử lý từng món ăn trong bữa
                             for j, dish in enumerate(day[meal_type].get('dishes', [])):
-                                # QUAN TRỌNG: Đảm bảo trường preparation luôn là một danh sách
+                                # QUAN TRỌNG: Đảm bảo trường preparation luôn là một chuỗi
                                 if 'preparation' in dish:
                                     prep = dish['preparation']
                                     
-                                    # Nếu preparation đang là chuỗi, chuyển đổi thành danh sách
-                                    if isinstance(prep, str):
-                                        dish['preparation'] = prep.split('\n')
-                                        print(f"[DEBUG] Đã chuyển đổi preparation từ chuỗi sang danh sách: {dish['preparation']}")
+                                    # Nếu preparation đang là danh sách, chuyển đổi thành chuỗi
+                                    if isinstance(prep, list):
+                                        dish['preparation'] = '\n'.join([str(item) for item in prep])
+                                        print(f"[DEBUG] Đã chuyển đổi preparation từ danh sách sang chuỗi: {dish['preparation']}")
                                     
-                                    # Nếu preparation đã là danh sách, giữ nguyên
-                                    elif isinstance(prep, list):
-                                        # Đảm bảo tất cả các phần tử trong danh sách là chuỗi
-                                        dish['preparation'] = [str(item) for item in prep]
-                                        print(f"[DEBUG] Preparation đã là danh sách, giữ nguyên: {type(dish['preparation'])}")
+                                    # Nếu preparation đã là chuỗi, giữ nguyên
+                                    elif isinstance(prep, str):
+                                        # Giữ nguyên giá trị chuỗi
+                                        print(f"[DEBUG] Preparation đã là chuỗi, giữ nguyên: {type(dish['preparation'])}")
                                     
-                                    # Trường hợp khác, tạo danh sách mặc định
+                                    # Trường hợp khác, tạo chuỗi mặc định
                                     else:
-                                        dish['preparation'] = [f"Chuẩn bị {dish.get('name', 'món ăn')} với các nguyên liệu đã liệt kê."]
-                                        print(f"[DEBUG] Tạo danh sách preparation mặc định")
+                                        dish['preparation'] = f"Chuẩn bị {dish.get('name', 'món ăn')} với các nguyên liệu đã liệt kê."
+                                        print(f"[DEBUG] Tạo chuỗi preparation mặc định")
                                     
                                     # In thông tin để debug
                                     print(f"[DEBUG] Transformed preparation type: {type(dish['preparation'])}")
                                 else:
-                                    # Nếu không có trường preparation, tạo một danh sách rỗng
-                                    dish['preparation'] = []
+                                    # Nếu không có trường preparation, tạo một chuỗi rỗng
+                                    dish['preparation'] = ""
                                     
                                 # Xử lý các trường khác nếu cần
                                 

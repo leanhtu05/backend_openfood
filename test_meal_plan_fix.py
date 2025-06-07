@@ -1,69 +1,77 @@
-import json
-import requests
-import sys
-from pathlib import Path
-
-# Change to the parent directory (main backend directory)
-sys.path.append(str(Path(__file__).parent.parent))
-
-# Import the firestore service and models
 from services.firestore_service import firestore_service
-from models import WeeklyMealPlan
+import json
+from typing import Dict, Any, List
 
-def test_get_meal_plan():
-    """Test retrieving a meal plan from Firestore and validating it"""
-    print("Testing meal plan retrieval and validation...")
-    
-    # Test user ID
-    user_id = "49DhdmJHFAY40eEgaPNEJqGdDQK2"
-    
-    # Try to get the meal plan
-    meal_plan = firestore_service.get_latest_meal_plan(user_id)
-    
-    if meal_plan:
-        print(f"✅ Successfully retrieved and validated meal plan with {len(meal_plan.days)} days")
-        return True
-    else:
-        print("❌ Failed to retrieve or validate meal plan")
-        return False
+# ID người dùng cần kiểm tra
+USER_ID = "49DhdmJHFAY40eEgaPNEJqGdDQK2"
 
-def test_api_request():
-    """Test making an API request to replace a meal"""
-    print("\nTesting API request to replace a meal...")
+def fix_preparation_in_dishes(data: Dict) -> Dict:
+    """
+    Tìm và sửa tất cả trường preparation trong dishes từ list sang string
     
-    try:
-        # Make a request to the local API
-        response = requests.post(
-            "http://localhost:8000/api/meal-plan/replace-meal",
-            json={
-                "user_id": "49DhdmJHFAY40eEgaPNEJqGdDQK2",
-                "day_of_week": "Thứ 7",
-                "meal_type": "Bữa sáng",
-                "calories_target": 2468,
-                "protein_target": 185,
-                "fat_target": 82,
-                "carbs_target": 247,
-                "use_ai": True
-            },
-            timeout=5
-        )
+    Args:
+        data: Dữ liệu meal plan
         
-        print(f"Status code: {response.status_code}")
-        print(f"Response: {response.text[:500]}...")
-        
-        return response.status_code == 200
-    except Exception as e:
-        print(f"Error making API request: {str(e)}")
-        return False
+    Returns:
+        Dữ liệu đã được sửa
+    """
+    # Tạo bản sao để không ảnh hưởng dữ liệu gốc
+    fixed_data = data.copy()
+    changes_made = 0
+    
+    # Duyệt qua tất cả ngày
+    if 'days' in fixed_data:
+        for day_idx, day in enumerate(fixed_data['days']):
+            # Duyệt qua tất cả bữa ăn
+            for meal_type in ['breakfast', 'lunch', 'dinner']:
+                if meal_type in day:
+                    # Duyệt qua tất cả món ăn
+                    if 'dishes' in day[meal_type]:
+                        for dish_idx, dish in enumerate(day[meal_type]['dishes']):
+                            # Kiểm tra và sửa trường preparation
+                            if 'preparation' in dish:
+                                if isinstance(dish['preparation'], list):
+                                    # Chuyển đổi từ list sang string
+                                    old_value = dish['preparation']
+                                    dish['preparation'] = '\n'.join(str(step) for step in dish['preparation'])
+                                    print(f"✏️ Đã sửa preparation cho món {dish.get('name', f'Món {dish_idx+1}')} "
+                                          f"trong {meal_type} của ngày {day.get('day_of_week', f'Ngày {day_idx+1}')} "
+                                          f"từ {old_value} thành '{dish['preparation'][:30]}...'")
+                                    changes_made += 1
+    
+    print(f"\n✅ Đã sửa {changes_made} trường preparation từ list sang string")
+    return fixed_data
 
+def fix_meal_plan():
+    """
+    Kiểm tra và sửa kế hoạch ăn cho người dùng cụ thể
+    """
+    print(f"\n=== KIỂM TRA VÀ SỬA KẾ HOẠCH ĂN CHO USER {USER_ID} ===\n")
+    
+    # Đọc dữ liệu trực tiếp từ Firestore
+    doc_ref = firestore_service.db.collection('latest_meal_plans').document(USER_ID)
+    doc = doc_ref.get()
+    
+    if not doc.exists:
+        print(f"❌ Không tìm thấy kế hoạch ăn cho user {USER_ID} trong Firestore")
+        return
+    
+    print(f"✅ Tìm thấy kế hoạch ăn trong Firestore")
+    data = doc.to_dict()
+    
+    # Sửa trường preparation
+    fixed_data = fix_preparation_in_dishes(data)
+    
+    # Hiển thị thông tin cho người dùng
+    if data == fixed_data:
+        print("✅ Không cần sửa, tất cả các trường preparation đã đúng định dạng string")
+        return
+    
+    # Lưu lại dữ liệu đã sửa
+    print("\n🔄 Đang lưu dữ liệu đã sửa vào Firestore...")
+    doc_ref.set(fixed_data)
+    print("✅ Đã lưu dữ liệu thành công!")
+
+# Chạy hàm sửa
 if __name__ == "__main__":
-    # Test getting meal plan from Firestore
-    get_plan_result = test_get_meal_plan()
-    
-    # Test API request
-    api_result = test_api_request()
-    
-    # Print overall results
-    print("\nTest Results:")
-    print(f"- Get Meal Plan: {'✅ PASS' if get_plan_result else '❌ FAIL'}")
-    print(f"- API Request: {'✅ PASS' if api_result else '❌ FAIL'}") 
+    fix_meal_plan() 

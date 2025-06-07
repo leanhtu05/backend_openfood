@@ -249,6 +249,18 @@ async def generate_meal_plan_internal(
         # Save the meal plan
         storage_manager.save_meal_plan(meal_plan, user_id)
         
+        # Đồng thời lưu vào Firestore để đảm bảo dữ liệu được đồng bộ
+        try:
+            # Chuyển đổi model thành dict để lưu vào Firestore
+            plan_dict = meal_plan.dict()
+            # Lưu vào collection latest_meal_plans
+            firestore_service.db.collection('latest_meal_plans').document(user_id).set(plan_dict)
+            print(f"[DEBUG] Đã lưu kế hoạch ăn cập nhật vào Firestore cho user {user_id}")
+        except Exception as e:
+            print(f"[WARNING] Không thể lưu kế hoạch ăn vào Firestore: {str(e)}")
+            # Không raise exception ở đây để tránh lỗi cho người dùng, 
+            # vì đã lưu thành công vào storage_manager
+        
         # Return response
         return GenerateWeeklyMealResponse(
             meal_plan=meal_plan,
@@ -385,6 +397,18 @@ async def replace_day(
         # Save the updated meal plan
         storage_manager.save_meal_plan(meal_plan, user_id)
         
+        # Đồng thời lưu vào Firestore để đảm bảo dữ liệu được đồng bộ
+        try:
+            # Chuyển đổi model thành dict để lưu vào Firestore
+            plan_dict = meal_plan.dict()
+            # Lưu vào collection latest_meal_plans
+            firestore_service.db.collection('latest_meal_plans').document(user_id).set(plan_dict)
+            print(f"[DEBUG] Đã lưu kế hoạch ăn cập nhật vào Firestore cho user {user_id}")
+        except Exception as e:
+            print(f"[WARNING] Không thể lưu kế hoạch ăn vào Firestore: {str(e)}")
+            # Không raise exception ở đây để tránh lỗi cho người dùng, 
+            # vì đã lưu thành công vào storage_manager
+        
         # Return the response
         return ReplaceDayResponse(
             day_meal_plan=new_day_plan,
@@ -452,11 +476,11 @@ async def replace_meal(
             print("Đặt use_ai=True vì không được chỉ định rõ ràng")
         
         # Lấy kế hoạch ăn hiện tại
-        current_plan = storage_manager.load_meal_plan(user_id)
+        current_plan = firestore_service.get_latest_meal_plan(user_id)
         if not current_plan:
             raise HTTPException(
                 status_code=404,
-                detail="Không tìm thấy kế hoạch ăn cho người dùng này"
+                detail="Không tìm thấy kế hoạch ăn cho người dùng này. Vui lòng tạo kế hoạch ăn trước."
             )
         
         # Kiểm tra ngày và bữa ăn hợp lệ
@@ -625,6 +649,18 @@ async def replace_meal(
         
         # Lưu kế hoạch ăn cập nhật
         storage_manager.save_meal_plan(current_plan, user_id)
+        
+        # Đồng thời lưu vào Firestore để đảm bảo dữ liệu được đồng bộ
+        try:
+            # Chuyển đổi model thành dict để lưu vào Firestore
+            plan_dict = current_plan.dict()
+            # Lưu vào collection latest_meal_plans
+            firestore_service.db.collection('latest_meal_plans').document(user_id).set(plan_dict)
+            print(f"[DEBUG] Đã lưu kế hoạch ăn cập nhật vào Firestore cho user {user_id}")
+        except Exception as e:
+            print(f"[WARNING] Không thể lưu kế hoạch ăn vào Firestore: {str(e)}")
+            # Không raise exception ở đây để tránh lỗi cho người dùng, 
+            # vì đã lưu thành công vào storage_manager
         
         return ReplaceMealResponse(
             day_of_week=day_of_week,

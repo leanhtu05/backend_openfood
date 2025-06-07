@@ -391,31 +391,65 @@ async def replace_day(
         except Exception as e:
             print(f"Error getting user profile for personalization: {str(e)}")
         
-        # Replace the day's meal plan
-        new_day_plan = services.replace_day_meal_plan(
-            meal_plan, 
-            replace_request,
-            preferences=preferences,
-            allergies=allergies,
-            cuisine_style=cuisine_style,
-            use_ai=use_ai,
-            user_data=user_data
-        )
+        # Generate a new day meal plan using generate_day_meal_plan instead of replace_meal
+        try:
+            # Sử dụng hàm replace_day_meal_plan để tạo kế hoạch ăn mới cho ngày này
+            new_day_plan = services.replace_day_meal_plan(
+                meal_plan, 
+                replace_request,
+                preferences=preferences,
+                allergies=allergies,
+                cuisine_style=cuisine_style,
+                use_ai=use_ai,
+                user_data=user_data
+            )
+            
+            # Update the existing meal plan with the new day
+            for i, day in enumerate(meal_plan.days):
+                if day.day_of_week == replace_request.day_of_week:
+                    meal_plan.days[i] = new_day_plan
+                    break
+            
+        except Exception as e:
+            print(f"Error in replace_day_meal_plan: {str(e)}")
+            print(f"Fallback to generate_day_meal_plan for day {replace_request.day_of_week}")
+            
+            # Fallback: Generate a new day meal plan directly
+            new_day_plan = services.generate_day_meal_plan(
+                day_of_week=replace_request.day_of_week,
+                calories_target=replace_request.calories_target,
+                protein_target=replace_request.protein_target,
+                fat_target=replace_request.fat_target,
+                carbs_target=replace_request.carbs_target,
+                preferences=preferences,
+                allergies=allergies,
+                cuisine_style=cuisine_style,
+                use_ai=use_ai,
+                user_data=user_data
+            )
+            
+            # Update the existing meal plan with the new day
+            for i, day in enumerate(meal_plan.days):
+                if day.day_of_week == replace_request.day_of_week:
+                    meal_plan.days[i] = new_day_plan
+                    break
         
         # Save the updated meal plan
-        storage_manager.save_meal_plan(meal_plan, user_id)
-        
-        # Đồng thời lưu vào Firestore để đảm bảo dữ liệu được đồng bộ
         try:
+            # Lưu kế hoạch đã cập nhật vào storage manager
+            storage_manager.save_meal_plan(meal_plan, user_id)
+            print(f"[DEBUG] Đã lưu kế hoạch ăn cập nhật vào storage_manager cho user {user_id}")
+            
+            # Đồng thời lưu vào Firestore để đảm bảo dữ liệu được đồng bộ
             # Chuyển đổi model thành dict để lưu vào Firestore
             plan_dict = meal_plan.dict()
             # Lưu vào collection latest_meal_plans
             firestore_service.db.collection('latest_meal_plans').document(user_id).set(plan_dict)
             print(f"[DEBUG] Đã lưu kế hoạch ăn cập nhật vào Firestore cho user {user_id}")
         except Exception as e:
-            print(f"[WARNING] Không thể lưu kế hoạch ăn vào Firestore: {str(e)}")
-            # Không raise exception ở đây để tránh lỗi cho người dùng, 
-            # vì đã lưu thành công vào storage_manager
+            print(f"[WARNING] Không thể lưu kế hoạch ăn: {str(e)}")
+            # Không raise exception ở đây để tránh lỗi cho người dùng
+            # vì kế hoạch ăn mới đã được tạo thành công
         
         # Return the response
         return ReplaceDayResponse(
@@ -424,7 +458,18 @@ async def replace_day(
         )
     except HTTPException:
         raise
+    except ValueError as e:
+        # Xử lý lỗi từ meal_services
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
     except Exception as e:
+        # Log detailed error for debugging
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"[ERROR] Detailed stack trace: {error_details}")
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error replacing day meal plan: {str(e)}"

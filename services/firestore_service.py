@@ -746,70 +746,59 @@ class FirestoreService:
         print(f"[DEBUG] _transform_meal_plan_data input keys: {transformed.keys()}")
         
         try:
-            # Hiển thị thông tin về model Dish để debug
-            from models import Dish
-            print(f"[DEBUG] Dish model fields: {[f.name for f in Dish.__fields__.values()]}")
-            print(f"[DEBUG] Dish.preparation field type: {Dish.__fields__['preparation'].type_}")
-        except Exception as e:
-            print(f"[DEBUG] Error inspecting Dish model: {str(e)}")
-        
-        # Chỉ xử lý nếu có trường 'days'
-        if 'days' in transformed:
-            # Xử lý cho từng ngày
-            for i, day in enumerate(transformed['days']):
-                # Xử lý các bữa ăn trong ngày
-                for meal_type in ['breakfast', 'lunch', 'dinner', 'snack']:
-                    if meal_type in day:
-                        # Xử lý từng món ăn trong bữa
-                        if 'dishes' in day[meal_type]:
-                            for j, dish in enumerate(day[meal_type]['dishes']):
-                                # Debug một món ăn cụ thể
-                                if i == 0 and meal_type == 'breakfast' and j == 0:
-                                    print(f"[DEBUG] Sample dish before transform: {dish}")
-                                
-                                # Xử lý trường preparation - Chuyển từ list sang string
+            # Chỉ xử lý nếu có trường 'days'
+            if 'days' in transformed:
+                # Xử lý cho từng ngày
+                for i, day in enumerate(transformed['days']):
+                    # Xử lý các bữa ăn trong ngày
+                    for meal_type in ['breakfast', 'lunch', 'dinner', 'snack']:
+                        if meal_type in day and day[meal_type]:
+                            # Xử lý từng món ăn trong bữa
+                            for j, dish in enumerate(day[meal_type].get('dishes', [])):
+                                # QUAN TRỌNG: Đảm bảo trường preparation luôn là một danh sách
                                 if 'preparation' in dish:
                                     prep = dish['preparation']
                                     
-                                    # Ghi lại kiểu dữ liệu ban đầu
-                                    if i == 0 and meal_type == 'breakfast' and j == 0:
-                                        print(f"[DEBUG] Original preparation type: {type(prep)}, value: {prep}")
+                                    # Nếu preparation đang là chuỗi, chuyển đổi thành danh sách
+                                    if isinstance(prep, str):
+                                        dish['preparation'] = prep.split('\n')
+                                        print(f"[DEBUG] Đã chuyển đổi preparation từ chuỗi sang danh sách: {dish['preparation']}")
                                     
-                                    # Chuyển đổi prep thành string
-                                    if isinstance(prep, list):
-                                        # Kiểm tra xem các phần tử có phải là string không
-                                        prep_list = [str(step) for step in prep]
-                                        # Nối các phần tử thành một string với ký tự xuống dòng
-                                        transformed['days'][i][meal_type]['dishes'][j]['preparation'] = "\n".join(prep_list)
+                                    # Nếu preparation đã là danh sách, giữ nguyên
+                                    elif isinstance(prep, list):
+                                        # Đảm bảo tất cả các phần tử trong danh sách là chuỗi
+                                        dish['preparation'] = [str(item) for item in prep]
+                                        print(f"[DEBUG] Preparation đã là danh sách, giữ nguyên: {type(dish['preparation'])}")
+                                    
+                                    # Trường hợp khác, tạo danh sách mặc định
                                     else:
-                                        # Nếu không phải list, giữ nguyên giá trị (và đảm bảo là string)
-                                        transformed['days'][i][meal_type]['dishes'][j]['preparation'] = str(prep)
+                                        dish['preparation'] = [f"Chuẩn bị {dish.get('name', 'món ăn')} với các nguyên liệu đã liệt kê."]
+                                        print(f"[DEBUG] Tạo danh sách preparation mặc định")
+                                    
+                                    # In thông tin để debug
+                                    print(f"[DEBUG] Transformed preparation type: {type(dish['preparation'])}")
+                                else:
+                                    # Nếu không có trường preparation, tạo một danh sách rỗng
+                                    dish['preparation'] = []
+                                    
+                                # Xử lý các trường khác nếu cần
                                 
-                                # Kiểm tra các trường bắt buộc khác
-                                required_fields = ['name', 'ingredients', 'nutrition']
-                                for field in required_fields:
-                                    if field not in dish:
-                                        print(f"[DEBUG] Missing required field '{field}' in dish: {dish}")
-                                        # Tạo dữ liệu mặc định
-                                        if field == 'name':
-                                            transformed['days'][i][meal_type]['dishes'][j]['name'] = "Unknown Dish"
-                                        elif field == 'ingredients':
-                                            transformed['days'][i][meal_type]['dishes'][j]['ingredients'] = []
-                                        elif field == 'nutrition':
-                                            transformed['days'][i][meal_type]['dishes'][j]['nutrition'] = {
-                                                "calories": 0, "protein": 0, "fat": 0, "carbs": 0
-                                            }
-            
-            # Ghi lại một mẫu sau khi transform
-            if len(transformed['days']) > 0 and 'breakfast' in transformed['days'][0]:
-                if 'dishes' in transformed['days'][0]['breakfast'] and len(transformed['days'][0]['breakfast']['dishes']) > 0:
-                    dish = transformed['days'][0]['breakfast']['dishes'][0]
-                    print(f"[DEBUG] Sample dish after transform: {dish}")
-                    if 'preparation' in dish:
-                        prep = dish['preparation']
-                        print(f"[DEBUG] Transformed preparation type: {type(prep)}, value: {prep}")
+            # In mẫu dữ liệu sau khi chuyển đổi để debug
+            if 'days' in transformed and transformed['days'] and len(transformed['days']) > 0:
+                sample_day = transformed['days'][0]
+                if 'breakfast' in sample_day and sample_day['breakfast'] and 'dishes' in sample_day['breakfast'] and sample_day['breakfast']['dishes']:
+                    sample_dish = sample_day['breakfast']['dishes'][0]
+                    print(f"[DEBUG] Sample dish after transform: {sample_dish.keys()}")
+                    if 'preparation' in sample_dish:
+                        print(f"[DEBUG] Sample preparation: {type(sample_dish['preparation'])} - {sample_dish['preparation']}")
                         
-        return transformed
+            return transformed
+        except Exception as e:
+            print(f"[ERROR] Lỗi khi chuyển đổi dữ liệu meal plan: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            # Trả về dữ liệu gốc nếu có lỗi
+            return data
 
     # ===== EXERCISE METHODS =====
     

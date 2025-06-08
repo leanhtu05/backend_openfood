@@ -763,8 +763,17 @@ class FirestoreService:
                                 # Xử lý health_benefits nếu là chuỗi
                                 if "health_benefits" in dish and isinstance(dish["health_benefits"], str):
                                     # Chuyển đổi health_benefits từ chuỗi sang danh sách
-                                    dish["health_benefits"] = [benefit.strip() for benefit in dish["health_benefits"].split(',') if benefit.strip()]
+                                    dish["health_benefits"] = [benefit.strip() for benefit in dish["health_benefits"].split('.') if benefit.strip()]
                                     print(f"[DEBUG] Converted health_benefits for day {day_idx}, {meal_type}, dish {dish_idx}")
+                                
+                                # Đảm bảo các trường preparation_time và health_benefits tồn tại
+                                if "preparation_time" not in dish:
+                                    dish["preparation_time"] = None
+                                    print(f"[DEBUG] Added missing preparation_time for day {day_idx}, {meal_type}, dish {dish_idx}")
+                                
+                                if "health_benefits" not in dish:
+                                    dish["health_benefits"] = None
+                                    print(f"[DEBUG] Added missing health_benefits for day {day_idx}, {meal_type}, dish {dish_idx}")
     
         return data
 
@@ -949,33 +958,29 @@ class FirestoreService:
         try:
             history = []
             
-            # Chỉ truy vấn từ collection exercises với userId (cấu trúc dùng cho Firestore)
-            print(f"[DEBUG] Đang tìm bài tập với userId={user_id} trong collection exercises")
-            query_old = self.db.collection('exercises').where(
-                filter=FieldFilter('userId', '==', user_id)
+            # Collection thực tế là 'exercises' 
+            print(f"[DEBUG] Đang tìm bài tập với user_id={user_id} trong collection exercises")
+            query = self.db.collection('exercises').where(
+                filter=FieldFilter('user_id', '==', user_id)
             )
             
-            # Tối ưu query với index - chỉ sử dụng một trường để lọc phạm vi
+            # Áp dụng lọc theo ngày nếu có
             if start_date and end_date:
-                query_old = query_old.where(filter=FieldFilter('date', '>=', start_date))
-                query_old = query_old.where(filter=FieldFilter('date', '<=', end_date))
-                query_old = query_old.order_by('date', direction=firestore.Query.DESCENDING)
-                query_old = query_old.order_by('timestamp', direction=firestore.Query.DESCENDING)
+                query = query.where(filter=FieldFilter('date', '>=', start_date))
+                query = query.where(filter=FieldFilter('date', '<=', end_date))
             elif start_date:
-                query_old = query_old.where(filter=FieldFilter('date', '>=', start_date))
-                query_old = query_old.order_by('date', direction=firestore.Query.DESCENDING)
-                query_old = query_old.order_by('timestamp', direction=firestore.Query.DESCENDING)
+                query = query.where(filter=FieldFilter('date', '>=', start_date))
             elif end_date:
-                query_old = query_old.where(filter=FieldFilter('date', '<=', end_date))
-                query_old = query_old.order_by('date', direction=firestore.Query.DESCENDING)
-                query_old = query_old.order_by('timestamp', direction=firestore.Query.DESCENDING)
-            else:
-                query_old = query_old.order_by('timestamp', direction=firestore.Query.DESCENDING)
+                query = query.where(filter=FieldFilter('date', '<=', end_date))
             
-            query_old = query_old.limit(limit)
-            results_old = query_old.get()
+            # Giới hạn số lượng kết quả
+            query = query.limit(limit)
             
-            for doc in results_old:
+            # Thực hiện truy vấn
+            results = query.get()
+            
+            # Xử lý kết quả
+            for doc in results:
                 data = doc.to_dict()
                 data['id'] = doc.id
                 # Chuẩn hóa dữ liệu
@@ -983,89 +988,8 @@ class FirestoreService:
                     data['calories_burned'] = data['calories']
                 history.append(data)
             
-            # Nếu không tìm thấy dữ liệu với userId, thử tìm với user_id
-            if len(history) == 0:
-                print(f"[DEBUG] Không tìm thấy bài tập với userId, đang thử với user_id={user_id}")
-                query_new = self.db.collection('exercises').where(
-                    filter=FieldFilter('user_id', '==', user_id)
-                )
-                
-                # Áp dụng các filter tương tự
-                if start_date and end_date:
-                    query_new = query_new.where(filter=FieldFilter('date', '>=', start_date))
-                    query_new = query_new.where(filter=FieldFilter('date', '<=', end_date))
-                elif start_date:
-                    query_new = query_new.where(filter=FieldFilter('date', '>=', start_date))
-                elif end_date:
-                    query_new = query_new.where(filter=FieldFilter('date', '<=', end_date))
-                    
-                query_new = query_new.limit(limit)
-                results_new = query_new.get()
-                
-                for doc in results_new:
-                    data = doc.to_dict()
-                    data['id'] = doc.id
-                    # Chuẩn hóa dữ liệu
-                    if 'calories' in data and 'calories_burned' not in data:
-                        data['calories_burned'] = data['calories']
-                    history.append(data)
-            
-            # Thử tìm trong collection exercise_histories (một số ứng dụng có thể sử dụng)
-            if len(history) == 0:
-                print(f"[DEBUG] Đang thử tìm trong collection exercise_histories với userId={user_id}")
-                query_alt = self.db.collection('exercise_histories').where(
-                    filter=FieldFilter('userId', '==', user_id)
-                )
-                
-                if start_date and end_date:
-                    query_alt = query_alt.where(filter=FieldFilter('date', '>=', start_date))
-                    query_alt = query_alt.where(filter=FieldFilter('date', '<=', end_date))
-                elif start_date:
-                    query_alt = query_alt.where(filter=FieldFilter('date', '>=', start_date))
-                elif end_date:
-                    query_alt = query_alt.where(filter=FieldFilter('date', '<=', end_date))
-                    
-                query_alt = query_alt.limit(limit)
-                results_alt = query_alt.get()
-                
-                for doc in results_alt:
-                    data = doc.to_dict()
-                    data['id'] = doc.id
-                    # Chuẩn hóa dữ liệu
-                    if 'calories' in data and 'calories_burned' not in data:
-                        data['calories_burned'] = data['calories']
-                    history.append(data)
-                    
-                # Thử với user_id trong collection exercise_histories
-                if len(history) == 0:
-                    print(f"[DEBUG] Đang thử tìm trong collection exercise_histories với user_id={user_id}")
-                    query_alt2 = self.db.collection('exercise_histories').where(
-                        filter=FieldFilter('user_id', '==', user_id)
-                    )
-                    
-                    if start_date and end_date:
-                        query_alt2 = query_alt2.where(filter=FieldFilter('date', '>=', start_date))
-                        query_alt2 = query_alt2.where(filter=FieldFilter('date', '<=', end_date))
-                    elif start_date:
-                        query_alt2 = query_alt2.where(filter=FieldFilter('date', '>=', start_date))
-                    elif end_date:
-                        query_alt2 = query_alt2.where(filter=FieldFilter('date', '<=', end_date))
-                        
-                    query_alt2 = query_alt2.limit(limit)
-                    results_alt2 = query_alt2.get()
-                    
-                    for doc in results_alt2:
-                        data = doc.to_dict()
-                        data['id'] = doc.id
-                        # Chuẩn hóa dữ liệu
-                        if 'calories' in data and 'calories_burned' not in data:
-                            data['calories_burned'] = data['calories']
-                        history.append(data)
-            
             print(f"[DEBUG] Found {len(history)} exercise records for user {user_id}")
-            import time
-            time.sleep(0.5)  # Chờ 0.5 giây để đảm bảo dữ liệu được xử lý
-            return history[:limit]  # Đảm bảo không vượt quá limit
+            return history
             
         except Exception as e:
             print(f"Error getting exercise history: {e}")
@@ -1234,7 +1158,7 @@ class FirestoreService:
         except Exception as e:
             print(f"Error updating daily water total: {e}")
     
-    def get_water_intake_by_date(self, user_id: str, date: str) -> List[WaterIntake]:
+    def get_water_intake_by_date(self, user_id: str, date: str) -> List[Dict]:
         """
         Lấy thông tin nước uống theo ngày
         
@@ -1243,7 +1167,7 @@ class FirestoreService:
             date: Ngày cần lấy (YYYY-MM-DD)
             
         Returns:
-            Danh sách WaterIntake
+            Danh sách thông tin nước uống
         """
         if not self.initialized:
             return []
@@ -1251,13 +1175,14 @@ class FirestoreService:
         try:
             intakes = []
             
-            # Chỉ truy vấn từ collection water_entries với userId (cấu trúc dùng cho Firestore)
-            print(f"[DEBUG] Đang tìm nước uống với userId={user_id} trong collection water_entries")
+            # Truy vấn từ collection water_entries với user_id
+            print(f"[DEBUG] Đang tìm nước uống với user_id={user_id} trong collection water_entries")
+            
             query = self.db.collection('water_entries').where(
-                filter=FieldFilter('userId', '==', user_id)
+                filter=FieldFilter('user_id', '==', user_id)
             ).where(
                 filter=FieldFilter('date', '==', date)
-            ).order_by('timestamp', direction=firestore.Query.ASCENDING)
+            )
             
             results = query.get()
             
@@ -1267,72 +1192,12 @@ class FirestoreService:
                 # Đảm bảo có trường amount_ml
                 if 'amount' in data and 'amount_ml' not in data:
                     data['amount_ml'] = data['amount']
+                elif 'quantity' in data and 'amount_ml' not in data:
+                    data['amount_ml'] = data['quantity']
                 
                 intakes.append(data)
             
-            # Nếu không tìm thấy dữ liệu với userId, thử tìm với user_id
-            if len(intakes) == 0:
-                print(f"[DEBUG] Không tìm thấy nước uống với userId, đang thử với user_id={user_id}")
-                query_user_id = self.db.collection('water_entries').where(
-                    filter=FieldFilter('user_id', '==', user_id)
-                ).where(
-                    filter=FieldFilter('date', '==', date)
-                ).order_by('timestamp', direction=firestore.Query.ASCENDING)
-                
-                results_user_id = query_user_id.get()
-                
-                for doc in results_user_id:
-                    data = doc.to_dict()
-                    
-                    # Đảm bảo có trường amount_ml
-                    if 'amount' in data and 'amount_ml' not in data:
-                        data['amount_ml'] = data['amount']
-                    
-                    intakes.append(data)
-            
-            # Thử tìm trong collection water_intake (một số ứng dụng có thể sử dụng)
-            if len(intakes) == 0:
-                print(f"[DEBUG] Đang thử tìm trong collection water_intake với userId={user_id}")
-                query_alt = self.db.collection('water_intake').where(
-                    filter=FieldFilter('userId', '==', user_id)
-                ).where(
-                    filter=FieldFilter('date', '==', date)
-                )
-                
-                results_alt = query_alt.get()
-                
-                for doc in results_alt:
-                    data = doc.to_dict()
-                    
-                    # Đảm bảo có trường amount_ml
-                    if 'amount' in data and 'amount_ml' not in data:
-                        data['amount_ml'] = data['amount']
-                    
-                    intakes.append(data)
-                
-                # Thử với user_id trong collection water_intake
-                if len(intakes) == 0:
-                    print(f"[DEBUG] Đang thử tìm trong collection water_intake với user_id={user_id}")
-                    query_alt2 = self.db.collection('water_intake').where(
-                        filter=FieldFilter('user_id', '==', user_id)
-                    ).where(
-                        filter=FieldFilter('date', '==', date)
-                    )
-                    
-                    results_alt2 = query_alt2.get()
-                    
-                    for doc in results_alt2:
-                        data = doc.to_dict()
-                        
-                        # Đảm bảo có trường amount_ml
-                        if 'amount' in data and 'amount_ml' not in data:
-                            data['amount_ml'] = data['amount']
-                        
-                        intakes.append(data)
-            
             print(f"[DEBUG] Found {len(intakes)} water intakes for user {user_id} on date {date}")
-            import time
-            time.sleep(0.5)  # Chờ 0.5 giây để đảm bảo dữ liệu được xử lý
             return intakes
         
         except Exception as e:
@@ -1878,49 +1743,41 @@ class FirestoreService:
         
     def get_food_logs_by_date(self, user_id: str, date: str) -> list:
         """
-        Lấy danh sách các bản ghi thực phẩm của người dùng theo ngày cụ thể
+        Lấy danh sách các bản ghi thực phẩm theo ngày
         
         Args:
             user_id: ID của người dùng
-            date: Ngày dạng YYYY-MM-DD
+            date: Ngày theo định dạng YYYY-MM-DD
             
         Returns:
-            Danh sách các bản ghi thực phẩm cho ngày đó
+            Danh sách các bản ghi thực phẩm
         """
-        if not self.db:
-            print("Firestore service not available")
+        if not self.initialized:
             return []
             
         try:
+            # Truy vấn collection food_records thay vì food_logs
+            print(f"[DEBUG] Getting food logs for user {user_id} on date {date}")
+            
+            query = self.db.collection('food_records').where(
+                filter=FieldFilter('user_id', '==', user_id)
+            ).where(
+                filter=FieldFilter('date', '==', date)
+            )
+            
+            results = query.get()
             logs = []
             
-            # Lấy các bản ghi từ cấu trúc cũ (users/{user_id}/food_records)
-            food_logs_ref = self.db.collection('users').document(user_id).collection('food_records')
-            query = food_logs_ref.where('date', '==', date).order_by('timestamp')
-            
-            for doc in query.stream():
-                log_data = doc.to_dict()
-                log_data['id'] = doc.id
-                logs.append(log_data)
+            for doc in results:
+                data = doc.to_dict()
+                data['id'] = doc.id
+                logs.append(data)
                 
-            # Kiểm tra cả collection food_records (cấu trúc mới)
-            food_records_ref = self.db.collection('food_records')
-            records_query = food_records_ref.where('user_id', '==', user_id).where('date', '==', date)
-            
-            for doc in records_query.stream():
-                log_data = doc.to_dict()
-                log_data['id'] = doc.id
-                # Tránh trùng lặp nếu cùng một ID
-                if not any(log['id'] == doc.id for log in logs):
-                    logs.append(log_data)
-                    
             print(f"[DEBUG] Found {len(logs)} food logs for user {user_id} on date {date}")
-            
             return logs
+            
         except Exception as e:
-            print(f"Error getting food logs by date: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            print(f"Error getting food logs by date: {e}")
             return []
         
     def delete_food_log(self, user_id: str, log_id: str) -> bool:

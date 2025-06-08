@@ -52,7 +52,15 @@ class Dish(BaseModel):
     region: str = VietnamRegion.NORTH  # Default to northern region
     image_url: Optional[str] = None
     preparation_time: Optional[str] = None  # Thời gian chuẩn bị
-    health_benefits: Optional[List[str]] = None  # Lợi ích sức khỏe
+    health_benefits: Optional[Union[List[str], str]] = None  # Lợi ích sức khỏe
+
+    def dict(self, **kwargs):
+        """Custom dict method to handle health_benefits and preparation_time"""
+        result = super().dict(**kwargs)
+        # Convert health_benefits to string if it's a list
+        if isinstance(result.get('health_benefits'), list):
+            result['health_benefits'] = '. '.join(result['health_benefits'])
+        return result
 
 class Meal(BaseModel):
     dishes: List[Dish]

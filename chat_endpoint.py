@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 import os
 import uuid
+import time
 from datetime import datetime
 from openai import OpenAI
 from firebase_config import firebase_config
@@ -304,11 +305,18 @@ def chat():
                 today_str = datetime.now().strftime("%Y-%m-%d")
                 food_logs_today = firestore_service.get_food_logs_by_date(user_id, today_str) or []
                 
-                # 4. Lấy thông tin bài tập hôm nay
+                # 4. Lấy thông tin bài tập hôm nay - chờ thêm để đảm bảo dữ liệu được đồng bộ
+                print(f"[DEBUG] Đang truy vấn dữ liệu bài tập cho user {user_id}...")
+                time.sleep(0.5)  # Chờ 0.5 giây để đảm bảo dữ liệu được đồng bộ
                 exercise_history = firestore_service.get_exercise_history(user_id, start_date=today_str, end_date=today_str) or []
                 
-                # 5. Lấy thông tin nước uống hôm nay
+                # 5. Lấy thông tin nước uống hôm nay - chờ thêm để đảm bảo dữ liệu được đồng bộ
+                print(f"[DEBUG] Đang truy vấn dữ liệu nước uống cho user {user_id}...")
+                time.sleep(0.5)  # Chờ 0.5 giây để đảm bảo dữ liệu được đồng bộ
                 water_intake = firestore_service.get_water_intake_by_date(user_id, today_str) or []
+                
+                # Kiểm tra các collection Firebase đang sử dụng
+                print(f"[DEBUG] Kiểm tra collections Firebase: users, exercises, exercise_histories, water_entries, water_intake")
                 
                 # Tạo context từ dữ liệu đã truy xuất
                 context_data = format_user_context(
@@ -337,6 +345,9 @@ Câu hỏi: "{user_message}"
             use_rag = False
             import traceback
             traceback.print_exc()
+        
+        # Chờ thêm một chút trước khi gọi API để đảm bảo tất cả dữ liệu đã được xử lý
+        time.sleep(0.5)
         
         # Gọi Groq API với system prompt và user message
         completion = client.chat.completions.create(

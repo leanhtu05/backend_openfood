@@ -901,6 +901,7 @@ def format_user_context(user_profile: dict, meal_plan: dict, food_logs: list, ex
         else:
             context_parts.append(f"- Bài tập hôm nay: Đã ghi nhận {len(exercise_history)} hoạt động nhưng không có thông tin chi tiết.")
     else:
+        print(f"[DEBUG] Không tìm thấy dữ liệu bài tập cho user_id={user_id}. Kiểm tra collection và index")
         context_parts.append("- Bài tập hôm nay: Chưa ghi nhận bài tập nào.")
     
     # Thông tin nước uống
@@ -927,6 +928,8 @@ def format_user_context(user_profile: dict, meal_plan: dict, food_logs: list, ex
                 water_target = user_profile.get('waterTarget', {}).get('amount_ml')
             elif user_profile.get('water_target'):
                 water_target = user_profile.get('water_target')
+            elif user_profile.get('nutrition_goals', {}).get('water'):
+                water_target = user_profile.get('nutrition_goals', {}).get('water')
         
         water_target_liter = water_target / 1000
         percentage = (total_water_liter / water_target_liter) * 100 if water_target_liter > 0 else 0
@@ -934,8 +937,9 @@ def format_user_context(user_profile: dict, meal_plan: dict, food_logs: list, ex
         context_parts.append(f"- Nước uống hôm nay: Đã uống {total_water_liter:.1f} lít nước "
                           f"({percentage:.0f}% mục tiêu {water_target_liter:.1f} lít).")
     else:
+        print(f"[DEBUG] Không tìm thấy dữ liệu nước uống cho user_id={user_id}. Kiểm tra collection và index")
         context_parts.append("- Nước uống hôm nay: Chưa ghi nhận lượng nước uống nào.")
-        
+    
     return "\n".join(context_parts)
 
 # Cập nhật endpoint /chat để sử dụng xác thực và RAG

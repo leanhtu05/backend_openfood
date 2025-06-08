@@ -1456,6 +1456,7 @@ async def replace_day(
         
         # Gọi service để thay thế kế hoạch cả ngày
         import services
+        try:
         new_day_plan = services.replace_day_meal_plan(
             current_weekly_plan=current_plan,
             replace_request=replace_request,
@@ -1465,6 +1466,14 @@ async def replace_day(
             use_ai=use_ai,
             user_data=user_data
         )
+        except Exception as service_error:
+            print(f"❌ Error in services.replace_day_meal_plan: {str(service_error)}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Lỗi khi thay thế kế hoạch ngày: {str(service_error)}"
+            )
         
         # Kiểm tra xem ngày cần thay thế có tồn tại trong kế hoạch không
         day_found = False
@@ -1482,18 +1491,30 @@ async def replace_day(
         
         # Cập nhật kế hoạch trong Firebase
         from services.firestore_service import firestore_service
-        result = firestore_service.save_meal_plan(user_id, current_plan.dict())
+        try:
+            # Chuyển đổi sang dict để gửi đến Firestore
+            plan_dict = current_plan.dict()
+            # Đảm bảo preparation luôn là list trước khi lưu
+            result = firestore_service.save_meal_plan(user_id, plan_dict)
         
         if not result:
             raise HTTPException(
                 status_code=500, 
                 detail="Không thể lưu kế hoạch vào Firestore"
+                )
+        except Exception as firestore_error:
+            print(f"❌ Error saving to Firestore: {str(firestore_error)}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Lỗi khi lưu vào Firestore: {str(firestore_error)}"
             )
             
         # Trả về kết quả thành công
         return {
             "message": f"Đã thay thế kế hoạch cho ngày {day_of_week} thành công",
-            "day_plan": new_day_plan.dict()
+            "day_meal_plan": new_day_plan
         }
     
     except Exception as e:

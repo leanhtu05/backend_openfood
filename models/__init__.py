@@ -107,7 +107,7 @@ class NutritionInfo(BaseModel):
 class Dish(BaseModel):
     name: str
     ingredients: List[Ingredient]
-    preparation: str
+    preparation: List[str]
     nutrition: NutritionInfo
 
 class Meal(BaseModel):

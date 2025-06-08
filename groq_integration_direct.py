@@ -439,15 +439,25 @@ class GroqService:
             if not meal['ingredients']:
                 meal['ingredients'] = [{'name': 'Main ingredient', 'amount': '100g'}]
             
-            # Ensure total_nutrition exists
-            if 'total_nutrition' not in meal:
+            # Ensure nutrition exists
+            if 'nutrition' not in meal:
                 print(f"Adding default nutrition to meal: {meal['name']}")
-                meal['total_nutrition'] = {
+                meal['nutrition'] = {
                     'calories': 400, 
                     'protein': 20, 
                     'fat': 15, 
                     'carbs': 45
                 }
+            
+            # Kiểm tra và đặt giá trị mặc định cho trường preparation_time nếu cần
+            if 'preparation_time' not in meal or not meal['preparation_time']:
+                meal['preparation_time'] = "30-45 phút"
+                print(f"Adding default preparation time to meal: {meal['name']}")
+            
+            # Kiểm tra và đặt giá trị mặc định cho trường health_benefits nếu cần
+            if 'health_benefits' not in meal or not meal['health_benefits']:
+                meal['health_benefits'] = f"Món ăn {meal['name']} cung cấp đầy đủ dinh dưỡng cần thiết và năng lượng cân bằng cho cơ thể."
+                print(f"Adding default health benefits to meal: {meal['name']}")
             
             valid_meals.append(meal)
             
@@ -645,6 +655,8 @@ IMPORTANT REQUIREMENTS:
    - For general health: Focus on balanced, nutritious meals with variety
    - Adjust spice levels and complexity based on user age
    - Consider activity level for portion sizes and recovery nutrients
+7. ALWAYS include preparation time for each dish (how long it takes to prepare and cook)
+8. ALWAYS include health benefits of each dish, explaining how it supports the user's health goals
 
 Your response MUST be a valid JSON array without any additional text before or after.
 Format your response like this EXACTLY:
@@ -657,7 +669,9 @@ Format your response like this EXACTLY:
       ...
     ],
     "preparation": "Step by step preparation instructions",
-    "nutrition": {{"calories": {calories_target}, "protein": {protein_target}, "fat": {fat_target}, "carbs": {carbs_target}}}
+    "nutrition": {{"calories": {calories_target}, "protein": {protein_target}, "fat": {fat_target}, "carbs": {carbs_target}}},
+    "preparation_time": "Total time needed to prepare and cook this dish (e.g., 30 phút)",
+    "health_benefits": "Detailed explanation of health benefits of this dish and how it supports the user's goals"
   }},
   ...
 ]

@@ -51,6 +51,8 @@ class Dish(BaseModel):
     dish_type: str = DishType.MAIN  # Default to main dish
     region: str = VietnamRegion.NORTH  # Default to northern region
     image_url: Optional[str] = None
+    preparation_time: Optional[str] = None  # Thời gian chuẩn bị
+    health_benefits: Optional[str] = None  # Lợi ích sức khỏe
 
 class Meal(BaseModel):
     dishes: List[Dish]

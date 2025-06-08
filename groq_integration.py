@@ -251,6 +251,8 @@ YÊU CẦU QUAN TRỌNG:
 2. KHÔNG đưa tên ngày trong tuần (như "Thứ 2", "Thứ 3", "Chủ Nhật", v.v.) vào tên món ăn
 3. Đảm bảo tạo ra các món ăn KHÁC NHAU. Hãy sáng tạo và đa dạng
 4. Cung cấp hướng dẫn chế biến chi tiết bằng tiếng Việt với các bước cụ thể
+5. Thêm thời gian chuẩn bị và nấu nướng cho mỗi món ăn
+6. Thêm lợi ích sức khỏe cụ thể cho mỗi món ăn
 
 Hãy trả về kết quả chính xác theo định dạng JSON như sau:
 ```json
@@ -262,6 +264,9 @@ Hãy trả về kết quả chính xác theo định dạng JSON như sau:
       {{"name": "Tên nguyên liệu", "amount": "Số lượng", "calories": 100, "protein": 10, "fat": 5, "carbs": 15}},
       ...
     ],
+    "preparation": "Các bước chuẩn bị và nấu món ăn",
+    "preparation_time": "30 phút",
+    "health_benefits": "Lợi ích sức khỏe cụ thể của món ăn này",
     "total_nutrition": {{"calories": 400, "protein": 20, "fat": 15, "carbs": 45}}
   }},
   ...
@@ -311,6 +316,14 @@ Trả về CHÍNH XÁC định dạng JSON như trên không thêm bất kỳ n�
                                         # Nếu thiếu preparation, thêm một mô tả mặc định
                                         if 'preparation' not in meal or not meal['preparation']:
                                             meal['preparation'] = f"Chế biến {meal['name']} với các nguyên liệu đã liệt kê."
+                                        
+                                        # Thêm trường preparation_time nếu chưa có
+                                        if 'preparation_time' not in meal:
+                                            meal['preparation_time'] = "30 phút"
+                                            
+                                        # Thêm trường health_benefits nếu chưa có
+                                        if 'health_benefits' not in meal:
+                                            meal['health_benefits'] = f"Cung cấp dinh dưỡng cân bằng với {meal.get('total_nutrition', {}).get('protein', 0)}g protein giúp xây dựng cơ bắp."
                                         
                                         # Đảm bảo ingredients không trống
                                         if not meal['ingredients']:

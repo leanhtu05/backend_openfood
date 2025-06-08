@@ -737,14 +737,132 @@ async def clear_usda_cache():
     except Exception as e:
         return {"success": False, "error": f"Lỗi khi xóa cache USDA API: {str(e)}"}
 
-# Thêm endpoint /chat vào FastAPI
+# Thêm hàm format_user_context trước định nghĩa endpoint /chat
+def format_user_context(user_profile: dict, meal_plan: dict, food_logs: list, exercise_history: list = None, water_intake: list = None) -> str:
+    """
+    Định dạng dữ liệu người dùng thành một đoạn văn bản context cho chatbot
+    
+    Args:
+        user_profile: Dữ liệu hồ sơ người dùng
+        meal_plan: Dữ liệu kế hoạch ăn uống
+        food_logs: Danh sách các bản ghi thực phẩm đã ăn
+        exercise_history: Lịch sử bài tập của người dùng
+        water_intake: Lượng nước uống trong ngày
+        
+    Returns:
+        Đoạn văn bản context đã định dạng
+    """
+    context_parts = []
+    
+    # Thông tin hồ sơ
+    if user_profile:
+        goal = user_profile.get('goal', 'Không rõ')
+        calories_target = user_profile.get('tdeeValues', {}).get('calories', 'Không rõ')
+        allergies = ", ".join(user_profile.get('allergies', [])) or "không có"
+        height = user_profile.get('height', 'Không rõ')
+        weight = user_profile.get('weight', 'Không rõ')
+        diet_restrictions = ", ".join(user_profile.get('dietRestrictions', [])) or "không có"
+        
+        context_parts.append(f"- Hồ sơ: Mục tiêu là '{goal}', mục tiêu calo hàng ngày là {calories_target} kcal. "
+                          f"Chiều cao: {height}cm, cân nặng: {weight}kg. "
+                          f"Dị ứng với: {allergies}. Hạn chế ăn uống: {diet_restrictions}.")
+
+    # Thông tin kế hoạch bữa ăn hôm nay
+    if meal_plan:
+        today_day = datetime.now().strftime("%A").lower()
+        # Chuyển đổi tên ngày tiếng Anh sang tiếng Việt nếu cần
+        days_translation = {
+            "monday": "monday", "tuesday": "tuesday", "wednesday": "wednesday", 
+            "thursday": "thursday", "friday": "friday", "saturday": "saturday", "sunday": "sunday"
+        }
+        today_day_key = days_translation.get(today_day, today_day)
+        
+        # Tìm dữ liệu ngày hiện tại trong kế hoạch
+        today_plan = None
+        if "days" in meal_plan:
+            for day in meal_plan.get("days", []):
+                if day.get("day_of_week", "").lower() == today_day_key:
+                    today_plan = day
+                    break
+        
+        if today_plan:
+            breakfast = ", ".join([dish.get("name", "") for dish in today_plan.get("breakfast", [])])
+            lunch = ", ".join([dish.get("name", "") for dish in today_plan.get("lunch", [])])
+            dinner = ", ".join([dish.get("name", "") for dish in today_plan.get("dinner", [])])
+            
+            context_parts.append(f"- Kế hoạch hôm nay: "
+                              f"Bữa sáng gồm {breakfast}. "
+                              f"Bữa trưa gồm {lunch}. "
+                              f"Bữa tối gồm {dinner}.")
+
+    # Thông tin nhật ký đã ăn
+    if food_logs:
+        eaten_calories = sum(log.get('total_nutrition', {}).get('calories', 0) for log in food_logs)
+        eaten_dishes = []
+        for log in food_logs:
+            for food in log.get('recognized_foods', []):
+                if food.get('food_name'):
+                    eaten_dishes.append(food.get('food_name'))
+        
+        if eaten_dishes:
+            context_parts.append(f"- Nhật ký đã ăn hôm nay: Đã ăn {len(food_logs)} bữa với các món: {', '.join(eaten_dishes)}. "
+                              f"Tổng calo đã nạp: {eaten_calories} kcal.")
+        else:
+            context_parts.append("- Nhật ký đã ăn hôm nay: Đã ghi nhận bữa ăn nhưng không có thông tin chi tiết.")
+    else:
+        context_parts.append("- Nhật ký đã ăn hôm nay: Chưa ghi nhận bữa nào.")
+    
+    # Thông tin bài tập
+    if exercise_history:
+        # Tính tổng calo đã đốt
+        burned_calories = sum(exercise.get('calories_burned', 0) for exercise in exercise_history)
+        
+        # Liệt kê các bài tập đã thực hiện
+        exercise_list = []
+        for exercise in exercise_history:
+            exercise_name = exercise.get('exercise_name', '')
+            duration = exercise.get('duration_minutes', 0)
+            if exercise_name and duration:
+                exercise_list.append(f"{exercise_name} ({duration} phút)")
+        
+        if exercise_list:
+            context_parts.append(f"- Bài tập hôm nay: Đã tập {len(exercise_history)} bài tập: {', '.join(exercise_list)}. "
+                               f"Tổng calo đã đốt: {burned_calories} kcal.")
+        else:
+            context_parts.append("- Bài tập hôm nay: Đã ghi nhận hoạt động nhưng không có thông tin chi tiết.")
+    else:
+        context_parts.append("- Bài tập hôm nay: Chưa ghi nhận bài tập nào.")
+    
+    # Thông tin nước uống
+    if water_intake:
+        # Tính tổng lượng nước đã uống
+        total_water_ml = sum(intake.get('amount_ml', 0) for intake in water_intake)
+        total_water_liter = total_water_ml / 1000
+        
+        # Kiểm tra có đạt mục tiêu không
+        water_target = user_profile.get('waterTarget', {}).get('amount_ml', 2000) / 1000
+        percentage = (total_water_liter / water_target) * 100 if water_target > 0 else 0
+        
+        context_parts.append(f"- Nước uống hôm nay: Đã uống {total_water_liter:.1f} lít nước "
+                          f"({percentage:.0f}% mục tiêu {water_target:.1f} lít).")
+    else:
+        context_parts.append("- Nước uống hôm nay: Chưa ghi nhận lượng nước uống nào.")
+        
+    return "\n".join(context_parts)
+
+# Cập nhật endpoint /chat để sử dụng xác thực và RAG
 @app.post("/chat", response_model=ChatResponse, tags=["Chat API"])
-async def chat(message: ChatMessage):
+async def chat(
+    message: ChatMessage,
+    user: TokenPayload = Depends(get_current_user)  # Thêm xác thực người dùng
+):
     """
     Endpoint nhận tin nhắn từ người dùng, xử lý qua Groq API và trả về phản hồi
+    Sử dụng kỹ thuật RAG (Retrieval-Augmented Generation) để cá nhân hóa phản hồi
     
     Parameters:
     - message: Nội dung tin nhắn từ người dùng
+    - user: Thông tin người dùng đã xác thực
     
     Returns:
     - Phản hồi từ AI
@@ -755,18 +873,71 @@ async def chat(message: ChatMessage):
                 status_code=503,
                 detail="Groq API không khả dụng. Vui lòng cấu hình GROQ_API_KEY trong biến môi trường."
             )
+        
+        # Lấy user_id từ token xác thực
+        user_id = user.uid
+        print(f"Chat request for user: {user_id}")
+        
+        # Truy xuất dữ liệu người dùng từ Firestore
+        try:
+            from services.firestore_service import firestore_service
             
-        # Gọi Groq API với system prompt và user message
+            # 1. Lấy hồ sơ người dùng
+            user_profile = firestore_service.get_user(user_id) or {}
+            
+            # 2. Lấy kế hoạch ăn mới nhất
+            meal_plan_data = firestore_service.get_latest_meal_plan(user_id) or {}
+            
+            # 3. Lấy nhật ký ăn uống hôm nay
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            food_logs_today = firestore_service.get_food_logs_by_date(user_id, today_str) or []
+            
+            # 4. Lấy thông tin bài tập hôm nay
+            exercise_history = firestore_service.get_exercise_history(user_id, start_date=today_str, end_date=today_str) or []
+            
+            # 5. Lấy thông tin nước uống hôm nay
+            water_intake = firestore_service.get_water_intake_by_date(user_id, today_str) or []
+            
+            # Tạo context từ dữ liệu đã truy xuất
+            context_data = format_user_context(
+                user_profile, 
+                meal_plan_data, 
+                food_logs_today,
+                exercise_history,
+                water_intake
+            )
+            
+            # Xây dựng prompt thông minh
+            augmented_prompt = f"""Bạn là một trợ lý dinh dưỡng ảo tên là DietAI. Nhiệm vụ của bạn là trả lời câu hỏi của người dùng dựa trên thông tin cá nhân và hoạt động hàng ngày của họ.
+
+--- DỮ LIỆU CÁ NHÂN CỦA NGƯỜI DÙNG ---
+{context_data}
+--- KẾT THÚC DỮ LIỆU ---
+
+Dựa vào các thông tin trên, hãy trả lời câu hỏi sau của người dùng một cách thân thiện và chính xác bằng tiếng Việt:
+
+Câu hỏi: "{message.message}"
+"""
+            print(f"DEBUG: Augmented Prompt:\n{augmented_prompt[:500]}...")  # In ra 500 ký tự đầu để kiểm tra
+            
+        except Exception as e:
+            print(f"Lỗi khi truy xuất dữ liệu người dùng: {str(e)}")
+            print(f"Tiếp tục với prompt thông thường")
+            # Fallback to regular prompt if retrieval fails
+            augmented_prompt = message.message
+            user_id = message.user_id if hasattr(message, 'user_id') else "anonymous"
+            
+        # Gọi Groq API với prompt đã được bổ sung dữ liệu
         completion = chat_client.chat.completions.create(
-            model="llama3-8b-8192",
+            model="llama3-8b-8192",  # Có thể nâng cấp lên model lớn hơn nếu cần
             messages=[
                 {
                     "role": "system", 
-                    "content": "Bạn là trợ lý ẩm thực thông minh, chuyên tư vấn món ăn theo nhu cầu người dùng. Hãy trả lời bằng tiếng Việt."
+                    "content": "Bạn là trợ lý dinh dưỡng ảo tên là DietAI. Trả lời dựa trên dữ liệu người dùng."
                 },
                 {
                     "role": "user", 
-                    "content": message.message
+                    "content": augmented_prompt
                 }
             ],
             temperature=0.7,
@@ -782,11 +953,12 @@ async def chat(message: ChatMessage):
             
             # Tạo dữ liệu chat
             chat_data = {
-                "user_id": message.user_id if hasattr(message, 'user_id') else "anonymous",
+                "user_id": user_id,
                 "user_message": message.message,
                 "ai_reply": ai_reply,
                 "timestamp": datetime.now().isoformat(),
-                "model": "llama3-8b-8192"
+                "model": "llama3-8b-8192",
+                "augmented": True  # Đánh dấu đây là câu trả lời đã được tăng cường
             }
             
             # Tạo ID cho chat

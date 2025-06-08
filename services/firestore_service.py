@@ -780,6 +780,14 @@ class FirestoreService:
                                     # Nếu không có trường preparation, tạo một chuỗi rỗng
                                     dish['preparation'] = ""
                                     
+                                # Thêm trường preparation_time nếu chưa có
+                                if 'preparation_time' not in dish:
+                                    dish['preparation_time'] = "30 phút"
+                                    
+                                # Thêm trường health_benefits nếu chưa có
+                                if 'health_benefits' not in dish:
+                                    dish['health_benefits'] = f"Cung cấp dinh dưỡng cân bằng cho cơ thể."
+                                
                                 # Xử lý các trường khác nếu cần
                                 
             # In mẫu dữ liệu sau khi chuyển đổi để debug

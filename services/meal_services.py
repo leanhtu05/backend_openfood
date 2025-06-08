@@ -15,8 +15,8 @@ from services.meal_tracker import (
     reset_tracker, reset_meal_type, add_dish, 
     is_dish_used, get_used_dishes
 )
-# Import hàm _process_preparation_steps từ services
-from services import _process_preparation_steps
+# Import hàm process_preparation_steps từ preparation_utils
+from services.preparation_utils import process_preparation_steps
 
 # Import biến used_dishes_tracker để tương thích ngược
 from services.meal_tracker import used_dishes_tracker
@@ -224,8 +224,8 @@ def generate_dish(recipe_dict: Dict, user_data: Dict = None) -> Dish:
     # Lấy hướng dẫn chế biến
     preparation_raw = recipe_dict.get("preparation", "Không có hướng dẫn chi tiết.")
     
-    # SỬA Ở ĐÂY: Chuyển đổi chuỗi thành danh sách các bước sử dụng hàm _process_preparation_steps
-    preparation_list = _process_preparation_steps(preparation_raw)
+    # SỬA Ở ĐÂY: Chuyển đổi chuỗi thành danh sách các bước sử dụng hàm process_preparation_steps
+    preparation_list = process_preparation_steps(preparation_raw)
     print(f"Processed preparation steps: {len(preparation_list)} steps")
     
     return Dish(

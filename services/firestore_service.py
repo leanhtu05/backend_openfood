@@ -992,10 +992,22 @@ class FirestoreService:
             for doc in results:
                 data = doc.to_dict()
                 data['id'] = doc.id
-                # Chuẩn hóa dữ liệu
-                if 'calories' in data and 'calories_burned' not in data:
-                    data['calories_burned'] = data['calories']
-                history.append(data)
+                
+                # Chuyển đổi dữ liệu để phù hợp với model ExerciseHistory
+                transformed_data = {
+                    'userId': user_id,
+                    'exerciseId': data.get('id', ''),
+                    'exercise_name': data.get('name', ''),
+                    'date': data.get('date', ''),
+                    'duration_minutes': data.get('minutes', 0),
+                    'calories_burned': data.get('calories_burned', data.get('calories', 0)),
+                    'notes': data.get('notes', ''),
+                    'timestamp': data.get('timestamp', data.get('created_at', '')),
+                    # Giữ lại các trường gốc để tương thích ngược
+                    'original_data': data
+                }
+                
+                history.append(transformed_data)
             
             print(f"[DEBUG] Found {len(history)} exercise records for user {user_id}")
             return history
@@ -1214,6 +1226,7 @@ class FirestoreService:
                 if doc_id not in processed_ids:
                     processed_ids.add(doc_id)
                     data = doc.to_dict()
+                    data['id'] = doc_id  # Thêm ID vào dữ liệu
                     
                     # Đảm bảo có trường amount_ml
                     if 'amount' in data and 'amount_ml' not in data:
@@ -1231,6 +1244,7 @@ class FirestoreService:
                 if doc_id not in processed_ids:
                     processed_ids.add(doc_id)
                     data = doc.to_dict()
+                    data['id'] = doc_id  # Thêm ID vào dữ liệu
                     
                     # Đảm bảo có trường amount_ml
                     if 'amount' in data and 'amount_ml' not in data:
@@ -1239,6 +1253,9 @@ class FirestoreService:
                         data['amount_ml'] = data['quantity']
                     
                     intakes.append(data)
+            
+            # Sắp xếp theo timestamp nếu có
+            intakes.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
             
             print(f"[DEBUG] Found {len(intakes)} water intakes for user {user_id} on date {date}")
             return intakes

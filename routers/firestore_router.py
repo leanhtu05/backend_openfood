@@ -573,8 +573,39 @@ async def get_exercise_history(
             detail="Firestore service is not initialized"
         )
     
-    history = firestore_service.get_exercise_history(user_id, start_date, end_date, limit)
-    return history
+    try:
+        # Lấy dữ liệu từ firestore_service
+        history_data = firestore_service.get_exercise_history(user_id, start_date, end_date, limit)
+        
+        # Kiểm tra và làm sạch dữ liệu
+        for item in history_data:
+            # Xóa trường original_data nếu có (không cần thiết cho response model)
+            if 'original_data' in item:
+                del item['original_data']
+            
+            # Đảm bảo các trường bắt buộc tồn tại
+            if 'userId' not in item or not item['userId']:
+                item['userId'] = user_id
+            
+            if 'exerciseId' not in item or not item['exerciseId']:
+                # Tạo exerciseId từ id nếu có
+                item['exerciseId'] = item.get('id', f"exercise_{int(datetime.now().timestamp()*1000)}")
+            
+            if 'exercise_name' not in item or not item['exercise_name']:
+                item['exercise_name'] = item.get('name', 'Unknown exercise')
+            
+            if 'duration_minutes' not in item or not item['duration_minutes']:
+                item['duration_minutes'] = item.get('minutes', 0)
+        
+        return history_data
+    except Exception as e:
+        print(f"Error processing exercise history: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error processing exercise history: {str(e)}"
+        )
 
 # ===== BEVERAGE ENDPOINTS =====
 

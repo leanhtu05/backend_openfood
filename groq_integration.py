@@ -237,44 +237,72 @@ class GroqService:
         cuisine_style_str = cuisine_style if cuisine_style else "không có yêu cầu cụ thể"
 
         # Tối ưu prompt cho LLaMA 3
-        prompt = f"""Bạn là chuyên gia dinh dưỡng, hãy gợi ý 5 món ăn cho {meal_type} với các tiêu chí sau:
-- Tổng lượng calo: {calories_target}kcal
-- Lượng protein: {protein_target}g
-- Lượng chất béo: {fat_target}g
-- Lượng carbohydrate: {carbs_target}g
-- Sở thích: {preferences_str}
-- Dị ứng (tránh): {allergies_str}
-- Phong cách ẩm thực: {cuisine_style_str}
+        prompt = """Hãy tạo một kế hoạch ăn uống cho 7 ngày với các yêu cầu sau:
+
+1. Mỗi ngày gồm 3 bữa chính (sáng, trưa, tối) và 1 bữa phụ (nếu cần)
+2. Mỗi bữa chỉ có tối đa 2-3 món ăn
+3. Chỉ sử dụng các món ăn phổ biến và dễ tìm tại Việt Nam
+4. Ưu tiên các món ăn phổ biến trong ẩm thực Việt Nam, có thể kết hợp các món từ cả ba miền
+5. Món ăn phải đơn giản, dễ chế biến, và có thể tìm nguyên liệu ở các chợ/siêu thị địa phương
+6. Cân đối các nhóm dinh dưỡng (tinh bột, đạm, rau củ)
+7. Đảm bảo có sự đa dạng giữa các ngày, tránh lặp lại món ăn
+8. Mỗi món cần có thông tin về các giá trị dinh dưỡng (calories, protein, carbs, fat)
+
+Thông tin bổ sung:
+- Mục tiêu: Giảm cân
+- Nhu cầu calories mỗi ngày: 1800 kcal
+- Nhu cầu protein mỗi ngày: 120 g
+- Nhu cầu carbs mỗi ngày: 180 g
+- Nhu cầu chất béo mỗi ngày: 60 g
+- Các hạn chế/dị ứng: không có
+- Sở thích: không có
 
 YÊU CẦU QUAN TRỌNG:
-1. Tất cả tên món ăn phải HOÀN TOÀN bằng tiếng Việt
-2. KHÔNG đưa tên ngày trong tuần (như "Thứ 2", "Thứ 3", "Chủ Nhật", v.v.) vào tên món ăn
-3. Đảm bảo tạo ra các món ăn KHÁC NHAU. Hãy sáng tạo và đa dạng
-4. Cung cấp hướng dẫn chế biến chi tiết bằng tiếng Việt với các bước cụ thể
-5. Thêm thời gian chuẩn bị và nấu nướng cho mỗi món ăn
-6. Thêm lợi ích sức khỏe cụ thể cho mỗi món ăn
+1. Đảm bảo tổng lượng calories trong ngày phù hợp với mục tiêu người dùng
+2. Chỉ sử dụng các món ăn Việt Nam hoặc các món ăn đã được Việt hóa phổ biến
+3. Trả về kết quả chính xác theo định dạng JSON sau
 
-Hãy trả về kết quả chính xác theo định dạng JSON như sau:
+Trả về kết quả theo định dạng JSON sau:
 ```json
-[
-  {{
-    "name": "Tên món ăn",
-    "description": "Mô tả ngắn gọn món ăn",
-    "ingredients": [
-      {{"name": "Tên nguyên liệu", "amount": "Số lượng", "calories": 100, "protein": 10, "fat": 5, "carbs": 15}},
-      ...
-    ],
-    "preparation": "Các bước chuẩn bị và nấu món ăn",
-    "preparation_time": "30 phút",
-    "health_benefits": "Lợi ích sức khỏe cụ thể của món ăn này",
-    "total_nutrition": {{"calories": 400, "protein": 20, "fat": 15, "carbs": 45}}
-  }},
-  ...
-]
+{
+  "days": [
+    {
+      "day_index": 0,
+      "day_name": "Thứ 2",
+      "breakfast": {
+        "meal_type": "breakfast",
+        "dishes": [
+          {
+            "name": "Tên món ăn",
+            "ingredients": [
+              {"name": "Tên nguyên liệu", "amount": "Số lượng"}
+            ],
+            "preparation": ["Bước 1", "Bước 2", "Bước 3"],
+            "preparation_time": "30 phút",
+            "nutrition": {"calories": 300, "protein": 15, "carbs": 40, "fat": 10},
+            "health_benefits": ["Lợi ích 1", "Lợi ích 2"]
+          }
+        ]
+      },
+      "lunch": {
+        "meal_type": "lunch",
+        "dishes": []
+      },
+      "dinner": {
+        "meal_type": "dinner",
+        "dishes": []
+      },
+      "snack": {
+        "meal_type": "snack",
+        "dishes": []
+      }
+    }
+  ]
+}
 ```
 
-Đảm bảo dữ liệu dinh dưỡng của mỗi món phù hợp với mục tiêu và tổng số của tất cả nguyên liệu khớp với tổng dinh dưỡng từng món.
-Trả về CHÍNH XÁC định dạng JSON như trên không thêm bất kỳ nội dung nào khác.
+Đối với mỗi ngày, hãy đảm bảo tạo đủ cả 3 bữa chính và 1 bữa phụ, mỗi bữa có 2-3 món ăn.
+Hãy trả về CHÍNH XÁC định dạng JSON như trên không thêm bất kỳ nội dung nào khác.
 """
         
         try:
@@ -287,7 +315,7 @@ Trả về CHÍNH XÁC định dạng JSON như trên không thêm bất kỳ n�
                         model=self.model,
                         messages=[{"role": "user", "content": prompt}],
                         temperature=0.7,
-                        max_tokens=2000,
+                        max_tokens=4000,  # Tăng max_tokens vì kế hoạch 7 ngày sẽ dài hơn
                         top_p=0.95
                     )
                     

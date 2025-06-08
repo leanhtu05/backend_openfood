@@ -22,6 +22,7 @@ from models.firestore_models import (
 )
 from firebase_integration import firebase
 from models import WeeklyMealPlan
+from services.preparation_utils import process_preparation_steps
 
 class FirestoreService:
     """
@@ -744,19 +745,21 @@ class FirestoreService:
         
         print("[DEBUG] _transform_meal_plan_data input keys:", data.keys())
         
-        # Xử lý các trường đặc biệt
+        # Xử lý days nếu tồn tại
         if "days" in data:
-            for day in data["days"]:
-                if "meals" in day:
-                    for meal in day["meals"]:
-                        if "dishes" in meal:
-                            for dish in meal["dishes"]:
-                                # Chuyển đổi preparation từ chuỗi sang danh sách nếu cần
+            # Duyệt qua từng ngày
+            for day_idx, day in enumerate(data["days"]):
+                # Xử lý breakfast, lunch, dinner
+                for meal_type in ["breakfast", "lunch", "dinner"]:
+                    if meal_type in day:
+                        if "dishes" in day[meal_type]:
+                            # Duyệt qua từng món ăn và xử lý preparation
+                            for dish_idx, dish in enumerate(day[meal_type]["dishes"]):
                                 if "preparation" in dish and isinstance(dish["preparation"], str):
-                                    dish["preparation"] = dish["preparation"].split("\n")
-                                    print("[DEBUG] Đã chuyển đổi preparation từ chuỗi sang danh sách theo dấu xuống dòng")
-                                    print("[DEBUG] Transformed preparation type:", type(dish["preparation"]))
-        
+                                    # Chuyển đổi preparation từ chuỗi sang danh sách
+                                    dish["preparation"] = process_preparation_steps(dish["preparation"])
+                                    print(f"[DEBUG] Converted preparation for day {day_idx}, {meal_type}, dish {dish_idx}")
+    
         return data
 
     # ===== EXERCISE METHODS =====
@@ -939,18 +942,34 @@ class FirestoreService:
             
         try:
             history = []
+            # Sử dụng collection exercises (thay vì exercise_history)
             query = self.db.collection('exercises').where(
                 filter=FieldFilter('userId', '==', user_id)
             )
             
-            # Lọc theo ngày nếu có
-            if start_date:
+            # Tối ưu query với index - chỉ sử dụng một trường để lọc phạm vi
+            if start_date and end_date:
+                # Nếu cả start_date và end_date được chỉ định, chỉ lọc theo date
+                # và sử dụng timestamp để sắp xếp
                 query = query.where(filter=FieldFilter('date', '>=', start_date))
-            if end_date:
                 query = query.where(filter=FieldFilter('date', '<=', end_date))
-                
-            # Sắp xếp theo thời gian giảm dần
-            query = query.order_by('timestamp', direction=firestore.Query.DESCENDING).limit(limit)
+                query = query.order_by('date', direction=firestore.Query.DESCENDING)
+                query = query.order_by('timestamp', direction=firestore.Query.DESCENDING)
+            elif start_date:
+                # Nếu chỉ có start_date, lọc theo date và sắp xếp theo timestamp
+                query = query.where(filter=FieldFilter('date', '>=', start_date))
+                query = query.order_by('date', direction=firestore.Query.DESCENDING)
+                query = query.order_by('timestamp', direction=firestore.Query.DESCENDING)
+            elif end_date:
+                # Nếu chỉ có end_date, lọc theo date và sắp xếp theo timestamp
+                query = query.where(filter=FieldFilter('date', '<=', end_date))
+                query = query.order_by('date', direction=firestore.Query.DESCENDING)
+                query = query.order_by('timestamp', direction=firestore.Query.DESCENDING)
+            else:
+                # Nếu không có date filter, chỉ sắp xếp theo timestamp
+                query = query.order_by('timestamp', direction=firestore.Query.DESCENDING)
+            
+            query = query.limit(limit)
             
             results = query.get()
             
@@ -1139,6 +1158,7 @@ class FirestoreService:
             
         try:
             intakes = []
+            # Sử dụng collection water_entries (thay vì water_intake)
             query = self.db.collection('water_entries').where(
                 filter=FieldFilter('userId', '==', user_id)
             ).where(
@@ -1173,9 +1193,11 @@ class FirestoreService:
             
         try:
             history = []
-            query = self.db.collection('daily_water_totals')
+            # Sử dụng collection water_entries thay vì daily_water_totals 
+            # để lấy dữ liệu trực tiếp từ các bản ghi nước uống
+            query = self.db.collection('water_entries')
             
-            # Tìm tất cả document có tiền tố là user_id
+            # Tìm tất cả document có userId trùng với user_id
             query = query.where(filter=FieldFilter('userId', '==', user_id))
             
             # Lọc theo ngày nếu có
@@ -1185,7 +1207,9 @@ class FirestoreService:
                 query = query.where(filter=FieldFilter('date', '<=', end_date))
                 
             # Sắp xếp theo ngày giảm dần
-            query = query.order_by('date', direction=firestore.Query.DESCENDING).limit(limit)
+            query = query.order_by('date', direction=firestore.Query.DESCENDING)
+            query = query.order_by('timestamp', direction=firestore.Query.DESCENDING)
+            query = query.limit(limit)
             
             results = query.get()
             
@@ -1559,6 +1583,43 @@ class FirestoreService:
             # Đảm bảo người dùng tồn tại trong Firestore
             self.get_or_create_user(user_id)
             
+            # Tính toán lại tổng dinh dưỡng từ danh sách món ăn
+            if 'items' in food_log_data and isinstance(food_log_data['items'], list) and food_log_data['items']:
+                # Tính tổng dinh dưỡng từ danh sách items
+                total_nutrition = {
+                    'calories': sum(item.get('calories', 0) for item in food_log_data['items']),
+                    'protein': sum(item.get('protein', 0) for item in food_log_data['items']),
+                    'carbs': sum(item.get('carbs', 0) for item in food_log_data['items']),
+                    'fat': sum(item.get('fat', 0) for item in food_log_data['items']),
+                    'fiber': sum(item.get('fiber', 0) for item in food_log_data['items'] if 'fiber' in item),
+                    'sugar': sum(item.get('sugar', 0) for item in food_log_data['items'] if 'sugar' in item),
+                    'sodium': sum(item.get('sodium', 0) for item in food_log_data['items'] if 'sodium' in item)
+                }
+                
+                # Cập nhật nutritionInfo trong food_log_data
+                if 'nutritionInfo' in food_log_data:
+                    food_log_data['nutritionInfo'].update(total_nutrition)
+                else:
+                    food_log_data['nutritionInfo'] = total_nutrition
+                    
+                # Cập nhật calories ở mức cao nhất
+                food_log_data['calories'] = total_nutrition['calories']
+                    
+                print(f"[DEBUG] Recalculated total nutrition: {total_nutrition}")
+            elif 'recognized_foods' in food_log_data and isinstance(food_log_data['recognized_foods'], list) and food_log_data['recognized_foods']:
+                # Tính tổng dinh dưỡng từ danh sách recognized_foods
+                total_nutrition = {
+                    'calories': sum(food.get('nutrition', {}).get('calories', 0) for food in food_log_data['recognized_foods']),
+                    'protein': sum(food.get('nutrition', {}).get('protein', 0) for food in food_log_data['recognized_foods']),
+                    'carbs': sum(food.get('nutrition', {}).get('carbs', 0) for food in food_log_data['recognized_foods']),
+                    'fat': sum(food.get('nutrition', {}).get('fat', 0) for food in food_log_data['recognized_foods'])
+                }
+                
+                # Cập nhật total_nutrition trong food_log_data
+                food_log_data['total_nutrition'] = total_nutrition
+                
+                print(f"[DEBUG] Recalculated total nutrition from recognized_foods: {total_nutrition}")
+            
             # Thêm bản ghi vào collection food_records
             food_logs_ref = self.db.collection('users').document(user_id).collection('food_records')
             doc_ref = food_logs_ref.add(food_log_data)
@@ -1573,130 +1634,48 @@ class FirestoreService:
             import traceback
             traceback.print_exc()
             return None
-    
-    def get_food_logs(self, user_id: str, limit: int = 20) -> list:
-        """
-        Lấy danh sách các bản ghi thực phẩm của người dùng
-        
-        Args:
-            user_id: ID của người dùng
-            limit: Số lượng bản ghi tối đa trả về
-            
-        Returns:
-            Danh sách các bản ghi thực phẩm
-        """
-        if not self.db:
-            print("Firestore service not available")
-            return []
-            
-        try:
-            # Lấy các bản ghi, sắp xếp theo thời gian giảm dần
-            food_logs_ref = self.db.collection('users').document(user_id).collection('food_records')
-            query = food_logs_ref.order_by('timestamp', direction='DESCENDING').limit(limit)
-            
-            logs = []
-            for doc in query.stream():
-                log_data = doc.to_dict()
-                log_data['id'] = doc.id
-                logs.append(log_data)
-                
-            return logs
-        except Exception as e:
-            print(f"Error getting food logs: {str(e)}")
-            return []
-            
-    def get_food_logs_by_date(self, user_id: str, date: str) -> list:
-        """
-        Lấy danh sách các bản ghi thực phẩm của người dùng theo ngày cụ thể
-        
-        Args:
-            user_id: ID của người dùng
-            date: Ngày dạng YYYY-MM-DD
-            
-        Returns:
-            Danh sách các bản ghi thực phẩm cho ngày đó
-        """
-        if not self.db:
-            print("Firestore service not available")
-            return []
-            
-        try:
-            # Lấy các bản ghi cho ngày cụ thể
-            food_logs_ref = self.db.collection('users').document(user_id).collection('food_records')
-            query = food_logs_ref.where('date', '==', date).order_by('timestamp')
-            
-            logs = []
-            for doc in query.stream():
-                log_data = doc.to_dict()
-                log_data['id'] = doc.id
-                logs.append(log_data)
-                
-            return logs
-        except Exception as e:
-            print(f"Error getting food logs by date: {str(e)}")
-            return []
-            
-    def delete_food_log(self, user_id: str, log_id: str) -> bool:
-        """
-        Xóa một bản ghi thực phẩm
-        
-        Args:
-            user_id: ID của người dùng
-            log_id: ID của bản ghi cần xóa
-            
-        Returns:
-            True nếu xóa thành công, False nếu thất bại
-        """
-        if not self.db:
-            print("Firestore service not available")
-            return False
-            
-        try:
-            # Xóa bản ghi
-            doc_ref = self.db.collection('users').document(user_id).collection('food_records').document(log_id)
-            doc_ref.delete()
-            print(f"Food log {log_id} deleted successfully")
-            
-            return True
-        except Exception as e:
-            print(f"Error deleting food log: {str(e)}")
-            return False
 
-    def save_meal_plan(self, user_id: str, meal_plan_data: Dict) -> bool:
+    def update_food_log(self, user_id: str, log_id: str, recognized_foods=None, total_nutrition=None) -> bool:
         """
-        Lưu kế hoạch bữa ăn của người dùng vào Firestore
+        Cập nhật bản ghi thực phẩm
         
         Args:
             user_id: ID của người dùng
-            meal_plan_data: Dữ liệu kế hoạch bữa ăn (đã được chuyển đổi thành Dict)
+            log_id: ID của bản ghi cần cập nhật
+            recognized_foods: Danh sách món ăn mới (nếu có)
+            total_nutrition: Tổng dinh dưỡng mới (nếu có)
             
         Returns:
-            bool: True nếu lưu thành công, False nếu thất bại
+            True nếu cập nhật thành công, False nếu thất bại
         """
-        if not self.initialized:
-            print(f"Firestore not initialized when trying to save meal plan for {user_id}")
+        if not self.db:
+            print("Firestore service not available")
             return False
             
         try:
-            print(f"[INFO] Saving meal plan for user: {user_id}")
+            # Tạo dữ liệu cần cập nhật
+            update_data = {}
             
-            # Lưu vào collection latest_meal_plans
-            latest_ref = self.db.collection('latest_meal_plans').document(user_id)
-            latest_ref.set(meal_plan_data)
+            if recognized_foods is not None:
+                update_data['recognized_foods'] = recognized_foods
             
-            # Đồng thời lưu vào collection meal_plans với timestamp
-            import time
-            timestamp = int(time.time())
-            history_ref = self.db.collection('meal_plans').document(f"{user_id}_{timestamp}")
-            history_data = meal_plan_data.copy()
-            history_data['user_id'] = user_id
-            history_data['created_at'] = timestamp
-            history_ref.set(history_data)
+            if total_nutrition is not None:
+                update_data['total_nutrition'] = total_nutrition
+                # Cập nhật calories ở mức cao nhất nếu có
+                if 'calories' in total_nutrition:
+                    update_data['calories'] = total_nutrition['calories']
             
-            print(f"[INFO] Successfully saved meal plan for user: {user_id}")
+            # Thêm timestamp cập nhật
+            update_data['updated_at'] = datetime.now().isoformat()
+            
+            # Cập nhật bản ghi
+            doc_ref = self.db.collection('users').document(user_id).collection('food_records').document(log_id)
+            doc_ref.update(update_data)
+            
+            print(f"Food log {log_id} updated successfully")
             return True
         except Exception as e:
-            print(f"[ERROR] Failed to save meal plan for user {user_id}: {str(e)}")
+            print(f"Error updating food log: {str(e)}")
             import traceback
             traceback.print_exc()
             return False

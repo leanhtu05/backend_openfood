@@ -69,7 +69,7 @@ from usda_integration import usda_api
 from routers import firestore_router, api_router, compat_router, meal_plan_router
 
 # Thêm import cho chat API
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from openai import OpenAI
 
 # Firebase Admin SDK

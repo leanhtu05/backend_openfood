@@ -18,6 +18,7 @@ from services.meal_tracker import (
 # Import hàm process_preparation_steps từ preparation_utils
 from services.preparation_utils import process_preparation_steps
 import config
+from config import Config
 
 # Import biến used_dishes_tracker để tương thích ngược
 from services.meal_tracker import used_dishes_tracker
@@ -233,8 +234,11 @@ def generate_dish(recipe_dict: Dict, user_data: Dict = None) -> Dish:
     preparation_time = None
     health_benefits = None
     
+    # Truy cập biến USE_ENHANCED_DISH_INFO từ đối tượng config
+    use_enhanced_info = config.config.USE_ENHANCED_DISH_INFO
+    
     # Chỉ thêm thông tin preparation_time và health_benefits nếu được bật trong cấu hình
-    if config.USE_ENHANCED_DISH_INFO:
+    if use_enhanced_info:
         # Lấy hoặc tính toán preparation_time nếu có
         preparation_time = recipe_dict.get("preparation_time", None)
         if not preparation_time:

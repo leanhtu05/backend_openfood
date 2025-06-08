@@ -1457,15 +1457,15 @@ async def replace_day(
         # Gọi service để thay thế kế hoạch cả ngày
         import services
         try:
-        new_day_plan = services.replace_day_meal_plan(
-            current_weekly_plan=current_plan,
-            replace_request=replace_request,
-            preferences=preferences,
-            allergies=allergies,
-            cuisine_style=cuisine_style,
-            use_ai=use_ai,
-            user_data=user_data
-        )
+            new_day_plan = services.replace_day_meal_plan(
+                current_weekly_plan=current_plan,
+                replace_request=replace_request,
+                preferences=preferences,
+                allergies=allergies,
+                cuisine_style=cuisine_style,
+                use_ai=use_ai,
+                user_data=user_data
+            )
         except Exception as service_error:
             print(f"❌ Error in services.replace_day_meal_plan: {str(service_error)}")
             import traceback
@@ -1497,10 +1497,10 @@ async def replace_day(
             # Đảm bảo preparation luôn là list trước khi lưu
             result = firestore_service.save_meal_plan(user_id, plan_dict)
         
-        if not result:
-            raise HTTPException(
-                status_code=500, 
-                detail="Không thể lưu kế hoạch vào Firestore"
+            if not result:
+                raise HTTPException(
+                    status_code=500, 
+                    detail="Không thể lưu kế hoạch vào Firestore"
                 )
         except Exception as firestore_error:
             print(f"❌ Error saving to Firestore: {str(firestore_error)}")

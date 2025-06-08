@@ -1,5 +1,5 @@
 # Import required dependencies
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Union
 from pydantic import BaseModel, Field
 import json
 from pydantic import validator, root_validator
@@ -148,7 +148,8 @@ class GenerateWeeklyMealResponse(BaseModel):
     message: str = "Weekly meal plan generated successfully"
 
 class ReplaceDayResponse(BaseModel):
-    day_meal_plan: DayMealPlan
+    """Phản hồi từ API thay thế kế hoạch bữa ăn một ngày"""
+    day_meal_plan: Union[DayMealPlan, Dict]
     message: str = "Day meal plan replaced successfully"
 
 class ReplaceWeekResponse(BaseModel):

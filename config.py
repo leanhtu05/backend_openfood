@@ -45,6 +45,26 @@ class Config:
     # Cors
     CORS_ORIGINS: list = os.getenv("CORS_ORIGINS", "*").split(",")
     
+    # Base config
+    USE_AUTH = os.environ.get("USE_AUTH", "1") == "1"
+    USE_GROQ = os.environ.get("USE_GROQ", "1") == "1"
+    USE_AI = os.environ.get("USE_AI", "1") == "1"
+    DISABLE_AUTH_FOR_TESTING = os.environ.get("DISABLE_AUTH_FOR_TESTING", "0") == "1"
+    USE_ENHANCED_DISH_INFO = os.environ.get("USE_ENHANCED_DISH_INFO", "1") == "1"  # Xác định có sử dụng thời gian nấu và lợi ích sức khỏe
+    
+    # Firestore paths
+    MEAL_PLANS_COLLECTION = "meal_plans"
+    LATEST_MEAL_PLANS_COLLECTION = "latest_meal_plans"
+    DAILY_INTAKE_COLLECTION = "daily_intakes"
+    USERS_COLLECTION = "users"
+    FOOD_RECORDS_COLLECTION = "food_records"
+    EXERCISE_COLLECTION = "exercises"
+    WATER_ENTRIES_COLLECTION = "water_entries"
+    
+    # GROQ config
+    GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+    GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+    
     @classmethod
     def as_dict(cls) -> Dict[str, Any]:
         """Lấy tất cả cấu hình dưới dạng dictionary"""

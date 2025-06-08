@@ -17,6 +17,7 @@ from services.meal_tracker import (
 )
 # Import hàm process_preparation_steps từ preparation_utils
 from services.preparation_utils import process_preparation_steps
+import config
 
 # Import biến used_dishes_tracker để tương thích ngược
 from services.meal_tracker import used_dishes_tracker
@@ -228,6 +229,50 @@ def generate_dish(recipe_dict: Dict, user_data: Dict = None) -> Dish:
     preparation_list = process_preparation_steps(preparation_raw)
     print(f"Processed preparation steps: {len(preparation_list)} steps")
     
+    # Khởi tạo các biến mới
+    preparation_time = None
+    health_benefits = None
+    
+    # Chỉ thêm thông tin preparation_time và health_benefits nếu được bật trong cấu hình
+    if config.USE_ENHANCED_DISH_INFO:
+        # Lấy hoặc tính toán preparation_time nếu có
+        preparation_time = recipe_dict.get("preparation_time", None)
+        if not preparation_time:
+            # Tạo thời gian nấu mặc định dựa trên độ phức tạp của món ăn
+            steps_count = len(preparation_list)
+            if steps_count <= 3:
+                preparation_time = "15-20 phút"
+            elif steps_count <= 5:
+                preparation_time = "30-40 phút"
+            else:
+                preparation_time = "45-60 phút"
+        
+        # Lấy hoặc tạo lợi ích sức khỏe
+        health_benefits_raw = recipe_dict.get("health_benefits", None)
+        if health_benefits_raw:
+            # Nếu là list, giữ nguyên
+            if isinstance(health_benefits_raw, list):
+                health_benefits = health_benefits_raw
+            # Nếu là string, tách thành list bằng dấu xuống dòng hoặc dấu phẩy
+            elif isinstance(health_benefits_raw, str):
+                if "\n" in health_benefits_raw:
+                    health_benefits = [benefit.strip() for benefit in health_benefits_raw.split("\n") if benefit.strip()]
+                elif "," in health_benefits_raw:
+                    health_benefits = [benefit.strip() for benefit in health_benefits_raw.split(",") if benefit.strip()]
+                else:
+                    health_benefits = [health_benefits_raw]
+        else:
+            # Tạo lợi ích sức khỏe mặc định dựa trên thành phần dinh dưỡng
+            benefits = []
+            if dish_nutrition.protein > 15:
+                benefits.append("Giàu protein, tốt cho cơ bắp")
+            if dish_nutrition.calories < 300:
+                benefits.append("Ít calo, phù hợp cho người đang giảm cân")
+            if dish_nutrition.carbs > 30:
+                benefits.append("Cung cấp năng lượng dồi dào cho hoạt động thể chất")
+            if len(benefits) > 0:
+                health_benefits = benefits
+    
     return Dish(
         name=dish_name,
         ingredients=ingredients,
@@ -235,7 +280,9 @@ def generate_dish(recipe_dict: Dict, user_data: Dict = None) -> Dish:
         nutrition=dish_nutrition,
         dish_type=dish_type,
         region=region,
-        image_url=image_url
+        image_url=image_url,
+        preparation_time=preparation_time,  # Thêm thời gian nấu
+        health_benefits=health_benefits  # Thêm lợi ích sức khỏe
     )
 
 def generate_meal(

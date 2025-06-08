@@ -453,7 +453,7 @@ async def replace_day(
         
         # Return the response
         return ReplaceDayResponse(
-            day_meal_plan=new_day_plan,
+            day_meal_plan=new_day_plan.dict(),  # Chuyển đổi thành dict để tránh lỗi định dạng
             message="Day meal plan replaced successfully"
         )
     except HTTPException:

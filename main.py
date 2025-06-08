@@ -1558,7 +1558,7 @@ async def replace_day(
         # Trả về kết quả thành công
         return {
             "message": f"Đã thay thế kế hoạch cho ngày {day_of_week} thành công",
-            "day_meal_plan": new_day_plan
+            "day_meal_plan": new_day_plan.dict()  # Chuyển đổi Pydantic model thành dict để tránh lỗi định dạng
         }
     
     except Exception as e:

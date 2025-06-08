@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Union
 from pydantic import BaseModel, Field, EmailStr
 from datetime import datetime
 
@@ -52,7 +52,7 @@ class Dish(BaseModel):
     region: str = VietnamRegion.NORTH  # Default to northern region
     image_url: Optional[str] = None
     preparation_time: Optional[str] = None  # Thời gian chuẩn bị
-    health_benefits: Optional[str] = None  # Lợi ích sức khỏe
+    health_benefits: Optional[List[str]] = None  # Lợi ích sức khỏe
 
 class Meal(BaseModel):
     dishes: List[Dish]
@@ -74,7 +74,7 @@ class GenerateWeeklyMealResponse(BaseModel):
     message: str = "Weekly meal plan generated successfully"
 
 class ReplaceDayResponse(BaseModel):
-    day_meal_plan: DayMealPlan
+    day_meal_plan: Union[DayMealPlan, Dict]
     message: str = "Day meal plan replaced successfully"
 
 class ReplaceWeekResponse(BaseModel):

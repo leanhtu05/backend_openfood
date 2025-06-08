@@ -1,17 +1,27 @@
-import os
+import traceback
 import json
-import firebase_admin
-from firebase_admin import credentials, firestore, storage
+import os
+import time
 from datetime import datetime
-from typing import Dict, List, Optional, Any
-from models import WeeklyMealPlan
+from typing import Dict, List, Any, Optional, Union
+from firebase_admin import credentials, firestore, initialize_app, get_app, storage
+from google.cloud.firestore_v1.base_query import FieldFilter
 
-# Import config để sử dụng các thông số cấu hình Firebase
-from config import config
+from config import config, CONFIG
+from models import WeeklyMealPlan, DayMealPlan, Meal, Dish
+from services.preparation_utils import process_preparation_steps
 
 # Hàm chuyển đổi Pydantic model sang dict tương thích với cả phiên bản 1.x và 2.x
 def model_to_dict(model: Any) -> Dict:
-    """Chuyển đổi Pydantic model sang dict tương thích với cả phiên bản 1.x và 2.x"""
+    """
+    Chuyển đổi Pydantic model sang dictionary
+    
+    Args:
+        model: Pydantic model
+        
+    Returns:
+        Dictionary từ model
+    """
     if model is None:
         return {}
         
@@ -58,7 +68,7 @@ class FirebaseIntegration:
         self.initialized = False
         try:
             # Kiểm tra xem đã khởi tạo Firebase chưa
-            if not firebase_admin._apps:
+            if not get_app():
                 # Kiểm tra file credentials tồn tại
                 if os.path.exists(credentials_path):
                     # Lấy storage bucket từ config hoặc sử dụng giá trị mặc định
@@ -79,12 +89,12 @@ class FirebaseIntegration:
                         
                         # Khởi tạo Firebase với file credentials và cấu hình
                         cred = credentials.Certificate(credentials_path)
-                        firebase_admin.initialize_app(cred, firebase_config)
+                        initialize_app(cred, firebase_config)
                     else:
                         # Khởi tạo Firebase không có Storage
                         print("[FIREBASE] WARNING: No storage bucket configured. Storage will not be available.")
                         cred = credentials.Certificate(credentials_path)
-                        firebase_admin.initialize_app(cred)
+                        initialize_app(cred)
                     
                     self.initialized = True
                     print("[FIREBASE] Firebase initialized successfully with credentials file")
@@ -101,7 +111,7 @@ class FirebaseIntegration:
                 
                 try:
                     # Kiểm tra xem Firebase app có được cấu hình với storage bucket chưa
-                    app_options = firebase_admin.get_app().options
+                    app_options = get_app().options
                     # Khắc phục lỗi kiểu dữ liệu _AppOptions không phải iterable
                     if hasattr(app_options, 'storageBucket') and app_options.storageBucket:
                         # Thử khởi tạo storage bucket
@@ -115,7 +125,6 @@ class FirebaseIntegration:
                 
         except Exception as e:
             print(f"[FIREBASE] ERROR initializing Firebase: {e}")
-            import traceback
             traceback.print_exc()
             self.initialized = False
     
@@ -214,13 +223,27 @@ class FirebaseIntegration:
                     meal = day.get(meal_type, {})
                     for dish in meal.get('dishes', []):
                         if 'preparation' in dish:
-                            # Đảm bảo preparation là một chuỗi
-                            if isinstance(dish['preparation'], list):
-                                print(f"[FIREBASE] Converting preparation for dish {dish.get('name')} to string format")
-                                dish['preparation'] = '\n'.join([str(step) for step in dish['preparation']])
-                            print(f"[FIREBASE] Dish {dish.get('name')} has preparation instructions: {dish['preparation'][:30] if isinstance(dish['preparation'], str) else str(dish['preparation'])[:30]}...")
+                            # Đảm bảo preparation là một danh sách (list)
+                            if not isinstance(dish['preparation'], list):
+                                print(f"[FIREBASE] Converting preparation for dish {dish.get('name')} to list format")
+                                dish['preparation'] = process_preparation_steps(dish['preparation'])
+                            print(f"[FIREBASE] Dish {dish.get('name')} has preparation instructions: {str(dish['preparation'][:2])[:30]}...")
                         else:
                             print(f"[FIREBASE] WARNING: Dish {dish.get('name')} missing preparation instructions!")
+                        
+                        # Đảm bảo lưu các trường preparation_time và health_benefits
+                        if 'preparation_time' in dish:
+                            print(f"[FIREBASE] Dish {dish.get('name')} has preparation time: {dish['preparation_time']}")
+                        
+                        if 'health_benefits' in dish:
+                            # Đảm bảo health_benefits là một danh sách
+                            if not isinstance(dish['health_benefits'], list) and dish['health_benefits'] is not None:
+                                print(f"[FIREBASE] Converting health_benefits for dish {dish.get('name')} to list format")
+                                # Nếu là chuỗi, chuyển thành danh sách bằng cách tách theo dấu phẩy
+                                if isinstance(dish['health_benefits'], str):
+                                    dish['health_benefits'] = [benefit.strip() for benefit in dish['health_benefits'].split(',') if benefit.strip()]
+                            if dish['health_benefits']:
+                                print(f"[FIREBASE] Dish {dish.get('name')} has health benefits: {str(dish['health_benefits'][:2])[:30]}...")
             
             # Lưu vào Firestore
             try:
@@ -242,13 +265,11 @@ class FirebaseIntegration:
                 return doc_id
             except Exception as firebase_err:
                 print(f"[FIREBASE] ERROR saving to Firestore: {str(firebase_err)}")
-                import traceback
                 traceback.print_exc()
                 return None
                 
         except Exception as e:
             print(f"[FIREBASE] ERROR saving meal plan: {str(e)}")
-            import traceback
             traceback.print_exc()
             return None
     
@@ -280,8 +301,13 @@ class FirebaseIntegration:
                 print(f"Invalid meal plan data for user {user_id}")
                 return None
             
-            # Không chuyển đổi preparation, giữ nguyên chuỗi
-            # QUAN TRỌNG: Phải giữ preparation ở dạng chuỗi (string) để tương thích với models/__init__.py
+            # Đảm bảo preparation là một danh sách
+            for day in data.get('days', []):
+                for meal_type in ['breakfast', 'lunch', 'dinner']:
+                    meal = day.get(meal_type, {})
+                    for dish in meal.get('dishes', []):
+                        if 'preparation' in dish and not isinstance(dish['preparation'], list):
+                            dish['preparation'] = process_preparation_steps(dish['preparation'])
             
             try:
                 # Convert dictionary to WeeklyMealPlan object
@@ -293,7 +319,6 @@ class FirebaseIntegration:
                 return None
         except Exception as e:
             print(f"Error loading meal plan from Firebase: {str(e)}")
-            import traceback
             traceback.print_exc()
             return None
     
@@ -333,7 +358,6 @@ class FirebaseIntegration:
             return result
         except Exception as e:
             print(f"Error getting meal plan history: {str(e)}")
-            import traceback
             traceback.print_exc()
             return []
         
@@ -472,7 +496,7 @@ class FirebaseIntegration:
             return True
         except Exception as e:
             print(f"[FIREBASE] ERROR creating user: {str(e)}")
-            import traceback; traceback.print_exc()
+            traceback.print_exc()
             return False
 
     def get_user(self, user_id: str) -> dict:
@@ -490,7 +514,7 @@ class FirebaseIntegration:
                 return None
         except Exception as e:
             print(f"[FIREBASE] ERROR getting user: {str(e)}")
-            import traceback; traceback.print_exc()
+            traceback.print_exc()
             return None
 
 # Tạo instance toàn cục

@@ -151,54 +151,111 @@ def format_user_context(user_profile, meal_plan, food_logs, exercise_history=Non
 
     # Thông tin nhật ký đã ăn
     if food_logs:
-        eaten_calories = sum(log.get('total_nutrition', {}).get('calories', 0) for log in food_logs)
+        # Tính tổng calo từ nhiều nguồn khác nhau
+        eaten_calories = 0
+        for log in food_logs:
+            # Cách 1: Từ total_nutrition (cấu trúc cũ)
+            if log.get('total_nutrition', {}).get('calories'):
+                eaten_calories += log.get('total_nutrition', {}).get('calories', 0)
+            # Cách 2: Từ trường calories (cấu trúc mới)
+            elif log.get('calories'):
+                eaten_calories += log.get('calories', 0)
+            # Cách 3: Từ items[].calories (cấu trúc mới)
+            elif log.get('items'):
+                for item in log.get('items', []):
+                    eaten_calories += item.get('calories', 0)
+        
+        # Thu thập tên các món ăn
         eaten_dishes = []
         for log in food_logs:
-            for food in log.get('recognized_foods', []):
-                if food.get('food_name'):
-                    eaten_dishes.append(food.get('food_name'))
+            # Cách 1: Từ recognized_foods (cấu trúc cũ)
+            if log.get('recognized_foods'):
+                for food in log.get('recognized_foods', []):
+                    if food.get('food_name'):
+                        eaten_dishes.append(food.get('food_name'))
+            
+            # Cách 2: Từ items (cấu trúc mới)
+            elif log.get('items'):
+                for item in log.get('items', []):
+                    if item.get('name'):
+                        eaten_dishes.append(item.get('name'))
+            
+            # Cách 3: Từ description (cấu trúc mới)
+            elif log.get('description'):
+                eaten_dishes.append(log.get('description'))
         
         if eaten_dishes:
             context_parts.append(f"- Nhật ký đã ăn hôm nay: Đã ăn {len(food_logs)} bữa với các món: {', '.join(eaten_dishes)}. "
                               f"Tổng calo đã nạp: {eaten_calories} kcal.")
         else:
-            context_parts.append("- Nhật ký đã ăn hôm nay: Đã ghi nhận bữa ăn nhưng không có thông tin chi tiết.")
+            context_parts.append(f"- Nhật ký đã ăn hôm nay: Đã ghi nhận {len(food_logs)} bữa ăn nhưng không có thông tin chi tiết.")
     else:
         context_parts.append("- Nhật ký đã ăn hôm nay: Chưa ghi nhận bữa nào.")
     
     # Thông tin bài tập
     if exercise_history:
         # Tính tổng calo đã đốt
-        burned_calories = sum(exercise.get('calories_burned', 0) for exercise in exercise_history)
+        burned_calories = 0
+        for exercise in exercise_history:
+            # Cách 1: Từ calories_burned (cấu trúc cũ)
+            if 'calories_burned' in exercise:
+                burned_calories += exercise.get('calories_burned', 0)
+            # Cách 2: Từ calories (cấu trúc mới)
+            elif 'calories' in exercise:
+                burned_calories += exercise.get('calories', 0)
         
         # Liệt kê các bài tập đã thực hiện
         exercise_list = []
         for exercise in exercise_history:
-            exercise_name = exercise.get('exercise_name', '')
-            duration = exercise.get('duration_minutes', 0)
-            if exercise_name and duration:
+            # Cách 1: Từ cấu trúc cũ
+            if exercise.get('exercise_name') and exercise.get('duration_minutes'):
+                exercise_name = exercise.get('exercise_name')
+                duration = exercise.get('duration_minutes')
+                exercise_list.append(f"{exercise_name} ({duration} phút)")
+            # Cách 2: Từ cấu trúc mới
+            elif exercise.get('name') and exercise.get('minutes'):
+                exercise_name = exercise.get('name')
+                duration = exercise.get('minutes')
                 exercise_list.append(f"{exercise_name} ({duration} phút)")
         
         if exercise_list:
             context_parts.append(f"- Bài tập hôm nay: Đã tập {len(exercise_history)} bài tập: {', '.join(exercise_list)}. "
                                f"Tổng calo đã đốt: {burned_calories} kcal.")
         else:
-            context_parts.append("- Bài tập hôm nay: Đã ghi nhận hoạt động nhưng không có thông tin chi tiết.")
+            context_parts.append(f"- Bài tập hôm nay: Đã ghi nhận {len(exercise_history)} hoạt động nhưng không có thông tin chi tiết.")
     else:
         context_parts.append("- Bài tập hôm nay: Chưa ghi nhận bài tập nào.")
     
     # Thông tin nước uống
     if water_intake:
         # Tính tổng lượng nước đã uống
-        total_water_ml = sum(intake.get('amount_ml', 0) for intake in water_intake)
+        total_water_ml = 0
+        for intake in water_intake:
+            # Cách 1: Từ amount_ml (cấu trúc cũ)
+            if 'amount_ml' in intake:
+                total_water_ml += intake.get('amount_ml', 0)
+            # Cách 2: Từ amount (cấu trúc mới)
+            elif 'amount' in intake:
+                total_water_ml += intake.get('amount', 0)
+        
+        # Chuyển đổi sang lít
         total_water_liter = total_water_ml / 1000
         
         # Kiểm tra có đạt mục tiêu không
-        water_target = user_profile.get('waterTarget', {}).get('amount_ml', 2000) / 1000
-        percentage = (total_water_liter / water_target) * 100 if water_target > 0 else 0
+        water_target = 2000  # Mặc định 2 lít (2000ml)
+        
+        # Cố gắng lấy mục tiêu từ user_profile
+        if user_profile:
+            if user_profile.get('waterTarget', {}).get('amount_ml'):
+                water_target = user_profile.get('waterTarget', {}).get('amount_ml')
+            elif user_profile.get('water_target'):
+                water_target = user_profile.get('water_target')
+        
+        water_target_liter = water_target / 1000
+        percentage = (total_water_liter / water_target_liter) * 100 if water_target_liter > 0 else 0
         
         context_parts.append(f"- Nước uống hôm nay: Đã uống {total_water_liter:.1f} lít nước "
-                          f"({percentage:.0f}% mục tiêu {water_target:.1f} lít).")
+                          f"({percentage:.0f}% mục tiêu {water_target_liter:.1f} lít).")
     else:
         context_parts.append("- Nước uống hôm nay: Chưa ghi nhận lượng nước uống nào.")
         

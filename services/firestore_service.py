@@ -949,7 +949,7 @@ class FirestoreService:
         try:
             history = []
             
-            # Truy vấn từ collection exercises với userId (cấu trúc cũ)
+            # Chỉ truy vấn từ collection exercises với userId (cấu trúc dùng cho Firestore)
             query_old = self.db.collection('exercises').where(
                 filter=FieldFilter('userId', '==', user_id)
             )
@@ -982,40 +982,7 @@ class FirestoreService:
                     data['calories_burned'] = data['calories']
                 history.append(data)
             
-            # Truy vấn từ collection exercises với user_id (cấu trúc mới)
-            query_new = self.db.collection('exercises').where(
-                filter=FieldFilter('user_id', '==', user_id)
-            )
-            
-            # Áp dụng các bộ lọc tương tự
-            if start_date and end_date:
-                query_new = query_new.where(filter=FieldFilter('date', '>=', start_date))
-                query_new = query_new.where(filter=FieldFilter('date', '<=', end_date))
-                query_new = query_new.order_by('date', direction=firestore.Query.DESCENDING)
-                query_new = query_new.order_by('timestamp', direction=firestore.Query.DESCENDING)
-            elif start_date:
-                query_new = query_new.where(filter=FieldFilter('date', '>=', start_date))
-                query_new = query_new.order_by('date', direction=firestore.Query.DESCENDING)
-                query_new = query_new.order_by('timestamp', direction=firestore.Query.DESCENDING)
-            elif end_date:
-                query_new = query_new.where(filter=FieldFilter('date', '<=', end_date))
-                query_new = query_new.order_by('date', direction=firestore.Query.DESCENDING)
-                query_new = query_new.order_by('timestamp', direction=firestore.Query.DESCENDING)
-            else:
-                query_new = query_new.order_by('timestamp', direction=firestore.Query.DESCENDING)
-            
-            query_new = query_new.limit(limit)
-            results_new = query_new.get()
-            
-            for doc in results_new:
-                data = doc.to_dict()
-                data['id'] = doc.id
-                # Chuẩn hóa dữ liệu
-                if 'calories' in data and 'calories_burned' not in data:
-                    data['calories_burned'] = data['calories']
-                # Tránh trùng lặp
-                if not any(item.get('id') == doc.id for item in history):
-                    history.append(data)
+            # Loại bỏ truy vấn user_id vì các document hiện tại sử dụng userId
             
             print(f"[DEBUG] Found {len(history)} exercise records for user {user_id}")
             return history[:limit]  # Đảm bảo không vượt quá limit
@@ -1204,25 +1171,7 @@ class FirestoreService:
         try:
             intakes = []
             
-            # Truy vấn từ collection water_entries
-            query = self.db.collection('water_entries').where(
-                filter=FieldFilter('user_id', '==', user_id)
-            ).where(
-                filter=FieldFilter('date', '==', date)
-            ).order_by('timestamp', direction=firestore.Query.ASCENDING)
-            
-            results = query.get()
-            
-            for doc in results:
-                data = doc.to_dict()
-                
-                # Đảm bảo có trường amount_ml
-                if 'amount' in data and 'amount_ml' not in data:
-                    data['amount_ml'] = data['amount']
-                
-                intakes.append(data)
-            
-            # Truy vấn từ cấu trúc cũ với userId thay vì user_id
+            # Chỉ truy vấn từ collection water_entries với userId (cấu trúc dùng cho Firestore)
             query = self.db.collection('water_entries').where(
                 filter=FieldFilter('userId', '==', user_id)
             ).where(
@@ -1238,9 +1187,9 @@ class FirestoreService:
                 if 'amount' in data and 'amount_ml' not in data:
                     data['amount_ml'] = data['amount']
                 
-                # Kiểm tra trùng lặp dựa trên ID
-                if not any(intake.get('id') == doc.id for intake in intakes):
-                    intakes.append(data)
+                intakes.append(data)
+            
+            # Loại bỏ truy vấn user_id vì các document hiện tại sử dụng userId
             
             print(f"[DEBUG] Found {len(intakes)} water intakes for user {user_id} on date {date}")
             return intakes
@@ -1269,11 +1218,10 @@ class FirestoreService:
             
         try:
             history = []
-            # Sử dụng collection water_entries thay vì daily_water_totals 
-            # để lấy dữ liệu trực tiếp từ các bản ghi nước uống
+            # Sử dụng collection water_entries và chỉ truy vấn với trường userId
             query = self.db.collection('water_entries')
             
-            # Tìm tất cả document có userId trùng với user_id
+            # Tìm tất cả document có userId trùng với user_id (giữ nguyên vì đã đúng)
             query = query.where(filter=FieldFilter('userId', '==', user_id))
             
             # Lọc theo ngày nếu có

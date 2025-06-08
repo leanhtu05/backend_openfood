@@ -762,33 +762,41 @@ def format_user_context(user_profile: dict, meal_plan: dict, food_logs: list, ex
         # Hỗ trợ các cấu trúc dữ liệu khác nhau
         goal = user_profile.get('goal', user_profile.get('dietGoal', 'Không rõ'))
         
-        # Kiểm tra nếu có trường tdeeValues, nếu không thì dùng trường tdee_calories hoặc targetCalories
+        # Lấy mục tiêu calo từ tdee_calories hoặc nutrition_goals.calories
         calories_target = (
-            user_profile.get('tdeeValues', {}).get('calories') or 
             user_profile.get('tdee_calories') or 
+            user_profile.get('nutrition_goals', {}).get('calories') or
             user_profile.get('targetCalories', 'Không rõ')
         )
         
         # Dị ứng có thể lưu ở trường allergies hoặc diet_restrictions
         allergies = ", ".join(user_profile.get('allergies', [])) or "không có"
         
-        # Chiều cao có thể lưu ở height hoặc height_cm
-        height = user_profile.get('height', user_profile.get('height_cm', 'Không rõ'))
+        # Chế độ ăn đặc biệt từ diet_restrictions
+        diet_restrictions = ", ".join(user_profile.get('diet_restrictions', [])) or "không có"
         
-        # Cân nặng có thể lưu ở weight hoặc weight_kg
-        weight = user_profile.get('weight', user_profile.get('weight_kg', 'Không rõ'))
+        # Chiều cao từ height_cm
+        height = user_profile.get('height_cm', user_profile.get('height', 'Không rõ'))
         
-        # Hạn chế ăn uống có thể lưu ở dietRestrictions hoặc diet_restrictions
-        diet_restrictions = ", ".join(
-            user_profile.get('dietRestrictions', user_profile.get('diet_restrictions', []))
-        ) or "không có"
+        # Cân nặng từ weight_kg
+        weight = user_profile.get('weight_kg', user_profile.get('weight', 'Không rõ'))
+        
+        # Độ tuổi từ age
+        age = user_profile.get('age', 'Không rõ')
+        
+        # Giới tính từ gender
+        gender = user_profile.get('gender', 'Không rõ')
+        
+        # Mức độ hoạt động
+        activity = user_profile.get('activity_level', 'Không rõ')
         
         # In dữ liệu hồ sơ để debug
         print(f"[DEBUG] User profile data: {user_profile}")
         
-        context_parts.append(f"- Hồ sơ: Mục tiêu là '{goal}', mục tiêu calo hàng ngày là {calories_target} kcal. "
+        context_parts.append(f"- Hồ sơ: Người dùng {age} tuổi, giới tính {gender}. Mục tiêu là '{goal}', mức hoạt động '{activity}'. "
+                          f"Mục tiêu calo hàng ngày là {calories_target} kcal. "
                           f"Chiều cao: {height}cm, cân nặng: {weight}kg. "
-                          f"Dị ứng với: {allergies}. Hạn chế ăn uống: {diet_restrictions}.")
+                          f"Dị ứng với: {allergies}. Chế độ ăn: {diet_restrictions}.")
 
     # Thông tin kế hoạch bữa ăn hôm nay
     if meal_plan:

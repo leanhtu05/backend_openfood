@@ -263,6 +263,8 @@ def generate_dish(recipe_dict: Dict, user_data: Dict = None) -> Dish:
                     health_benefits = [benefit.strip() for benefit in health_benefits_raw.split("\n") if benefit.strip()]
                 elif "," in health_benefits_raw:
                     health_benefits = [benefit.strip() for benefit in health_benefits_raw.split(",") if benefit.strip()]
+                elif "." in health_benefits_raw:
+                    health_benefits = [benefit.strip() for benefit in health_benefits_raw.split(".") if benefit.strip()]
                 else:
                     health_benefits = [health_benefits_raw]
         else:
@@ -276,6 +278,10 @@ def generate_dish(recipe_dict: Dict, user_data: Dict = None) -> Dish:
                 benefits.append("Cung cấp năng lượng dồi dào cho hoạt động thể chất")
             if len(benefits) > 0:
                 health_benefits = benefits
+                
+    # In thông tin debug
+    print(f"DEBUG: preparation_time = {preparation_time}")
+    print(f"DEBUG: health_benefits = {health_benefits}")
     
     return Dish(
         name=dish_name,

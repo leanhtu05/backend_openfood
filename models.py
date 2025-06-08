@@ -54,13 +54,34 @@ class Dish(BaseModel):
     preparation_time: Optional[str] = None  # Thời gian chuẩn bị
     health_benefits: Optional[Union[List[str], str]] = None  # Lợi ích sức khỏe
 
-    def dict(self, **kwargs):
-        """Custom dict method to handle health_benefits and preparation_time"""
-        result = super().dict(**kwargs)
-        # Convert health_benefits to string if it's a list
-        if isinstance(result.get('health_benefits'), list):
-            result['health_benefits'] = '. '.join(result['health_benefits'])
-        return result
+    def model_dump(self, *args, **kwargs):
+        """Pydantic v2 compatible model_dump method"""
+        data = {
+            "name": self.name,
+            "ingredients": [ing.dict() for ing in self.ingredients],
+            "preparation": self.preparation,
+            "nutrition": self.nutrition.dict(),
+            "dish_type": self.dish_type,
+            "region": self.region,
+        }
+        
+        if self.image_url is not None:
+            data["image_url"] = self.image_url
+            
+        if self.preparation_time is not None:
+            data["preparation_time"] = self.preparation_time
+            
+        if self.health_benefits is not None:
+            if isinstance(self.health_benefits, list):
+                data["health_benefits"] = '. '.join(self.health_benefits)
+            else:
+                data["health_benefits"] = self.health_benefits
+                
+        return data
+        
+    def dict(self, *args, **kwargs):
+        """Compatibility method for Pydantic v1"""
+        return self.model_dump(*args, **kwargs)
 
 class Meal(BaseModel):
     dishes: List[Dish]

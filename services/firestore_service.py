@@ -743,7 +743,7 @@ class FirestoreService:
         if not data:
             return None
         
-        print("[DEBUG] _transform_meal_plan_data input keys:", data.keys())
+        print(f"[DEBUG] _transform_meal_plan_data input keys: {data.keys()}")
         
         # Xử lý days nếu tồn tại
         if "days" in data:
@@ -751,30 +751,39 @@ class FirestoreService:
             for day_idx, day in enumerate(data["days"]):
                 # Xử lý breakfast, lunch, dinner
                 for meal_type in ["breakfast", "lunch", "dinner"]:
-                    if meal_type in day:
-                        if "dishes" in day[meal_type]:
-                            # Duyệt qua từng món ăn và xử lý preparation
-                            for dish_idx, dish in enumerate(day[meal_type]["dishes"]):
-                                if "preparation" in dish and isinstance(dish["preparation"], str):
-                                    # Chuyển đổi preparation từ chuỗi sang danh sách
+                    if meal_type in day and "dishes" in day[meal_type]:
+                        # Duyệt qua từng món ăn
+                        for dish_idx, dish in enumerate(day[meal_type]["dishes"]):
+                            # Xử lý trường preparation
+                            if "preparation" in dish:
+                                # Nếu preparation là string, chuyển thành list
+                                if isinstance(dish["preparation"], str):
                                     dish["preparation"] = process_preparation_steps(dish["preparation"])
-                                    print(f"[DEBUG] Converted preparation for day {day_idx}, {meal_type}, dish {dish_idx}")
                                     
-                                # Xử lý health_benefits nếu là chuỗi
-                                if "health_benefits" in dish and isinstance(dish["health_benefits"], str):
-                                    # Chuyển đổi health_benefits từ chuỗi sang danh sách
-                                    dish["health_benefits"] = [benefit.strip() for benefit in dish["health_benefits"].split('.') if benefit.strip()]
-                                    print(f"[DEBUG] Converted health_benefits for day {day_idx}, {meal_type}, dish {dish_idx}")
-                                
-                                # Đảm bảo các trường preparation_time và health_benefits tồn tại
-                                if "preparation_time" not in dish:
-                                    dish["preparation_time"] = None
-                                    print(f"[DEBUG] Added missing preparation_time for day {day_idx}, {meal_type}, dish {dish_idx}")
-                                
-                                if "health_benefits" not in dish:
-                                    dish["health_benefits"] = None
-                                    print(f"[DEBUG] Added missing health_benefits for day {day_idx}, {meal_type}, dish {dish_idx}")
-    
+                            # Xử lý health_benefits nếu có
+                            if "health_benefits" in dish:
+                                # Nếu health_benefits là string và có dấu phẩy hoặc dấu chấm, chuyển thành list
+                                if isinstance(dish["health_benefits"], str):
+                                    if "." in dish["health_benefits"]:
+                                        benefits = [b.strip() for b in dish["health_benefits"].split(".") if b.strip()]
+                                        dish["health_benefits"] = benefits
+                                        print(f"[DEBUG] Converted health_benefits for day {day_idx}, {meal_type}, dish {dish_idx}")
+                                    elif "," in dish["health_benefits"]:
+                                        benefits = [b.strip() for b in dish["health_benefits"].split(",") if b.strip()]
+                                        dish["health_benefits"] = benefits
+                                        print(f"[DEBUG] Converted health_benefits for day {day_idx}, {meal_type}, dish {dish_idx}")
+                            
+                            # Đảm bảo preparation_time được giữ nguyên
+                            if "preparation_time" not in dish:
+                                # Nếu không có, tạo giá trị mặc định
+                                steps_count = len(dish.get("preparation", []))
+                                if steps_count <= 3:
+                                    dish["preparation_time"] = "15-20 phút"
+                                elif steps_count <= 5:
+                                    dish["preparation_time"] = "30-40 phút"
+                                else:
+                                    dish["preparation_time"] = "45-60 phút"
+        
         return data
 
     # ===== EXERCISE METHODS =====
@@ -1174,28 +1183,62 @@ class FirestoreService:
             
         try:
             intakes = []
+            processed_ids = set()  # Theo dõi các ID đã xử lý để tránh trùng lặp
             
             # Truy vấn từ collection water_entries với user_id
             print(f"[DEBUG] Đang tìm nước uống với user_id={user_id} trong collection water_entries")
             
-            query = self.db.collection('water_entries').where(
+            # Truy vấn với trường user_id
+            query1 = self.db.collection('water_entries').where(
                 filter=FieldFilter('user_id', '==', user_id)
             ).where(
                 filter=FieldFilter('date', '==', date)
             )
             
-            results = query.get()
+            results1 = query1.get()
             
-            for doc in results:
-                data = doc.to_dict()
+            # Truy vấn với trường userId (vì có thể một số bản ghi sử dụng userId)
+            query2 = self.db.collection('water_entries').where(
+                filter=FieldFilter('userId', '==', user_id)
+            ).where(
+                filter=FieldFilter('date', '==', date)
+            )
+            
+            results2 = query2.get()
+            
+            # Xử lý kết quả từ truy vấn thứ nhất
+            for doc in results1:
+                doc_id = doc.id
                 
-                # Đảm bảo có trường amount_ml
-                if 'amount' in data and 'amount_ml' not in data:
-                    data['amount_ml'] = data['amount']
-                elif 'quantity' in data and 'amount_ml' not in data:
-                    data['amount_ml'] = data['quantity']
+                # Nếu ID này chưa được xử lý
+                if doc_id not in processed_ids:
+                    processed_ids.add(doc_id)
+                    data = doc.to_dict()
+                    
+                    # Đảm bảo có trường amount_ml
+                    if 'amount' in data and 'amount_ml' not in data:
+                        data['amount_ml'] = data['amount']
+                    elif 'quantity' in data and 'amount_ml' not in data:
+                        data['amount_ml'] = data['quantity']
+                    
+                    intakes.append(data)
+            
+            # Xử lý kết quả từ truy vấn thứ hai, chỉ thêm vào nếu ID chưa tồn tại
+            for doc in results2:
+                doc_id = doc.id
                 
-                intakes.append(data)
+                # Nếu ID này chưa được xử lý
+                if doc_id not in processed_ids:
+                    processed_ids.add(doc_id)
+                    data = doc.to_dict()
+                    
+                    # Đảm bảo có trường amount_ml
+                    if 'amount' in data and 'amount_ml' not in data:
+                        data['amount_ml'] = data['amount']
+                    elif 'quantity' in data and 'amount_ml' not in data:
+                        data['amount_ml'] = data['quantity']
+                    
+                    intakes.append(data)
             
             print(f"[DEBUG] Found {len(intakes)} water intakes for user {user_id} on date {date}")
             return intakes

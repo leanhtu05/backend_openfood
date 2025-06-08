@@ -739,81 +739,25 @@ class FirestoreService:
         Returns:
             Dữ liệu đã được chuyển đổi
         """
-        # Tạo bản sao để không ảnh hưởng đến dữ liệu gốc
-        transformed = data.copy()
+        if not data:
+            return None
         
-        # In dữ liệu input để debug
-        print(f"[DEBUG] _transform_meal_plan_data input keys: {transformed.keys()}")
+        print("[DEBUG] _transform_meal_plan_data input keys:", data.keys())
         
-        try:
-            # Chỉ xử lý nếu có trường 'days'
-            if 'days' in transformed:
-                # Xử lý cho từng ngày
-                for i, day in enumerate(transformed['days']):
-                    # Xử lý các bữa ăn trong ngày
-                    for meal_type in ['breakfast', 'lunch', 'dinner', 'snack']:
-                        if meal_type in day and day[meal_type]:
-                            # Xử lý từng món ăn trong bữa
-                            for j, dish in enumerate(day[meal_type].get('dishes', [])):
-                                # QUAN TRỌNG: Đảm bảo trường preparation luôn là một danh sách
-                                if 'preparation' in dish:
-                                    prep = dish['preparation']
-                                    
-                                    # Nếu preparation đang là chuỗi, chuyển đổi thành danh sách
-                                    if isinstance(prep, str):
-                                        # Tách chuỗi thành danh sách bằng các dấu phân tách phổ biến
-                                        if '\n' in prep:
-                                            dish['preparation'] = [step.strip() for step in prep.split('\n') if step.strip()]
-                                            print(f"[DEBUG] Đã chuyển đổi preparation từ chuỗi sang danh sách theo dấu xuống dòng")
-                                        elif '. ' in prep:
-                                            dish['preparation'] = [step.strip() for step in prep.split('. ') if step.strip()]
-                                            print(f"[DEBUG] Đã chuyển đổi preparation từ chuỗi sang danh sách theo dấu chấm")
-                                        else:
-                                            dish['preparation'] = [prep]
-                                            print(f"[DEBUG] Đã chuyển đổi preparation từ chuỗi sang danh sách một phần tử")
-                                    
-                                    # Nếu preparation đã là danh sách, giữ nguyên
-                                    elif isinstance(prep, list):
-                                        # Giữ nguyên giá trị danh sách
-                                        print(f"[DEBUG] Preparation đã là danh sách, giữ nguyên: {type(dish['preparation'])}")
-                                    
-                                    # Trường hợp khác, tạo danh sách mặc định
-                                    else:
-                                        dish['preparation'] = [f"Chuẩn bị {dish.get('name', 'món ăn')} với các nguyên liệu đã liệt kê."]
-                                        print(f"[DEBUG] Tạo danh sách preparation mặc định")
-                                    
-                                    # In thông tin để debug
-                                    print(f"[DEBUG] Transformed preparation type: {type(dish['preparation'])}")
-                                else:
-                                    # Nếu không có trường preparation, tạo một danh sách rỗng
-                                    dish['preparation'] = []
-                                    
-                                # Thêm trường preparation_time nếu chưa có
-                                if 'preparation_time' not in dish:
-                                    dish['preparation_time'] = "30 phút"
-                                    
-                                # Thêm trường health_benefits nếu chưa có
-                                if 'health_benefits' not in dish:
-                                    dish['health_benefits'] = f"Cung cấp dinh dưỡng cân bằng cho cơ thể."
-                                
-                                # Xử lý các trường khác nếu cần
-                                
-            # In mẫu dữ liệu sau khi chuyển đổi để debug
-            if 'days' in transformed and transformed['days'] and len(transformed['days']) > 0:
-                sample_day = transformed['days'][0]
-                if 'breakfast' in sample_day and sample_day['breakfast'] and 'dishes' in sample_day['breakfast'] and sample_day['breakfast']['dishes']:
-                    sample_dish = sample_day['breakfast']['dishes'][0]
-                    print(f"[DEBUG] Sample dish after transform: {sample_dish.keys()}")
-                    if 'preparation' in sample_dish:
-                        print(f"[DEBUG] Sample preparation: {type(sample_dish['preparation'])} - {sample_dish['preparation']}")
-                        
-            return transformed
-        except Exception as e:
-            print(f"[ERROR] Lỗi khi chuyển đổi dữ liệu meal plan: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            # Trả về dữ liệu gốc nếu có lỗi
-            return data
+        # Xử lý các trường đặc biệt
+        if "days" in data:
+            for day in data["days"]:
+                if "meals" in day:
+                    for meal in day["meals"]:
+                        if "dishes" in meal:
+                            for dish in meal["dishes"]:
+                                # Chuyển đổi preparation từ chuỗi sang danh sách nếu cần
+                                if "preparation" in dish and isinstance(dish["preparation"], str):
+                                    dish["preparation"] = dish["preparation"].split("\n")
+                                    print("[DEBUG] Đã chuyển đổi preparation từ chuỗi sang danh sách theo dấu xuống dòng")
+                                    print("[DEBUG] Transformed preparation type:", type(dish["preparation"]))
+        
+        return data
 
     # ===== EXERCISE METHODS =====
     
@@ -967,8 +911,8 @@ class FirestoreService:
             return None
             
         try:
-            # Tạo document mới trong collection exercise_history
-            doc_ref = self.db.collection('exercise_history').document()
+            # Tạo document mới trong collection exercises
+            doc_ref = self.db.collection('exercises').document()
             history_data = exercise_history.to_dict()
             doc_ref.set(history_data)
             
@@ -995,7 +939,7 @@ class FirestoreService:
             
         try:
             history = []
-            query = self.db.collection('exercise_history').where(
+            query = self.db.collection('exercises').where(
                 filter=FieldFilter('userId', '==', user_id)
             )
             
@@ -1136,8 +1080,8 @@ class FirestoreService:
             return None
             
         try:
-            # Tạo document mới trong collection water_intake
-            doc_ref = self.db.collection('water_intake').document()
+            # Tạo document mới trong collection water_entries
+            doc_ref = self.db.collection('water_entries').document()
             intake_data = water_intake.to_dict()
             doc_ref.set(intake_data)
             
@@ -1195,7 +1139,7 @@ class FirestoreService:
             
         try:
             intakes = []
-            query = self.db.collection('water_intake').where(
+            query = self.db.collection('water_entries').where(
                 filter=FieldFilter('userId', '==', user_id)
             ).where(
                 filter=FieldFilter('date', '==', date)
@@ -1615,8 +1559,8 @@ class FirestoreService:
             # Đảm bảo người dùng tồn tại trong Firestore
             self.get_or_create_user(user_id)
             
-            # Thêm bản ghi vào collection food_logs
-            food_logs_ref = self.db.collection('users').document(user_id).collection('food_logs')
+            # Thêm bản ghi vào collection food_records
+            food_logs_ref = self.db.collection('users').document(user_id).collection('food_records')
             doc_ref = food_logs_ref.add(food_log_data)
             
             # Lấy ID của document mới
@@ -1647,7 +1591,7 @@ class FirestoreService:
             
         try:
             # Lấy các bản ghi, sắp xếp theo thời gian giảm dần
-            food_logs_ref = self.db.collection('users').document(user_id).collection('food_logs')
+            food_logs_ref = self.db.collection('users').document(user_id).collection('food_records')
             query = food_logs_ref.order_by('timestamp', direction='DESCENDING').limit(limit)
             
             logs = []
@@ -1678,7 +1622,7 @@ class FirestoreService:
             
         try:
             # Lấy các bản ghi cho ngày cụ thể
-            food_logs_ref = self.db.collection('users').document(user_id).collection('food_logs')
+            food_logs_ref = self.db.collection('users').document(user_id).collection('food_records')
             query = food_logs_ref.where('date', '==', date).order_by('timestamp')
             
             logs = []
@@ -1709,7 +1653,7 @@ class FirestoreService:
             
         try:
             # Xóa bản ghi
-            doc_ref = self.db.collection('users').document(user_id).collection('food_logs').document(log_id)
+            doc_ref = self.db.collection('users').document(user_id).collection('food_records').document(log_id)
             doc_ref.delete()
             print(f"Food log {log_id} deleted successfully")
             

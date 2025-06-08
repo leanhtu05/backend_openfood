@@ -15,6 +15,8 @@ from services.meal_tracker import (
     reset_tracker, reset_meal_type, add_dish, 
     is_dish_used, get_used_dishes
 )
+# Import hàm _process_preparation_steps từ services
+from services import _process_preparation_steps
 
 # Import biến used_dishes_tracker để tương thích ngược
 from services.meal_tracker import used_dishes_tracker
@@ -219,18 +221,17 @@ def generate_dish(recipe_dict: Dict, user_data: Dict = None) -> Dish:
     # Lấy URL hình ảnh nếu có
     image_url = recipe_dict.get("image_url", None)
     
-    # Create and return the Dish object
-    preparation = recipe_dict.get("preparation", "Không có hướng dẫn chi tiết.")
+    # Lấy hướng dẫn chế biến
+    preparation_raw = recipe_dict.get("preparation", "Không có hướng dẫn chi tiết.")
     
-    # Chuyển đổi preparation từ list sang string nếu cần
-    if isinstance(preparation, list):
-        preparation = "\n".join([str(step) for step in preparation])
-        print(f"Converted preparation from list to string")
+    # SỬA Ở ĐÂY: Chuyển đổi chuỗi thành danh sách các bước sử dụng hàm _process_preparation_steps
+    preparation_list = _process_preparation_steps(preparation_raw)
+    print(f"Processed preparation steps: {len(preparation_list)} steps")
     
     return Dish(
         name=dish_name,
         ingredients=ingredients,
-        preparation=preparation,
+        preparation=preparation_list,  # Truyền danh sách các bước đã xử lý
         nutrition=dish_nutrition,
         dish_type=dish_type,
         region=region,

@@ -7,6 +7,9 @@ import os
 import json
 from datetime import datetime
 import logging
+from fastapi.responses import JSONResponse
+from datetime import timedelta as Duration
+import auth_utils as auth_service
 
 # Import config từ module config
 from config import config
@@ -756,12 +759,32 @@ def format_user_context(user_profile: dict, meal_plan: dict, food_logs: list, ex
     
     # Thông tin hồ sơ
     if user_profile:
-        goal = user_profile.get('goal', 'Không rõ')
-        calories_target = user_profile.get('tdeeValues', {}).get('calories', 'Không rõ')
+        # Hỗ trợ các cấu trúc dữ liệu khác nhau
+        goal = user_profile.get('goal', user_profile.get('dietGoal', 'Không rõ'))
+        
+        # Kiểm tra nếu có trường tdeeValues, nếu không thì dùng trường tdee_calories hoặc targetCalories
+        calories_target = (
+            user_profile.get('tdeeValues', {}).get('calories') or 
+            user_profile.get('tdee_calories') or 
+            user_profile.get('targetCalories', 'Không rõ')
+        )
+        
+        # Dị ứng có thể lưu ở trường allergies hoặc diet_restrictions
         allergies = ", ".join(user_profile.get('allergies', [])) or "không có"
-        height = user_profile.get('height', 'Không rõ')
-        weight = user_profile.get('weight', 'Không rõ')
-        diet_restrictions = ", ".join(user_profile.get('dietRestrictions', [])) or "không có"
+        
+        # Chiều cao có thể lưu ở height hoặc height_cm
+        height = user_profile.get('height', user_profile.get('height_cm', 'Không rõ'))
+        
+        # Cân nặng có thể lưu ở weight hoặc weight_kg
+        weight = user_profile.get('weight', user_profile.get('weight_kg', 'Không rõ'))
+        
+        # Hạn chế ăn uống có thể lưu ở dietRestrictions hoặc diet_restrictions
+        diet_restrictions = ", ".join(
+            user_profile.get('dietRestrictions', user_profile.get('diet_restrictions', []))
+        ) or "không có"
+        
+        # In dữ liệu hồ sơ để debug
+        print(f"[DEBUG] User profile data: {user_profile}")
         
         context_parts.append(f"- Hồ sơ: Mục tiêu là '{goal}', mục tiêu calo hàng ngày là {calories_target} kcal. "
                           f"Chiều cao: {height}cm, cân nặng: {weight}kg. "
@@ -884,6 +907,19 @@ async def chat(
             
             # 1. Lấy hồ sơ người dùng
             user_profile = firestore_service.get_user(user_id) or {}
+            print(f"[DEBUG] User profile retrieved from Firestore: {user_profile}")
+            
+            # Nếu không tìm thấy dữ liệu từ get_user, thử phương thức get_user_profile
+            if not user_profile or len(user_profile) == 0:
+                print(f"[DEBUG] No user data found with get_user, trying get_user_profile")
+                profile_obj = firestore_service.get_user_profile(user_id)
+                if profile_obj:
+                    # Chuyển đổi từ UserProfile thành dict nếu cần
+                    if hasattr(profile_obj, 'to_dict'):
+                        user_profile = profile_obj.to_dict()
+                    elif hasattr(profile_obj, '__dict__'):
+                        user_profile = profile_obj.__dict__
+                print(f"[DEBUG] User profile from get_user_profile: {user_profile}")
             
             # 2. Lấy kế hoạch ăn mới nhất
             meal_plan_data = firestore_service.get_latest_meal_plan(user_id) or {}
@@ -1588,6 +1624,40 @@ async def replace_meal(
         raise HTTPException(
             status_code=500,
             detail=f"Error replacing meal: {str(e)}"
+        )
+
+# Thêm xử lý cho OTP hết hạn trong endpoint verify_phone_number (nếu có)
+@app.post("/verify-phone-number", tags=["Authentication"])
+async def verify_phone_number(
+    phone_number: str = Body(..., embed=True),
+    resend: bool = Body(False, embed=True)
+):
+    try:
+        # Gọi dịch vụ xác thực số điện thoại
+        # Tăng thời gian chờ timeout
+        await auth_service.verify_phone_number(
+            phone_number,
+            timeout=Duration(seconds=120),  # Tăng timeout lên 120 giây
+            resend=resend
+        )
+        
+        return {"success": True, "message": "Mã xác thực đã được gửi"}
+    except Exception as e:
+        if "expired" in str(e).lower():
+            # Xử lý trường hợp OTP hết hạn
+            return JSONResponse(
+                status_code=410,  # Gone - Mã đã hết hạn
+                content={
+                    "success": False,
+                    "error_code": "otp_expired",
+                    "message": "Mã xác thực đã hết hạn. Vui lòng gửi lại mã mới.",
+                    "should_resend": True
+                }
+            )
+        
+        raise HTTPException(
+            status_code=500,
+            detail=f"Lỗi khi gửi mã xác thực: {str(e)}"
         )
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ from typing import Dict, List, Any, Optional, Union
 from firebase_admin import credentials, firestore, initialize_app, get_app, storage
 from google.cloud.firestore_v1.base_query import FieldFilter
 
-from config import config, CONFIG
+from config import config
 from models import WeeklyMealPlan, DayMealPlan, Meal, Dish
 from services.preparation_utils import process_preparation_steps
 

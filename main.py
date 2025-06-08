@@ -741,7 +741,7 @@ async def clear_usda_cache():
         return {"success": False, "error": f"Lỗi khi xóa cache USDA API: {str(e)}"}
 
 # Thêm hàm format_user_context trước định nghĩa endpoint /chat
-def format_user_context(user_profile: dict, meal_plan: dict, food_logs: list, exercise_history: list = None, water_intake: list = None) -> str:
+def format_user_context(user_profile: dict, meal_plan: dict, food_logs: list, exercise_history: list = None, water_intake: list = None, user_id: str = None) -> str:
     """
     Định dạng dữ liệu người dùng thành một đoạn văn bản context cho chatbot
     
@@ -751,6 +751,7 @@ def format_user_context(user_profile: dict, meal_plan: dict, food_logs: list, ex
         food_logs: Danh sách các bản ghi thực phẩm đã ăn
         exercise_history: Lịch sử bài tập của người dùng
         water_intake: Lượng nước uống trong ngày
+        user_id: ID của người dùng
         
     Returns:
         Đoạn văn bản context đã định dạng
@@ -901,7 +902,8 @@ def format_user_context(user_profile: dict, meal_plan: dict, food_logs: list, ex
         else:
             context_parts.append(f"- Bài tập hôm nay: Đã ghi nhận {len(exercise_history)} hoạt động nhưng không có thông tin chi tiết.")
     else:
-        print(f"[DEBUG] Không tìm thấy dữ liệu bài tập cho user_id={user_id}. Kiểm tra collection và index")
+        if user_id:
+            print(f"[DEBUG] Không tìm thấy dữ liệu bài tập cho user_id={user_id}. Kiểm tra collection và index")
         context_parts.append("- Bài tập hôm nay: Chưa ghi nhận bài tập nào.")
     
     # Thông tin nước uống
@@ -937,7 +939,8 @@ def format_user_context(user_profile: dict, meal_plan: dict, food_logs: list, ex
         context_parts.append(f"- Nước uống hôm nay: Đã uống {total_water_liter:.1f} lít nước "
                           f"({percentage:.0f}% mục tiêu {water_target_liter:.1f} lít).")
     else:
-        print(f"[DEBUG] Không tìm thấy dữ liệu nước uống cho user_id={user_id}. Kiểm tra collection và index")
+        if user_id:
+            print(f"[DEBUG] Không tìm thấy dữ liệu nước uống cho user_id={user_id}. Kiểm tra collection và index")
         context_parts.append("- Nước uống hôm nay: Chưa ghi nhận lượng nước uống nào.")
     
     return "\n".join(context_parts)
@@ -991,25 +994,60 @@ async def chat(
                 print(f"[DEBUG] User profile from get_user_profile: {user_profile}")
             
             # 2. Lấy kế hoạch ăn mới nhất
-            meal_plan_data = firestore_service.get_latest_meal_plan(user_id) or {}
+            try:
+                meal_plan_data = firestore_service.get_latest_meal_plan(user_id) or {}
+                if hasattr(meal_plan_data, 'dict'):
+                    meal_plan_dict = meal_plan_data.dict()
+                else:
+                    meal_plan_dict = meal_plan_data
+            except Exception as e:
+                print(f"[DEBUG] Error getting meal plan: {str(e)}")
+                meal_plan_dict = {}
             
             # 3. Lấy nhật ký ăn uống hôm nay
             today_str = datetime.now().strftime("%Y-%m-%d")
-            food_logs_today = firestore_service.get_food_logs_by_date(user_id, today_str) or []
+            try:
+                food_logs_today = firestore_service.get_food_logs_by_date(user_id, today_str) or []
+            except Exception as e:
+                print(f"[DEBUG] Error getting food logs: {str(e)}")
+                food_logs_today = []
             
             # 4. Lấy thông tin bài tập hôm nay
-            exercise_history = firestore_service.get_exercise_history(user_id, start_date=today_str, end_date=today_str) or []
+            exercise_history = []
+            try:
+                print(f"[DEBUG] Đang tìm bài tập với userId={user_id} trong collection exercises")
+                exercise_history = firestore_service.get_exercise_history(user_id, start_date=today_str, end_date=today_str) or []
+            except Exception as e:
+                print(f"Error getting exercise history: {str(e)}")
+                
+                # Hướng dẫn tạo index nếu cần
+                if "requires an index" in str(e):
+                    index_url = str(e).split("create it here: ")[1] if "create it here: " in str(e) else ""
+                    if index_url:
+                        print(f"[INDEX NEEDED] Please create the required Firestore index at: {index_url}")
             
             # 5. Lấy thông tin nước uống hôm nay
-            water_intake = firestore_service.get_water_intake_by_date(user_id, today_str) or []
+            water_intake = []
+            try:
+                print(f"[DEBUG] Đang tìm nước uống với userId={user_id} trong collection water_entries")
+                water_intake = firestore_service.get_water_intake_by_date(user_id, today_str) or []
+            except Exception as e:
+                print(f"Error getting water intake by date: {str(e)}")
+                
+                # Hướng dẫn tạo index nếu cần
+                if "requires an index" in str(e):
+                    index_url = str(e).split("create it here: ")[1] if "create it here: " in str(e) else ""
+                    if index_url:
+                        print(f"[INDEX NEEDED] Please create the required Firestore index at: {index_url}")
             
             # Tạo context từ dữ liệu đã truy xuất
             context_data = format_user_context(
                 user_profile, 
-                meal_plan_data, 
+                meal_plan_dict, 
                 food_logs_today,
                 exercise_history,
-                water_intake
+                water_intake,
+                user_id
             )
             
             # Xây dựng prompt thông minh
@@ -1027,10 +1065,11 @@ Câu hỏi: "{message.message}"
             
         except Exception as e:
             print(f"Lỗi khi truy xuất dữ liệu người dùng: {str(e)}")
+            import traceback
+            traceback.print_exc()
             print(f"Tiếp tục với prompt thông thường")
             # Fallback to regular prompt if retrieval fails
             augmented_prompt = message.message
-            user_id = message.user_id if hasattr(message, 'user_id') else "anonymous"
             
         # Gọi Groq API với prompt đã được bổ sung dữ liệu
         completion = chat_client.chat.completions.create(

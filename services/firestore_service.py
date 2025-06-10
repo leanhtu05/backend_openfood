@@ -927,91 +927,183 @@ class FirestoreService:
     def add_exercise_history(self, exercise_history: ExerciseHistory) -> str:
         """
         Lưu lịch sử bài tập của người dùng
-        
+
         Args:
             exercise_history: Đối tượng ExerciseHistory
-            
+
         Returns:
             ID của bản ghi lịch sử đã tạo
         """
         if not self.initialized:
             return None
-            
+
         try:
             # Tạo document mới trong collection exercises
             doc_ref = self.db.collection('exercises').document()
             history_data = exercise_history.to_dict()
+
+            # Đảm bảo trường date luôn có giá trị và đúng format
+            if not history_data.get('date'):
+                history_data['date'] = datetime.now().strftime('%Y-%m-%d')
+            else:
+                # Nếu date có format datetime, chuyển về date string
+                date_str = history_data['date']
+                if 'T' in date_str:
+                    date_str = date_str.split('T')[0]
+                history_data['date'] = date_str
+
+            # Đảm bảo có cả user_id và userId để tương thích
+            history_data['user_id'] = exercise_history.userId
+            history_data['userId'] = exercise_history.userId
+
+            # Thêm timestamp nếu chưa có
+            if not history_data.get('timestamp'):
+                history_data['timestamp'] = datetime.now().isoformat()
+
+            # Thêm created_at và updated_at
+            history_data['created_at'] = datetime.now().isoformat()
+            history_data['updated_at'] = datetime.now().isoformat()
+
+            print(f"[DEBUG] Saving exercise history: {history_data}")
             doc_ref.set(history_data)
-            
+
             return doc_ref.id
         except Exception as e:
             print(f"Error adding exercise history: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def get_exercise_history(self, user_id: str, start_date: str = None, end_date: str = None, limit: int = 50) -> List[Dict]:
         """
         Lấy lịch sử bài tập của người dùng
-        
+
         Args:
             user_id: ID của người dùng
             start_date: Ngày bắt đầu (YYYY-MM-DD)
             end_date: Ngày kết thúc (YYYY-MM-DD)
             limit: Số lượng bản ghi tối đa
-            
+
         Returns:
             Danh sách Dictionary chứa thông tin bài tập
         """
         if not self.initialized:
             return []
-            
+
         try:
             history = []
-            
-            # Collection thực tế là 'exercises' 
-            print(f"[DEBUG] Đang tìm bài tập với user_id={user_id} trong collection exercises")
-            query = self.db.collection('exercises').where(
+            processed_ids = set()  # Theo dõi các ID đã xử lý để tránh trùng lặp
+
+            # Truy vấn với trường user_id (không filter theo date để tránh lỗi index)
+            query1 = self.db.collection('exercises').where(
                 filter=FieldFilter('user_id', '==', user_id)
-            )
-            
-            # Áp dụng lọc theo ngày nếu có
-            if start_date and end_date:
-                query = query.where(filter=FieldFilter('date', '>=', start_date))
-                query = query.where(filter=FieldFilter('date', '<=', end_date))
-            elif start_date:
-                query = query.where(filter=FieldFilter('date', '>=', start_date))
-            elif end_date:
-                query = query.where(filter=FieldFilter('date', '<=', end_date))
-            
-            # Giới hạn số lượng kết quả
-            query = query.limit(limit)
-            
+            ).limit(limit)
+
             # Thực hiện truy vấn
-            results = query.get()
-            
-            # Xử lý kết quả
-            for doc in results:
-                data = doc.to_dict()
-                data['id'] = doc.id
-                
-                # Chuyển đổi dữ liệu để phù hợp với model ExerciseHistory
-                transformed_data = {
-                    'userId': user_id,
-                    'exerciseId': data.get('id', ''),
-                    'exercise_name': data.get('name', ''),
-                    'date': data.get('date', ''),
-                    'duration_minutes': data.get('minutes', 0),
-                    'calories_burned': data.get('calories_burned', data.get('calories', 0)),
-                    'notes': data.get('notes', ''),
-                    'timestamp': data.get('timestamp', data.get('created_at', '')),
-                    # Giữ lại các trường gốc để tương thích ngược
-                    'original_data': data
-                }
-                
-                history.append(transformed_data)
-            
+            results1 = query1.get()
+
+            # Truy vấn với trường userId (không filter theo date để tránh lỗi index)
+            try:
+                query2 = self.db.collection('exercises').where(
+                    filter=FieldFilter('userId', '==', user_id)
+                ).limit(limit)
+
+                # Thực hiện truy vấn
+                results2 = query2.get()
+            except Exception as e:
+                print(f"[DEBUG] Query2 failed: {e}")
+                results2 = []
+
+            # Function để kiểm tra date có match với range không
+            def date_matches(record_date, start_date, end_date):
+                if not record_date:
+                    return False
+
+                # Chuyển đổi date từ ISO datetime về date string nếu cần
+                if 'T' in record_date:
+                    record_date = record_date.split('T')[0]
+
+                # Kiểm tra range
+                if start_date and end_date:
+                    return start_date <= record_date <= end_date
+                elif start_date:
+                    return record_date >= start_date
+                elif end_date:
+                    return record_date <= end_date
+                else:
+                    return True
+
+            # Xử lý kết quả từ truy vấn thứ nhất
+            for doc in results1:
+                doc_id = doc.id
+
+                # Nếu ID này chưa được xử lý
+                if doc_id not in processed_ids:
+                    data = doc.to_dict()
+                    record_date = data.get('date', '')
+
+                    # Kiểm tra date có match với range không
+                    if date_matches(record_date, start_date, end_date):
+                        processed_ids.add(doc_id)
+                        data['id'] = doc_id
+
+                        # Chuẩn hóa date format
+                        if 'T' in record_date:
+                            data['date'] = record_date.split('T')[0]
+
+                        # Chuyển đổi dữ liệu để phù hợp với model ExerciseHistory
+                        transformed_data = {
+                            'userId': user_id,
+                            'exerciseId': data.get('id', ''),
+                            'exercise_name': data.get('name', ''),
+                            'date': data.get('date', ''),
+                            'duration_minutes': data.get('minutes', data.get('duration_minutes', 0)),
+                            'calories_burned': data.get('calories_burned', data.get('calories', 0)),
+                            'notes': data.get('notes', ''),
+                            'timestamp': data.get('timestamp', data.get('created_at', '')),
+                            # Giữ lại các trường gốc để tương thích ngược
+                            'original_data': data
+                        }
+
+                        history.append(transformed_data)
+
+            # Xử lý kết quả từ truy vấn thứ hai, chỉ thêm vào nếu ID chưa tồn tại
+            for doc in results2:
+                doc_id = doc.id
+
+                # Nếu ID này chưa được xử lý
+                if doc_id not in processed_ids:
+                    data = doc.to_dict()
+                    record_date = data.get('date', '')
+
+                    # Kiểm tra date có match với range không
+                    if date_matches(record_date, start_date, end_date):
+                        processed_ids.add(doc_id)
+                        data['id'] = doc_id
+
+                        # Chuẩn hóa date format
+                        if 'T' in record_date:
+                            data['date'] = record_date.split('T')[0]
+
+                        # Chuyển đổi dữ liệu để phù hợp với model ExerciseHistory
+                        transformed_data = {
+                            'userId': user_id,
+                            'exerciseId': data.get('id', ''),
+                            'exercise_name': data.get('name', ''),
+                            'date': data.get('date', ''),
+                            'duration_minutes': data.get('minutes', data.get('duration_minutes', 0)),
+                            'calories_burned': data.get('calories_burned', data.get('calories', 0)),
+                            'notes': data.get('notes', ''),
+                            'timestamp': data.get('timestamp', data.get('created_at', '')),
+                            # Giữ lại các trường gốc để tương thích ngược
+                            'original_data': data
+                        }
+
+                        history.append(transformed_data)
+
             print(f"[DEBUG] Found {len(history)} exercise records for user {user_id}")
             return history
-            
+
         except Exception as e:
             print(f"Error getting exercise history: {e}")
             import traceback
@@ -1125,28 +1217,49 @@ class FirestoreService:
     def add_water_intake(self, water_intake: WaterIntake) -> str:
         """
         Ghi nhận lượng nước uống hàng ngày
-        
+
         Args:
             water_intake: Đối tượng WaterIntake
-            
+
         Returns:
             ID của bản ghi nước uống đã tạo
         """
         if not self.initialized:
             return None
-            
+
         try:
             # Tạo document mới trong collection water_entries
             doc_ref = self.db.collection('water_entries').document()
             intake_data = water_intake.to_dict()
+
+            # Đảm bảo trường date luôn có giá trị
+            if not intake_data.get('date'):
+                intake_data['date'] = datetime.now().strftime('%Y-%m-%d')
+
+            # Đảm bảo có cả user_id và userId để tương thích
+            intake_data['user_id'] = water_intake.userId
+            intake_data['userId'] = water_intake.userId
+
+            # Thêm timestamp nếu chưa có
+            if not intake_data.get('timestamp'):
+                intake_data['timestamp'] = datetime.now().isoformat()
+
+            # Thêm created_at và updated_at
+            intake_data['created_at'] = datetime.now().isoformat()
+            intake_data['updated_at'] = datetime.now().isoformat()
+
+            print(f"[DEBUG] Saving water intake: {intake_data}")
             doc_ref.set(intake_data)
-            
+
             # Cập nhật tổng lượng nước uống trong ngày
-            self._update_daily_water_total(water_intake.userId, water_intake.date, water_intake.amount_ml)
-            
+            date_to_use = intake_data['date']
+            self._update_daily_water_total(water_intake.userId, date_to_use, water_intake.amount_ml)
+
             return doc_ref.id
         except Exception as e:
             print(f"Error adding water intake: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def _update_daily_water_total(self, user_id: str, date: str, amount_ml: int) -> None:
@@ -1182,40 +1295,37 @@ class FirestoreService:
     def get_water_intake_by_date(self, user_id: str, date: str) -> List[Dict]:
         """
         Lấy thông tin nước uống theo ngày
-        
+
         Args:
             user_id: ID của người dùng
             date: Ngày cần lấy (YYYY-MM-DD)
-            
+
         Returns:
             Danh sách thông tin nước uống
         """
         if not self.initialized:
             return []
-            
+
         try:
             intakes = []
             processed_ids = set()  # Theo dõi các ID đã xử lý để tránh trùng lặp
-            
-            # Truy vấn từ collection water_entries với user_id
-            print(f"[DEBUG] Đang tìm nước uống với user_id={user_id} trong collection water_entries")
-            
+
             # Truy vấn với trường user_id
             query1 = self.db.collection('water_entries').where(
                 filter=FieldFilter('user_id', '==', user_id)
             ).where(
                 filter=FieldFilter('date', '==', date)
             )
-            
+
             results1 = query1.get()
-            
+
             # Truy vấn với trường userId (vì có thể một số bản ghi sử dụng userId)
             query2 = self.db.collection('water_entries').where(
                 filter=FieldFilter('userId', '==', user_id)
             ).where(
                 filter=FieldFilter('date', '==', date)
             )
-            
+
             results2 = query2.get()
             
             # Xử lý kết quả từ truy vấn thứ nhất

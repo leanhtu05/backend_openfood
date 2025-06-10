@@ -75,14 +75,20 @@ class GeminiVisionService:
             
             # Prepare prompt for Gemini Vision
             prompt = """
-            Analyze this food image and provide the following information:
-            
+            Analyze this food image and provide comprehensive nutritional information:
+
             1. Identify all food items visible in the image
-            2. For each identified food item:
+            2. For each identified food item, provide:
                - Name of the food (in Vietnamese and English)
                - Estimate of portion size
-               - Estimated nutritional information: calories, protein, fat, carbs
-            
+               - Comprehensive nutritional information including:
+                 * Basic: calories, protein, fat, carbs
+                 * Detailed: fiber, sugar, saturated fat, trans fat, cholesterol
+                 * Minerals: sodium, potassium, calcium, iron
+                 * Vitamins: vitamin C, vitamin A
+                 * Special: caffeine (if applicable), alcohol (if applicable)
+                 * Additional: glycemic index, water content
+
             Return your analysis in this exact JSON format:
             {
               "foods": [
@@ -95,15 +101,34 @@ class GeminiVisionService:
                     "calories": 200,
                     "protein": 10,
                     "fat": 5,
-                    "carbs": 30
+                    "carbs": 30,
+                    "fiber": 3,
+                    "sugar": 8,
+                    "saturated_fat": 2,
+                    "trans_fat": 0,
+                    "cholesterol": 15,
+                    "sodium": 300,
+                    "potassium": 150,
+                    "calcium": 50,
+                    "iron": 2,
+                    "vitamin_c": 10,
+                    "vitamin_a": 100,
+                    "caffeine": 0,
+                    "alcohol": 0,
+                    "glycemic_index": 55,
+                    "water_content": 85
                   }
                 }
               ]
             }
-            
-            Do not include any explanations or text outside the JSON.
-            Be accurate but estimate nutrition if exact values are not obvious.
-            If you are unsure of the portion size, make a reasonable estimate.
+
+            Important guidelines:
+            - Provide realistic estimates based on typical nutritional values for the food type
+            - Use null for nutrients that are not applicable (e.g., caffeine in vegetables)
+            - For glycemic index: Low (0-55), Medium (56-69), High (70-100)
+            - Water content as percentage (0-100)
+            - All mineral/vitamin values should be reasonable for the portion size
+            - Do not include explanations or text outside the JSON
             """
             
             # Configure generation parameters
@@ -149,13 +174,50 @@ class GeminiVisionService:
                 # Use Vietnamese name if available, fallback to English
                 food_name = food.get("name_vi") or food.get("name_en") or "Không xác định"
                 
-                # Create NutritionInfo from response
+                # Create NutritionInfo from response with comprehensive data (optional)
                 nutrition_data = food.get("nutrition", {})
+
+                # Helper function to safely convert to float or None
+                def safe_float(value):
+                    if value is None or value == "":
+                        return None
+                    try:
+                        return float(value)
+                    except (ValueError, TypeError):
+                        return None
+
+                # Helper function to safely convert to int or None
+                def safe_int(value):
+                    if value is None or value == "":
+                        return None
+                    try:
+                        return int(value)
+                    except (ValueError, TypeError):
+                        return None
+
                 nutrition = NutritionInfo(
+                    # Basic nutrition (required)
                     calories=float(nutrition_data.get("calories", 0)),
                     protein=float(nutrition_data.get("protein", 0)),
                     fat=float(nutrition_data.get("fat", 0)),
-                    carbs=float(nutrition_data.get("carbs", 0))
+                    carbs=float(nutrition_data.get("carbs", 0)),
+
+                    # Detailed nutrition (optional)
+                    fiber=safe_float(nutrition_data.get("fiber")),
+                    sugar=safe_float(nutrition_data.get("sugar")),
+                    saturated_fat=safe_float(nutrition_data.get("saturated_fat")),
+                    trans_fat=safe_float(nutrition_data.get("trans_fat")),
+                    cholesterol=safe_float(nutrition_data.get("cholesterol")),
+                    sodium=safe_float(nutrition_data.get("sodium")),
+                    potassium=safe_float(nutrition_data.get("potassium")),
+                    calcium=safe_float(nutrition_data.get("calcium")),
+                    iron=safe_float(nutrition_data.get("iron")),
+                    vitamin_c=safe_float(nutrition_data.get("vitamin_c")),
+                    vitamin_a=safe_float(nutrition_data.get("vitamin_a")),
+                    caffeine=safe_float(nutrition_data.get("caffeine")),
+                    alcohol=safe_float(nutrition_data.get("alcohol")),
+                    glycemic_index=safe_int(nutrition_data.get("glycemic_index")),
+                    water_content=safe_float(nutrition_data.get("water_content"))
                 )
                 
                 # Create RecognizedFood object

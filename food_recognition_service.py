@@ -75,10 +75,37 @@ class FoodRecognitionService:
         total_nutrition = NutritionInfo(calories=0, protein=0, fat=0, carbs=0)
         for food in recognized_foods:
             if food.nutrition:
+                # Basic nutrition
                 total_nutrition.calories += food.nutrition.calories
                 total_nutrition.protein += food.nutrition.protein
                 total_nutrition.fat += food.nutrition.fat
                 total_nutrition.carbs += food.nutrition.carbs
+
+                # Extended nutrition - only add if both values exist
+                if food.nutrition.fiber and total_nutrition.fiber is not None:
+                    total_nutrition.fiber = (total_nutrition.fiber or 0) + food.nutrition.fiber
+                elif food.nutrition.fiber:
+                    total_nutrition.fiber = food.nutrition.fiber
+
+                if food.nutrition.sugar and total_nutrition.sugar is not None:
+                    total_nutrition.sugar = (total_nutrition.sugar or 0) + food.nutrition.sugar
+                elif food.nutrition.sugar:
+                    total_nutrition.sugar = food.nutrition.sugar
+
+                if food.nutrition.saturated_fat and total_nutrition.saturated_fat is not None:
+                    total_nutrition.saturated_fat = (total_nutrition.saturated_fat or 0) + food.nutrition.saturated_fat
+                elif food.nutrition.saturated_fat:
+                    total_nutrition.saturated_fat = food.nutrition.saturated_fat
+
+                if food.nutrition.sodium and total_nutrition.sodium is not None:
+                    total_nutrition.sodium = (total_nutrition.sodium or 0) + food.nutrition.sodium
+                elif food.nutrition.sodium:
+                    total_nutrition.sodium = food.nutrition.sodium
+
+                if food.nutrition.cholesterol and total_nutrition.cholesterol is not None:
+                    total_nutrition.cholesterol = (total_nutrition.cholesterol or 0) + food.nutrition.cholesterol
+                elif food.nutrition.cholesterol:
+                    total_nutrition.cholesterol = food.nutrition.cholesterol
                 
         # Step 4: Save to Firestore if requested
         if self.firestore_available and save_to_firebase:
@@ -100,7 +127,7 @@ class FoodRecognitionService:
             # Save to Firestore
             try:
                 # Convert to dictionary for Firestore
-                log_data = food_log.dict()
+                log_data = food_log.model_dump()
                 
                 # Add to Firestore
                 firestore_service.add_food_log(user_id, log_data)
@@ -179,14 +206,29 @@ class FoodRecognitionService:
                 
                 if not food_exists:
                     # Chỉ thêm vào nếu chưa có món này
-                    existing_foods.append(recognized_food.dict())
-                    
-                    # Tính toán lại tổng dinh dưỡng
+                    existing_foods.append(recognized_food.model_dump())
+
+                    # Tính toán lại tổng dinh dưỡng với thông tin mở rộng
+                    def safe_sum(field_name):
+                        total = 0
+                        count = 0
+                        for food in existing_foods:
+                            value = food.get('nutrition', {}).get(field_name)
+                            if value is not None:
+                                total += value
+                                count += 1
+                        return total if count > 0 else None
+
                     total_nutrition = {
                         'calories': sum(food.get('nutrition', {}).get('calories', 0) for food in existing_foods),
                         'protein': sum(food.get('nutrition', {}).get('protein', 0) for food in existing_foods),
                         'fat': sum(food.get('nutrition', {}).get('fat', 0) for food in existing_foods),
-                        'carbs': sum(food.get('nutrition', {}).get('carbs', 0) for food in existing_foods)
+                        'carbs': sum(food.get('nutrition', {}).get('carbs', 0) for food in existing_foods),
+                        'fiber': safe_sum('fiber'),
+                        'sugar': safe_sum('sugar'),
+                        'saturated_fat': safe_sum('saturated_fat'),
+                        'sodium': safe_sum('sodium'),
+                        'cholesterol': safe_sum('cholesterol')
                     }
                     
                     # Cập nhật bản ghi
@@ -200,20 +242,17 @@ class FoodRecognitionService:
                 # Tạo bản ghi mới
                 timestamp = datetime.now().isoformat()
                 
-                # Tạo dữ liệu bản ghi
+                # Tạo dữ liệu bản ghi với thông tin dinh dưỡng mở rộng
+                nutrition_dict = recognized_food.nutrition.model_dump()
+
                 log_entry = {
                     'user_id': user_id,
-                    'recognized_foods': [recognized_food.dict()],
+                    'recognized_foods': [recognized_food.model_dump()],
                     'meal_type': meal_type,
                     'image_url': dish.get('image_url', ''),
                     'timestamp': timestamp,
                     'date': today,
-                    'total_nutrition': {
-                        'calories': recognized_food.nutrition.calories,
-                        'protein': recognized_food.nutrition.protein,
-                        'fat': recognized_food.nutrition.fat,
-                        'carbs': recognized_food.nutrition.carbs
-                    }
+                    'total_nutrition': nutrition_dict
                 }
                 
                 # Lưu vào Firestore

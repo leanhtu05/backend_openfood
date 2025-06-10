@@ -99,10 +99,30 @@ class Ingredient(BaseModel):
     amount: str  # e.g. "100g", "2 tbsp"
 
 class NutritionInfo(BaseModel):
+    # Thông tin dinh dưỡng cơ bản
     calories: float
-    protein: float
-    fat: float
-    carbs: float
+    protein: float  # g
+    fat: float  # g
+    carbs: float  # g
+
+    # Thông tin dinh dưỡng chi tiết
+    fiber: Optional[float] = Field(None, description="Chất xơ (g)")
+    sugar: Optional[float] = Field(None, description="Đường (g)")
+    saturated_fat: Optional[float] = Field(None, description="Chất béo bão hòa (g)")
+    trans_fat: Optional[float] = Field(None, description="Chất béo chuyển hóa (g)")
+    cholesterol: Optional[float] = Field(None, description="Cholesterol (mg)")
+    sodium: Optional[float] = Field(None, description="Natri (mg)")
+    potassium: Optional[float] = Field(None, description="Kali (mg)")
+    calcium: Optional[float] = Field(None, description="Canxi (mg)")
+    iron: Optional[float] = Field(None, description="Sắt (mg)")
+    vitamin_c: Optional[float] = Field(None, description="Vitamin C (mg)")
+    vitamin_a: Optional[float] = Field(None, description="Vitamin A (IU)")
+    caffeine: Optional[float] = Field(None, description="Caffeine (mg)")
+    alcohol: Optional[float] = Field(None, description="Cồn (g)")
+
+    # Thông tin bổ sung
+    glycemic_index: Optional[int] = Field(None, description="Chỉ số đường huyết (0-100)")
+    water_content: Optional[float] = Field(None, description="Hàm lượng nước (%)")
 
 class Dish(BaseModel):
     name: str

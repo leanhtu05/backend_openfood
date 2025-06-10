@@ -1,7 +1,0 @@
-from groq_integration import groq_service
-
-print("Groq available:", groq_service.available)
-print("API Key set:", groq_service.api_key is not None)
-print("API Key:", groq_service.api_key and "***" + groq_service.api_key[-4:] if groq_service.api_key else "Not set")
-if groq_service.available:
-    print("Model:", groq_service.model) 

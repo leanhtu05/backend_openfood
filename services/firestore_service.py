@@ -1255,7 +1255,19 @@ class FirestoreService:
                     intakes.append(data)
             
             # Sắp xếp theo timestamp nếu có
-            intakes.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+            # Đảm bảo chuyển đổi timestamp thành cùng kiểu dữ liệu trước khi so sánh
+            def get_timestamp_value(item):
+                timestamp = item.get('timestamp', 0)
+                # Nếu timestamp là chuỗi chứa số, chuyển thành số
+                if isinstance(timestamp, str) and timestamp.isdigit():
+                    return int(timestamp)
+                # Nếu là số nguyên, giữ nguyên
+                elif isinstance(timestamp, (int, float)):
+                    return timestamp
+                # Các trường hợp khác, trả về 0 (giá trị mặc định thấp nhất)
+                return 0
+                
+            intakes.sort(key=get_timestamp_value, reverse=True)
             
             print(f"[DEBUG] Found {len(intakes)} water intakes for user {user_id} on date {date}")
             return intakes

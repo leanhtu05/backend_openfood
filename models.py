@@ -71,6 +71,7 @@ class Dish(BaseModel):
     dish_type: str = DishType.MAIN  # Default to main dish
     region: str = VietnamRegion.NORTH  # Default to northern region
     image_url: Optional[str] = None
+    video_url: Optional[str] = None  # URL video hướng dẫn nấu ăn
     preparation_time: Optional[str] = None  # Thời gian chuẩn bị
     health_benefits: Optional[Union[List[str], str]] = None  # Lợi ích sức khỏe
 
@@ -87,10 +88,13 @@ class Dish(BaseModel):
         
         if self.image_url is not None:
             data["image_url"] = self.image_url
-            
+
+        if self.video_url is not None:
+            data["video_url"] = self.video_url
+
         if self.preparation_time is not None:
             data["preparation_time"] = self.preparation_time
-            
+
         if self.health_benefits is not None:
             if isinstance(self.health_benefits, list):
                 data["health_benefits"] = '. '.join(self.health_benefits)

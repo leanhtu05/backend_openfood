@@ -85,6 +85,10 @@ from food_recognition_service import food_recognition_service
 # Import Firebase Storage
 from firebase_storage_service import firebase_storage_service
 
+# Import YouTube Service
+from youtube_service import youtube_service
+from dish_enhancement_service import dish_enhancement_service
+
 # Initialize Firebase Admin SDK
 # Đảm bảo các import cần thiết đã có ở đầu file:
 # import firebase_admin
@@ -1767,6 +1771,128 @@ async def verify_phone_number(
             status_code=500,
             detail=f"Lỗi khi gửi mã xác thực: {str(e)}"
         )
+
+# YouTube Video Search Endpoints
+@app.get("/youtube/search")
+async def search_youtube_video(
+    dish_name: str = Query(..., description="Tên món ăn cần tìm video"),
+    user: TokenPayload = Depends(get_current_user)
+):
+    """
+    Tìm kiếm video YouTube cho món ăn
+
+    Parameters:
+    - dish_name: Tên món ăn cần tìm video
+
+    Returns:
+    - URL video YouTube hoặc thông báo lỗi
+    """
+    try:
+        if not youtube_service.available:
+            return {
+                "success": False,
+                "message": "YouTube API không khả dụng. Vui lòng cấu hình YOUTUBE_API_KEY.",
+                "video_url": None
+            }
+
+        video_url = youtube_service.get_youtube_video_url(dish_name)
+
+        if video_url:
+            # Lấy thông tin chi tiết video nếu có
+            video_info = youtube_service.get_video_info(video_url)
+
+            return {
+                "success": True,
+                "message": f"Tìm thấy video cho món '{dish_name}'",
+                "dish_name": dish_name,
+                "video_url": video_url,
+                "video_info": video_info
+            }
+        else:
+            return {
+                "success": False,
+                "message": f"Không tìm thấy video phù hợp cho món '{dish_name}'",
+                "dish_name": dish_name,
+                "video_url": None
+            }
+
+    except Exception as e:
+        logger.error(f"Lỗi khi tìm kiếm video cho món '{dish_name}': {str(e)}")
+        return {
+            "success": False,
+            "message": f"Lỗi khi tìm kiếm video: {str(e)}",
+            "dish_name": dish_name,
+            "video_url": None
+        }
+
+@app.get("/youtube/status")
+async def get_youtube_status():
+    """
+    Kiểm tra trạng thái YouTube service
+
+    Returns:
+    - Thông tin về tính khả dụng của YouTube API
+    """
+    return {
+        "youtube_available": youtube_service.available,
+        "api_key_configured": bool(youtube_service.api_key),
+        "message": "YouTube API sẵn sàng" if youtube_service.available else "YouTube API chưa được cấu hình"
+    }
+
+@app.post("/dishes/enhance-videos")
+async def enhance_dishes_with_videos(
+    dish_names: List[str] = Body(..., description="Danh sách tên món ăn cần tìm video"),
+    user: TokenPayload = Depends(get_current_user)
+):
+    """
+    Tự động tìm kiếm và thêm video URL cho danh sách món ăn
+
+    Parameters:
+    - dish_names: Danh sách tên món ăn
+
+    Returns:
+    - Danh sách món ăn với video URL đã được thêm
+    """
+    try:
+        if not youtube_service.available:
+            return {
+                "success": False,
+                "message": "YouTube API không khả dụng. Vui lòng cấu hình YOUTUBE_API_KEY.",
+                "results": []
+            }
+
+        results = []
+        for dish_name in dish_names:
+            try:
+                video_url = dish_enhancement_service.enhance_single_dish_name(dish_name)
+                results.append({
+                    "dish_name": dish_name,
+                    "video_url": video_url,
+                    "success": video_url is not None
+                })
+            except Exception as e:
+                results.append({
+                    "dish_name": dish_name,
+                    "video_url": None,
+                    "success": False,
+                    "error": str(e)
+                })
+
+        success_count = sum(1 for r in results if r["success"])
+
+        return {
+            "success": True,
+            "message": f"Đã tìm thấy video cho {success_count}/{len(dish_names)} món ăn",
+            "results": results
+        }
+
+    except Exception as e:
+        logger.error(f"Lỗi khi xử lý danh sách món ăn: {str(e)}")
+        return {
+            "success": False,
+            "message": f"Lỗi khi xử lý: {str(e)}",
+            "results": []
+        }
 
 if __name__ == "__main__":
     import uvicorn

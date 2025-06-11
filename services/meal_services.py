@@ -12,9 +12,11 @@ from utils import (
 from nutritionix import get_nutrition_fallback
 from nutritionix_optimized import nutritionix_optimized_api
 from services.meal_tracker import (
-    reset_tracker, reset_meal_type, add_dish, 
+    reset_tracker, reset_meal_type, add_dish,
     is_dish_used, get_used_dishes
 )
+# Import dish enhancement service để tự động thêm video
+from dish_enhancement_service import dish_enhancement_service
 # Import hàm process_preparation_steps từ preparation_utils
 from services.preparation_utils import process_preparation_steps
 import config
@@ -424,7 +426,17 @@ def generate_meal(
                 # Chuyển đổi kết quả từ LLaMA thành Dish objects
                 dishes = [generate_dish(dish_dict, user_data) for dish_dict in ai_dish_dicts]
                 print(f"Successfully created {len(dishes)} dishes from AI for {meal_type}")
-                
+
+                # Tự động thêm video URL cho các món ăn mới
+                try:
+                    print(f"Đang tìm kiếm video cho {len(dishes)} món ăn...")
+                    enhanced_dishes = dish_enhancement_service.enhance_dishes_with_videos(dishes)
+                    dishes = enhanced_dishes
+                    print(f"Đã hoàn thành việc tìm kiếm video cho các món ăn")
+                except Exception as e:
+                    print(f"Lỗi khi tìm kiếm video cho món ăn: {str(e)}")
+                    # Tiếp tục với dishes gốc nếu có lỗi
+
                 # Track used dish names
                 for dish in dishes:
                     add_dish(meal_category, dish.name)
@@ -470,7 +482,17 @@ def generate_meal(
         # Convert to Dish objects
         dishes = [generate_dish(dish_dict, user_data) for dish_dict in adjusted_dish_dicts]
         print(f"Generated {len(dishes)} random dishes for {meal_type}")
-        
+
+        # Tự động thêm video URL cho các món ăn ngẫu nhiên
+        try:
+            print(f"Đang tìm kiếm video cho {len(dishes)} món ăn ngẫu nhiên...")
+            enhanced_dishes = dish_enhancement_service.enhance_dishes_with_videos(dishes)
+            dishes = enhanced_dishes
+            print(f"Đã hoàn thành việc tìm kiếm video cho các món ăn ngẫu nhiên")
+        except Exception as e:
+            print(f"Lỗi khi tìm kiếm video cho món ăn ngẫu nhiên: {str(e)}")
+            # Tiếp tục với dishes gốc nếu có lỗi
+
         # Track used dish names
         for dish in dishes:
             add_dish(meal_category, dish.name)
@@ -530,7 +552,17 @@ def generate_meal(
             }
         dishes = [generate_dish(basic_dish, user_data)]
         print(f"Created fallback dish: {basic_dish['name']}")
-        
+
+        # Tự động thêm video URL cho món ăn fallback
+        try:
+            print(f"Đang tìm kiếm video cho món ăn fallback...")
+            enhanced_dishes = dish_enhancement_service.enhance_dishes_with_videos(dishes)
+            dishes = enhanced_dishes
+            print(f"Đã hoàn thành việc tìm kiếm video cho món ăn fallback")
+        except Exception as e:
+            print(f"Lỗi khi tìm kiếm video cho món ăn fallback: {str(e)}")
+            # Tiếp tục với dishes gốc nếu có lỗi
+
         # Track used dish names
         for dish in dishes:
             add_dish(meal_category, dish.name)

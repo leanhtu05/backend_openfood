@@ -25,29 +25,69 @@ class YouTubeService:
         else:
             logger.info("YouTube Service đã được khởi tạo thành công.")
     
+    def _normalize_dish_name(self, dish_name: str) -> str:
+        """
+        Chuẩn hóa tên món ăn để tìm kiếm tốt hơn
+
+        Args:
+            dish_name: Tên món ăn gốc
+
+        Returns:
+            Tên món ăn đã được chuẩn hóa
+        """
+        # Loại bỏ các từ không cần thiết
+        unnecessary_words = [
+            'với', 'và', 'kèm', 'theo', 'kiểu', 'phong cách', 'đặc biệt',
+            'truyền thống', 'gia đình', 'nhà làm', 'tự làm'
+        ]
+
+        normalized = dish_name.lower()
+        for word in unnecessary_words:
+            normalized = normalized.replace(word, ' ')
+
+        # Loại bỏ khoảng trắng thừa
+        normalized = ' '.join(normalized.split())
+
+        return normalized
+
     def get_youtube_video_url(self, dish_name: str, max_retries: int = 3) -> Optional[str]:
         """
         Tìm kiếm video YouTube cho món ăn
-        
+
         Args:
             dish_name: Tên món ăn cần tìm video
             max_retries: Số lần thử lại tối đa
-            
+
         Returns:
             URL của video YouTube hoặc None nếu không tìm thấy
         """
         if not self.available:
             logger.warning("YouTube API không khả dụng")
             return None
+
+        # Chuẩn hóa tên món ăn
+        normalized_name = self._normalize_dish_name(dish_name)
+        logger.info(f"Tìm kiếm video cho món '{dish_name}' (chuẩn hóa: '{normalized_name}')")
             
-        # Tạo query tìm kiếm
+        # Tạo query tìm kiếm với nhiều biến thể hơn
         search_queries = [
-            f"cách làm {dish_name}",
-            f"hướng dẫn nấu {dish_name}",
-            f"công thức {dish_name}",
-            f"recipe {dish_name}",
-            f"{dish_name} cooking tutorial"
+            f"cách làm {normalized_name}",
+            f"hướng dẫn nấu {normalized_name}",
+            f"công thức {normalized_name}",
+            f"nấu {normalized_name}",
+            f"làm {normalized_name}",
+            f"recipe {normalized_name}",
+            f"{normalized_name} recipe",
+            f"{normalized_name} cooking tutorial",
+            f"how to make {normalized_name}",
+            f"{normalized_name} cooking",
+            # Thêm query với tên gốc nếu khác với tên chuẩn hóa
+            f"cách làm {dish_name}" if normalized_name != dish_name.lower() else None,
+            f"recipe {dish_name}" if normalized_name != dish_name.lower() else None
         ]
+
+        # Loại bỏ các query None
+        search_queries = [q for q in search_queries if q is not None]
         
         for query in search_queries:
             try:
@@ -110,16 +150,21 @@ class YouTubeService:
                 
                 # Kiểm tra video có liên quan đến nấu ăn không
                 cooking_keywords = [
-                    'cách làm', 'hướng dẫn', 'công thức', 'nấu', 'làm',
-                    'recipe', 'cooking', 'tutorial', 'how to make'
+                    'cách làm', 'hướng dẫn', 'công thức', 'nấu', 'làm', 'chế biến',
+                    'recipe', 'cooking', 'tutorial', 'how to make', 'food', 'kitchen',
+                    'chef', 'món', 'ăn', 'thức ăn', 'bếp'
                 ]
-                
+
+                # Nếu tìm thấy từ khóa nấu ăn, ưu tiên video này
                 if any(keyword in title or keyword in description for keyword in cooking_keywords):
+                    logger.info(f"Found cooking video: {title}")
                     return f"https://www.youtube.com/watch?v={video_id}"
             
             # Nếu không có video nào phù hợp, trả về video đầu tiên
             if data['items']:
                 video_id = data['items'][0]['id']['videoId']
+                title = data['items'][0]['snippet']['title']
+                logger.info(f"Using first available video: {title}")
                 return f"https://www.youtube.com/watch?v={video_id}"
                 
             return None

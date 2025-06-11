@@ -132,25 +132,30 @@ class Dish(BaseModel):
     dish_type: str = DishType.MAIN  # Default to main dish
     region: str = VietnamRegion.NORTH  # Default to northern region
     image_url: Optional[str] = None
+    video_url: Optional[str] = None  # URL video hướng dẫn nấu ăn
     preparation_time: Optional[str] = None  # Thời gian chuẩn bị
     health_benefits: Optional[Union[List[str], str]] = None  # Lợi ích sức khỏe
     
     def dict(self, *args, **kwargs):
-        """Custom dict method to handle health_benefits and preparation_time"""
+        """Custom dict method to handle health_benefits, preparation_time, and video_url"""
         # Lấy dict từ phương thức gốc
         result = super().dict(*args, **kwargs)
-        
+
         # Đảm bảo bao gồm preparation_time và health_benefits
         if hasattr(self, 'preparation_time') and self.preparation_time is not None:
             result['preparation_time'] = self.preparation_time
-            
+
         if hasattr(self, 'health_benefits') and self.health_benefits is not None:
             # Chuyển đổi health_benefits thành chuỗi nếu là danh sách
             if isinstance(self.health_benefits, list):
                 result['health_benefits'] = '. '.join(self.health_benefits)
             else:
                 result['health_benefits'] = self.health_benefits
-                
+
+        # Đảm bảo bao gồm video_url
+        if hasattr(self, 'video_url') and self.video_url is not None:
+            result['video_url'] = self.video_url
+
         return result
 
 class Meal(BaseModel):

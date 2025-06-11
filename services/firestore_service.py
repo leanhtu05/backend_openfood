@@ -1023,17 +1023,27 @@ class FirestoreService:
                 if 'T' in record_date:
                     record_date = record_date.split('T')[0]
 
+                print(f"[DEBUG] Comparing record_date: {record_date} with start_date: {start_date}, end_date: {end_date}")
+
                 # Kiểm tra range
                 if start_date and end_date:
-                    return start_date <= record_date <= end_date
+                    result = start_date <= record_date <= end_date
+                    print(f"[DEBUG] Range check result: {result}")
+                    return result
                 elif start_date:
-                    return record_date >= start_date
+                    result = record_date >= start_date
+                    print(f"[DEBUG] Start date check result: {result}")
+                    return result
                 elif end_date:
-                    return record_date <= end_date
+                    result = record_date <= end_date
+                    print(f"[DEBUG] End date check result: {result}")
+                    return result
                 else:
+                    print(f"[DEBUG] No date filter, returning True")
                     return True
 
             # Xử lý kết quả từ truy vấn thứ nhất
+            print(f"[DEBUG] Processing {len(results1)} results from query1")
             for doc in results1:
                 doc_id = doc.id
 
@@ -1041,6 +1051,7 @@ class FirestoreService:
                 if doc_id not in processed_ids:
                     data = doc.to_dict()
                     record_date = data.get('date', '')
+                    print(f"[DEBUG] Found exercise record: {data.get('name', 'N/A')} with date: {record_date}")
 
                     # Kiểm tra date có match với range không
                     if date_matches(record_date, start_date, end_date):
@@ -1068,6 +1079,7 @@ class FirestoreService:
                         history.append(transformed_data)
 
             # Xử lý kết quả từ truy vấn thứ hai, chỉ thêm vào nếu ID chưa tồn tại
+            print(f"[DEBUG] Processing {len(results2)} results from query2")
             for doc in results2:
                 doc_id = doc.id
 
@@ -1075,6 +1087,7 @@ class FirestoreService:
                 if doc_id not in processed_ids:
                     data = doc.to_dict()
                     record_date = data.get('date', '')
+                    print(f"[DEBUG] Found exercise record (query2): {data.get('name', 'N/A')} with date: {record_date}")
 
                     # Kiểm tra date có match với range không
                     if date_matches(record_date, start_date, end_date):

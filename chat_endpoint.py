@@ -326,8 +326,9 @@ def chat():
                 # 3. Lấy nhật ký ăn uống hôm nay
                 vietnam_now = datetime.now(VIETNAM_TZ)
                 today_str = vietnam_now.strftime("%Y-%m-%d")
-                print(f"[DEBUG] Thời gian hiện tại (VN): {vietnam_now.isoformat()}")
-                print(f"[DEBUG] Đang truy vấn dữ liệu cho ngày: {today_str}")
+                print(f"[DEBUG] ⏰ Thời gian hiện tại (VN): {vietnam_now.isoformat()}")
+                print(f"[DEBUG] 📅 Đang truy vấn dữ liệu cho ngày: {today_str}")
+                print(f"[DEBUG] 🌏 Timezone: {VIETNAM_TZ}")
                 food_logs_today = firestore_service.get_food_logs_by_date(user_id, today_str) or []
 
                 # 4. Lấy thông tin bài tập hôm nay - với fallback logic

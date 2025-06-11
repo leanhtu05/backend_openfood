@@ -138,8 +138,11 @@ class Dish(BaseModel):
     
     def dict(self, *args, **kwargs):
         """Custom dict method to handle health_benefits, preparation_time, and video_url"""
-        # Lấy dict từ phương thức gốc
-        result = super().dict(*args, **kwargs)
+        # Sử dụng model_dump() cho Pydantic v2 hoặc dict() cho v1
+        try:
+            result = super().model_dump(*args, **kwargs)
+        except AttributeError:
+            result = super().dict(*args, **kwargs)
 
         # Đảm bảo bao gồm preparation_time và health_benefits
         if hasattr(self, 'preparation_time') and self.preparation_time is not None:
@@ -148,7 +151,7 @@ class Dish(BaseModel):
         if hasattr(self, 'health_benefits') and self.health_benefits is not None:
             # Chuyển đổi health_benefits thành chuỗi nếu là danh sách
             if isinstance(self.health_benefits, list):
-                result['health_benefits'] = '. '.join(self.health_benefits)
+                result['health_benefits'] = self.health_benefits  # Giữ nguyên list
             else:
                 result['health_benefits'] = self.health_benefits
 
@@ -158,9 +161,32 @@ class Dish(BaseModel):
 
         return result
 
+    def model_dump(self, *args, **kwargs):
+        """Pydantic v2 compatible model_dump method"""
+        return self.dict(*args, **kwargs)
+
 class Meal(BaseModel):
     dishes: List[Dish]
     nutrition: NutritionInfo
+
+    def dict(self, *args, **kwargs):
+        """Custom dict method để đảm bảo video_url được serialize"""
+        try:
+            result = super().model_dump(*args, **kwargs)
+        except AttributeError:
+            result = super().dict(*args, **kwargs)
+
+        # Đảm bảo tất cả dishes có video_url
+        if 'dishes' in result:
+            for dish in result['dishes']:
+                if 'video_url' not in dish:
+                    dish['video_url'] = None
+
+        return result
+
+    def model_dump(self, *args, **kwargs):
+        """Pydantic v2 compatible model_dump method"""
+        return self.dict(*args, **kwargs)
 
 class DayMealPlan(BaseModel):
     day_of_week: str
@@ -169,13 +195,55 @@ class DayMealPlan(BaseModel):
     dinner: Meal
     nutrition: NutritionInfo
 
+    def dict(self, *args, **kwargs):
+        """Custom dict method để đảm bảo video_url được serialize"""
+        try:
+            result = super().model_dump(*args, **kwargs)
+        except AttributeError:
+            result = super().dict(*args, **kwargs)
+
+        # Đảm bảo tất cả meals có video_url trong dishes
+        for meal_name in ['breakfast', 'lunch', 'dinner']:
+            if meal_name in result and 'dishes' in result[meal_name]:
+                for dish in result[meal_name]['dishes']:
+                    if 'video_url' not in dish:
+                        dish['video_url'] = None
+
+        return result
+
+    def model_dump(self, *args, **kwargs):
+        """Pydantic v2 compatible model_dump method"""
+        return self.dict(*args, **kwargs)
+
 class WeeklyMealPlan(BaseModel):
     days: List[DayMealPlan]
-    
+
+    def dict(self, *args, **kwargs):
+        """Custom dict method để đảm bảo video_url được serialize"""
+        try:
+            result = super().model_dump(*args, **kwargs)
+        except AttributeError:
+            result = super().dict(*args, **kwargs)
+
+        # Đảm bảo tất cả dishes có video_url
+        if 'days' in result:
+            for day in result['days']:
+                for meal_name in ['breakfast', 'lunch', 'dinner']:
+                    if meal_name in day and 'dishes' in day[meal_name]:
+                        for dish in day[meal_name]['dishes']:
+                            if 'video_url' not in dish:
+                                dish['video_url'] = None
+
+        return result
+
+    def model_dump(self, *args, **kwargs):
+        """Pydantic v2 compatible model_dump method"""
+        return self.dict(*args, **kwargs)
+
     # Thêm phương thức để tương thích với cả Pydantic 1.x và 2.x
     def json(self, **kwargs):
         return json.dumps(self.dict(), **kwargs)
-    
+
     def model_dump_json(self, **kwargs):
         return json.dumps(self.dict(), **kwargs)
 

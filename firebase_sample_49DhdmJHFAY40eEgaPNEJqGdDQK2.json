@@ -1,0 +1,767 @@
+{
+  "dinner": {
+    "dishes": [
+      {
+        "dish_type": "main",
+        "ingredients": [
+          {
+            "amount": "200g",
+            "name": "Gạo"
+          },
+          {
+            "amount": "150g",
+            "name": "Sườn non ức"
+          },
+          {
+            "amount": "50g",
+            "name": "Rau thơm"
+          },
+          {
+            "amount": "10g",
+            "name": "Dầu ăn"
+          },
+          {
+            "amount": "5g",
+            "name": "Muối"
+          },
+          {
+            "amount": "5g",
+            "name": "Hạt nêm"
+          }
+        ],
+        "preparation_time": "40 phút",
+        "video_url": null,
+        "preparation": [
+          "Bước 1: Vo gạo và nấu chín. Bước 2: Ướp sườn non với dầu ăn, muối, hạt nêm. Bước 3: Nướng sườn non trong lò nướng 15 phút. Bước 4: Trộn cơm với sườn non và rau thơm."
+        ],
+        "nutrition": {
+          "caffeine": null,
+          "glycemic_index": null,
+          "water_content": null,
+          "carbs": 22.0,
+          "vitamin_c": null,
+          "iron": null,
+          "fiber": null,
+          "vitamin_a": null,
+          "cholesterol": null,
+          "trans_fat": null,
+          "sodium": null,
+          "alcohol": null,
+          "calories": 216.0,
+          "saturated_fat": null,
+          "protein": 16.0,
+          "sugar": null,
+          "potassium": null,
+          "calcium": null,
+          "fat": 7.5
+        },
+        "health_benefits": [
+          "Món cơm này cung cấp đầy đủ protein để duy trì cân nặng",
+          "đồng thời giàu chất xơ và ít chất béo giúp kiểm soát cân nặng. Sườn non ức cũng giàu vitamin B12 giúp tăng cường sức khỏe tim mạch."
+        ],
+        "image_url": null,
+        "region": "north",
+        "name": "Cơm Sườn Non Ức"
+      },
+      {
+        "dish_type": "main",
+        "ingredients": [
+          {
+            "amount": "200g",
+            "name": "Bún"
+          },
+          {
+            "amount": "150g",
+            "name": "Mọc chay"
+          },
+          {
+            "amount": "50g",
+            "name": "Nấm"
+          },
+          {
+            "amount": "50g",
+            "name": "Rau thơm"
+          },
+          {
+            "amount": "10g",
+            "name": "Dầu ăn"
+          },
+          {
+            "amount": "5g",
+            "name": "Muối"
+          },
+          {
+            "amount": "5g",
+            "name": "Hạt nêm"
+          }
+        ],
+        "preparation_time": "35 phút",
+        "video_url": null,
+        "preparation": [
+          "Bước 1: Luộc bún chín. Bước 2: Xào mọc chay với dầu ăn, muối, hạt nêm. Bước 3: Trộn bún với mọc chay, nấm và rau thơm."
+        ],
+        "nutrition": {
+          "caffeine": null,
+          "glycemic_index": null,
+          "water_content": null,
+          "carbs": 22.0,
+          "vitamin_c": null,
+          "iron": null,
+          "fiber": null,
+          "vitamin_a": null,
+          "cholesterol": null,
+          "trans_fat": null,
+          "sodium": null,
+          "alcohol": null,
+          "calories": 216.0,
+          "saturated_fat": null,
+          "protein": 16.0,
+          "sugar": null,
+          "potassium": null,
+          "calcium": null,
+          "fat": 7.5
+        },
+        "health_benefits": [
+          "Món bún này cung cấp đầy đủ protein để duy trì cân nặng",
+          "đồng thời giàu chất xơ và ít chất béo giúp kiểm soát cân nặng. Mọc chay cũng giàu vitamin và khoáng chất giúp tăng cường sức khỏe."
+        ],
+        "image_url": null,
+        "region": "north",
+        "name": "Bún Mọc Chay"
+      },
+      {
+        "dish_type": "main",
+        "ingredients": [
+          {
+            "amount": "200g",
+            "name": "Gạo"
+          },
+          {
+            "amount": "150g",
+            "name": "Gà xối"
+          },
+          {
+            "amount": "50g",
+            "name": "Rau thơm"
+          },
+          {
+            "amount": "10g",
+            "name": "Dầu ăn"
+          },
+          {
+            "amount": "5g",
+            "name": "Muối"
+          },
+          {
+            "amount": "5g",
+            "name": "Hạt nêm"
+          }
+        ],
+        "preparation_time": "40 phút",
+        "video_url": null,
+        "preparation": [
+          "Bước 1: Vo gạo và nấu chín. Bước 2: Ướp gà xối với dầu ăn, muối, hạt nêm. Bước 3: Nướng gà xối trong lò nướng 15 phút. Bước 4: Trộn cơm với gà xối và rau thơm."
+        ],
+        "nutrition": {
+          "caffeine": null,
+          "glycemic_index": null,
+          "water_content": null,
+          "carbs": 22.0,
+          "vitamin_c": null,
+          "iron": null,
+          "fiber": null,
+          "vitamin_a": null,
+          "cholesterol": null,
+          "trans_fat": null,
+          "sodium": null,
+          "alcohol": null,
+          "calories": 216.0,
+          "saturated_fat": null,
+          "protein": 16.0,
+          "sugar": null,
+          "potassium": null,
+          "calcium": null,
+          "fat": 7.5
+        },
+        "health_benefits": [
+          "Món cơm này cung cấp đầy đủ protein để duy trì cân nặng",
+          "đồng thời giàu chất xơ và ít chất béo giúp kiểm soát cân nặng. Gà xối cũng giàu vitamin B6 giúp tăng cường sức khỏe."
+        ],
+        "image_url": null,
+        "region": "north",
+        "name": "Cơm Gà Xối"
+      },
+      {
+        "dish_type": "main",
+        "ingredients": [
+          {
+            "amount": "200g",
+            "name": "Gạo"
+          },
+          {
+            "amount": "150g",
+            "name": "Gà ức"
+          },
+          {
+            "amount": "50g",
+            "name": "Rau thơm"
+          },
+          {
+            "amount": "10g",
+            "name": "Dầu ăn"
+          },
+          {
+            "amount": "5g",
+            "name": "Muối"
+          },
+          {
+            "amount": "5g",
+            "name": "Hạt nêm"
+          }
+        ],
+        "preparation_time": "40 phút",
+        "video_url": null,
+        "preparation": [
+          "Bước 1: Vo gạo và nấu chín. Bước 2: Ướp gà ức với dầu ăn, muối, hạt nêm. Bước 3: Nấu cháo với gà ức và rau thơm."
+        ],
+        "nutrition": {
+          "caffeine": null,
+          "glycemic_index": null,
+          "water_content": null,
+          "carbs": 22.0,
+          "vitamin_c": null,
+          "iron": null,
+          "fiber": null,
+          "vitamin_a": null,
+          "cholesterol": null,
+          "trans_fat": null,
+          "sodium": null,
+          "alcohol": null,
+          "calories": 216.0,
+          "saturated_fat": null,
+          "protein": 16.0,
+          "sugar": null,
+          "potassium": null,
+          "calcium": null,
+          "fat": 7.5
+        },
+        "health_benefits": [
+          "Món cháo này cung cấp đầy đủ protein để duy trì cân nặng",
+          "đồng thời giàu chất xơ và ít chất béo giúp kiểm soát cân nặng. Gà ức cũng giàu vitamin B12 giúp tăng cường sức khỏe tim mạch."
+        ],
+        "image_url": null,
+        "region": "north",
+        "name": "Cháo Gà Ức"
+      }
+    ],
+    "nutrition": {
+      "potassium": null,
+      "calcium": null,
+      "water_content": null,
+      "carbs": 88.0,
+      "fiber": null,
+      "iron": null,
+      "vitamin_c": null,
+      "vitamin_a": null,
+      "cholesterol": null,
+      "calories": 864.0,
+      "sodium": null,
+      "alcohol": null,
+      "trans_fat": null,
+      "saturated_fat": null,
+      "protein": 64.0,
+      "sugar": null,
+      "caffeine": null,
+      "glycemic_index": null,
+      "fat": 30.0
+    }
+  },
+  "lunch": {
+    "dishes": [
+      {
+        "dish_type": "main",
+        "ingredients": [
+          {
+            "amount": "200g",
+            "name": "Cơm trắng"
+          },
+          {
+            "amount": "120g",
+            "name": "Thịt gà ức"
+          },
+          {
+            "amount": "50g",
+            "name": "Rau xanh"
+          },
+          {
+            "amount": "10g",
+            "name": "Dầu ô liu"
+          },
+          {
+            "amount": "2g",
+            "name": "Muối"
+          },
+          {
+            "amount": "1g",
+            "name": "Tiêu"
+          }
+        ],
+        "preparation_time": "30 phút",
+        "video_url": null,
+        "preparation": [
+          "Bước 1: Đun nước sôi, cho cơm trắng vào nấu chín. Bước 2: Luộc thịt gà ức cho chín, sau đó xối qua nước lạnh. Bước 3: Rửa sạch rau xanh, cho vào tô cơm, thêm thịt gà, dầu ô liu, muối, tiêu."
+        ],
+        "nutrition": {
+          "caffeine": null,
+          "glycemic_index": null,
+          "water_content": null,
+          "carbs": 19.0,
+          "vitamin_c": null,
+          "iron": null,
+          "fiber": null,
+          "vitamin_a": null,
+          "cholesterol": null,
+          "trans_fat": null,
+          "sodium": null,
+          "alcohol": null,
+          "calories": 150.0,
+          "saturated_fat": null,
+          "protein": 9.0,
+          "sugar": null,
+          "potassium": null,
+          "calcium": null,
+          "fat": 5.0
+        },
+        "health_benefits": [
+          "Món cơm gà xối xanh này cung cấp đầy đủ protein và chất xơ",
+          "giúp hỗ trợ giảm cân và cải thiện sức khỏe. Rau xanh giàu vitamin và khoáng",
+          "giúp tăng cường miễn dịch và chống oxy hóa."
+        ],
+        "image_url": null,
+        "region": "north",
+        "name": "Cơm Gà Xối Xanh"
+      },
+      {
+        "dish_type": "main",
+        "ingredients": [
+          {
+            "amount": "100g",
+            "name": "Bánh mì"
+          },
+          {
+            "amount": "100g",
+            "name": "Đậu xanh"
+          },
+          {
+            "amount": "50g",
+            "name": "Rau xanh"
+          },
+          {
+            "amount": "10g",
+            "name": "Dầu ô liu"
+          },
+          {
+            "amount": "2g",
+            "name": "Muối"
+          },
+          {
+            "amount": "1g",
+            "name": "Tiêu"
+          }
+        ],
+        "preparation_time": "25 phút",
+        "video_url": null,
+        "preparation": [
+          "Bước 1: Đun nước sôi, cho đậu xanh vào nấu chín. Bước 2: Rửa sạch rau xanh, cho vào bánh mì, thêm đậu xanh, dầu ô liu, muối, tiêu."
+        ],
+        "nutrition": {
+          "caffeine": null,
+          "glycemic_index": null,
+          "water_content": null,
+          "carbs": 19.0,
+          "vitamin_c": null,
+          "iron": null,
+          "fiber": null,
+          "vitamin_a": null,
+          "cholesterol": null,
+          "trans_fat": null,
+          "sodium": null,
+          "alcohol": null,
+          "calories": 150.0,
+          "saturated_fat": null,
+          "protein": 9.0,
+          "sugar": null,
+          "potassium": null,
+          "calcium": null,
+          "fat": 5.0
+        },
+        "health_benefits": [
+          "Món bánh mì chay đậu xanh này cung cấp đầy đủ protein và chất xơ",
+          "giúp hỗ trợ giảm cân và cải thiện sức khỏe. Đậu xanh giàu vitamin và khoáng",
+          "giúp tăng cường miễn dịch và chống oxy hóa."
+        ],
+        "image_url": null,
+        "region": "north",
+        "name": "Bánh Mì Chay Đậu Xanh"
+      },
+      {
+        "dish_type": "soup",
+        "ingredients": [
+          {
+            "amount": "150g",
+            "name": "Cá chép"
+          },
+          {
+            "amount": "100g",
+            "name": "Đậu phụ"
+          },
+          {
+            "amount": "50g",
+            "name": "Rau xanh"
+          },
+          {
+            "amount": "10g",
+            "name": "Dầu ô liu"
+          },
+          {
+            "amount": "2g",
+            "name": "Muối"
+          },
+          {
+            "amount": "1g",
+            "name": "Tiêu"
+          }
+        ],
+        "preparation_time": "30 phút",
+        "video_url": null,
+        "preparation": [
+          "Bước 1: Đun nước sôi, cho cá chép vào nấu chín. Bước 2: Rửa sạch rau xanh, cho vào canh, thêm đậu phụ, dầu ô liu, muối, tiêu."
+        ],
+        "nutrition": {
+          "caffeine": null,
+          "glycemic_index": null,
+          "water_content": null,
+          "carbs": 19.0,
+          "vitamin_c": null,
+          "iron": null,
+          "fiber": null,
+          "vitamin_a": null,
+          "cholesterol": null,
+          "trans_fat": null,
+          "sodium": null,
+          "alcohol": null,
+          "calories": 150.0,
+          "saturated_fat": null,
+          "protein": 9.0,
+          "sugar": null,
+          "potassium": null,
+          "calcium": null,
+          "fat": 5.0
+        },
+        "health_benefits": [
+          "Món canh cá chép đậu phụ này cung cấp đầy đủ protein và chất xơ",
+          "giúp hỗ trợ giảm cân và cải thiện sức khỏe. Cá chép giàu omega-3",
+          "giúp tăng cường tim mạch và chống oxy hóa."
+        ],
+        "image_url": null,
+        "region": "north",
+        "name": "Canh Cá Chép Đậu Phụ"
+      },
+      {
+        "dish_type": "main",
+        "ingredients": [
+          {
+            "amount": "150g",
+            "name": "Bún thang"
+          },
+          {
+            "amount": "100g",
+            "name": "Đậu xanh"
+          },
+          {
+            "amount": "50g",
+            "name": "Rau xanh"
+          },
+          {
+            "amount": "10g",
+            "name": "Dầu ô liu"
+          },
+          {
+            "amount": "2g",
+            "name": "Muối"
+          },
+          {
+            "amount": "1g",
+            "name": "Tiêu"
+          }
+        ],
+        "preparation_time": "25 phút",
+        "video_url": null,
+        "preparation": [
+          "Bước 1: Đun nước sôi, cho đậu xanh vào nấu chín. Bước 2: Rửa sạch rau xanh, cho vào bún thang, thêm đậu xanh, dầu ô liu, muối, tiêu."
+        ],
+        "nutrition": {
+          "caffeine": null,
+          "glycemic_index": null,
+          "water_content": null,
+          "carbs": 19.0,
+          "vitamin_c": null,
+          "iron": null,
+          "fiber": null,
+          "vitamin_a": null,
+          "cholesterol": null,
+          "trans_fat": null,
+          "sodium": null,
+          "alcohol": null,
+          "calories": 150.0,
+          "saturated_fat": null,
+          "protein": 9.0,
+          "sugar": null,
+          "potassium": null,
+          "calcium": null,
+          "fat": 5.0
+        },
+        "health_benefits": [
+          "Món bún thang chay đậu xanh này cung cấp đầy đủ protein và chất xơ",
+          "giúp hỗ trợ giảm cân và cải thiện sức khỏe. Đậu xanh giàu vitamin và khoáng",
+          "giúp tăng cường miễn dịch và chống oxy hóa."
+        ],
+        "image_url": null,
+        "region": "north",
+        "name": "Bún Tháng Chay Đậu Xanh"
+      }
+    ],
+    "nutrition": {
+      "potassium": null,
+      "calcium": null,
+      "water_content": null,
+      "carbs": 76.0,
+      "fiber": null,
+      "iron": null,
+      "vitamin_c": null,
+      "vitamin_a": null,
+      "cholesterol": null,
+      "calories": 600.0,
+      "sodium": null,
+      "alcohol": null,
+      "trans_fat": null,
+      "saturated_fat": null,
+      "protein": 36.0,
+      "sugar": null,
+      "caffeine": null,
+      "glycemic_index": null,
+      "fat": 20.0
+    }
+  },
+  "day_of_week": "Thứ 2",
+  "breakfast": {
+    "dishes": [
+      {
+        "dish_type": "main",
+        "ingredients": [
+          {
+            "amount": "1 ổ",
+            "name": "Bánh mì chay"
+          },
+          {
+            "amount": "100g",
+            "name": "Đậu xanh"
+          },
+          {
+            "amount": "10g",
+            "name": "Rau thơm"
+          },
+          {
+            "amount": "100ml",
+            "name": "Sữa đậu nành"
+          }
+        ],
+        "preparation_time": "20 phút",
+        "video_url": null,
+        "preparation": [
+          "Bước 1: Đậu xanh rửa sạch, luộc chín và xay nhuyễn. Bước 2: Bánh mì chay cắt nhỏ. Bước 3: Trộn đều đậu xanh, bánh mì chay, và rau thơm. Bước 4: Thêm sữa đậu nành và trộn đều."
+        ],
+        "nutrition": {
+          "caffeine": null,
+          "glycemic_index": null,
+          "water_content": null,
+          "carbs": 14.0,
+          "vitamin_c": null,
+          "iron": null,
+          "fiber": null,
+          "vitamin_a": null,
+          "cholesterol": null,
+          "trans_fat": null,
+          "sodium": null,
+          "alcohol": null,
+          "calories": 112.0,
+          "saturated_fat": null,
+          "protein": 6.3,
+          "sugar": null,
+          "potassium": null,
+          "calcium": null,
+          "fat": 3.5
+        },
+        "health_benefits": [
+          "Bánh mì chay giàu chất xơ và protein giúp giảm cân hiệu quả. Đậu xanh cung cấp đầy đủ protein và sắt",
+          "hỗ trợ cơ thể khỏe mạnh. Rau thơm giàu vitamin và khoáng chất",
+          "tăng cường miễn dịch. Sữa đậu nành cung cấp thêm protein và canxi",
+          "hỗ trợ phát triển cơ bắp."
+        ],
+        "image_url": null,
+        "region": "north",
+        "name": "Bánh Mì Chay Đậu Xanh"
+      },
+      {
+        "dish_type": "main",
+        "ingredients": [
+          {
+            "amount": "50g",
+            "name": "Yến mạch"
+          },
+          {
+            "amount": "100g",
+            "name": "Đậu đỏ"
+          },
+          {
+            "amount": "200ml",
+            "name": "Nước dashi"
+          },
+          {
+            "amount": "5g",
+            "name": "Gia vị"
+          }
+        ],
+        "preparation_time": "30 phút",
+        "video_url": null,
+        "preparation": [
+          "Bước 1: Yến mạch ngâm nước, sau đó nấu chín. Bước 2: Đậu đỏ rửa sạch, luộc chín và xay nhuyễn. Bước 3: Trộn đều yến mạch, đậu đỏ, và nước dashi. Bước 4: Thêm gia vị và trộn đều."
+        ],
+        "nutrition": {
+          "caffeine": null,
+          "glycemic_index": null,
+          "water_content": null,
+          "carbs": 16.0,
+          "vitamin_c": null,
+          "iron": null,
+          "fiber": null,
+          "vitamin_a": null,
+          "cholesterol": null,
+          "trans_fat": null,
+          "sodium": null,
+          "alcohol": null,
+          "calories": 130.0,
+          "saturated_fat": null,
+          "protein": 7.0,
+          "sugar": null,
+          "potassium": null,
+          "calcium": null,
+          "fat": 4.2
+        },
+        "health_benefits": [
+          "Cháo yến mạch giàu chất xơ và protein",
+          "hỗ trợ giảm cân và tăng cường miễn dịch. Đậu đỏ cung cấp đầy đủ protein và sắt",
+          "hỗ trợ cơ thể khỏe mạnh. Nước dashi cung cấp thêm khoáng chất",
+          "tăng cường miễn dịch."
+        ],
+        "image_url": null,
+        "region": "north",
+        "name": "Cháo Yến Mạch Đậu Đỏ"
+      },
+      {
+        "dish_type": "dessert",
+        "ingredients": [
+          {
+            "amount": "2 cái",
+            "name": "Bánh kẹp"
+          },
+          {
+            "amount": "100g",
+            "name": "Đậu phụng"
+          },
+          {
+            "amount": "10g",
+            "name": "Rau thơm"
+          }
+        ],
+        "preparation_time": "25 phút",
+        "video_url": null,
+        "preparation": [
+          "Bước 1: Đậu phụng rửa sạch, luộc chín và xay nhuyễn. Bước 2: Bánh kẹp cắt nhỏ. Bước 3: Trộn đều đậu phụng, bánh kẹp, và rau thơm."
+        ],
+        "nutrition": {
+          "caffeine": null,
+          "glycemic_index": null,
+          "water_content": null,
+          "carbs": 17.0,
+          "vitamin_c": null,
+          "iron": null,
+          "fiber": null,
+          "vitamin_a": null,
+          "cholesterol": null,
+          "trans_fat": null,
+          "sodium": null,
+          "alcohol": null,
+          "calories": 133.0,
+          "saturated_fat": null,
+          "protein": 7.7,
+          "sugar": null,
+          "potassium": null,
+          "calcium": null,
+          "fat": 4.2
+        },
+        "health_benefits": [
+          "Bánh kẹp giàu chất xơ và protein",
+          "hỗ trợ giảm cân hiệu quả. Đậu phụng cung cấp đầy đủ protein và sắt",
+          "hỗ trợ cơ thể khỏe mạnh. Rau thơm giàu vitamin và khoáng chất",
+          "tăng cường miễn dịch."
+        ],
+        "image_url": null,
+        "region": "north",
+        "name": "Bánh Kẹp Đậu Phụng"
+      }
+    ],
+    "nutrition": {
+      "potassium": null,
+      "calcium": null,
+      "water_content": null,
+      "carbs": 47.0,
+      "fiber": null,
+      "iron": null,
+      "vitamin_c": null,
+      "vitamin_a": null,
+      "cholesterol": null,
+      "calories": 375.0,
+      "sodium": null,
+      "alcohol": null,
+      "trans_fat": null,
+      "saturated_fat": null,
+      "protein": 21.0,
+      "sugar": null,
+      "caffeine": null,
+      "glycemic_index": null,
+      "fat": 11.9
+    }
+  },
+  "nutrition": {
+    "caffeine": null,
+    "glycemic_index": null,
+    "water_content": null,
+    "carbs": 246.0,
+    "vitamin_c": null,
+    "iron": null,
+    "fiber": null,
+    "vitamin_a": null,
+    "cholesterol": null,
+    "trans_fat": null,
+    "sodium": null,
+    "alcohol": null,
+    "calories": 2467.0,
+    "saturated_fat": null,
+    "protein": 186.0,
+    "sugar": null,
+    "potassium": null,
+    "calcium": null,
+    "fat": 82.0
+  }
+}

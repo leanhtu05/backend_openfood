@@ -2,9 +2,12 @@ from flask import Flask, request, jsonify
 import os
 import uuid
 import time
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from openai import OpenAI
 from firebase_config import firebase_config
+
+# Thiết lập timezone Việt Nam (UTC+7)
+VIETNAM_TZ = timezone(timedelta(hours=7))
 
 app = Flask(__name__)
 
@@ -48,7 +51,7 @@ class ChatHistoryManager:
                 "user_id": user_id,
                 "user_message": user_message,
                 "ai_reply": ai_reply,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(VIETNAM_TZ).isoformat(),
                 "model": "llama3-8b-8192",
                 "augmented": augmented  # Đánh dấu nếu sử dụng RAG
             }
@@ -110,7 +113,7 @@ def format_user_context(user_profile, meal_plan, food_logs, exercise_history=Non
         Đoạn văn bản context đã định dạng
     """
     context_parts = []
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_str = datetime.now(VIETNAM_TZ).strftime("%Y-%m-%d")
     
     # Thông tin hồ sơ
     if user_profile:
@@ -127,7 +130,7 @@ def format_user_context(user_profile, meal_plan, food_logs, exercise_history=Non
 
     # Thông tin kế hoạch bữa ăn hôm nay
     if meal_plan:
-        today_day = datetime.now().strftime("%A").lower()
+        today_day = datetime.now(VIETNAM_TZ).strftime("%A").lower()
         # Chuyển đổi tên ngày tiếng Anh sang tiếng Việt nếu cần
         days_translation = {
             "monday": "monday", "tuesday": "tuesday", "wednesday": "wednesday", 
@@ -321,7 +324,9 @@ def chat():
                 meal_plan_dict = meal_plan_data.dict() if meal_plan_data else {}
                 
                 # 3. Lấy nhật ký ăn uống hôm nay
-                today_str = datetime.now().strftime("%Y-%m-%d")
+                vietnam_now = datetime.now(VIETNAM_TZ)
+                today_str = vietnam_now.strftime("%Y-%m-%d")
+                print(f"[DEBUG] Thời gian hiện tại (VN): {vietnam_now.isoformat()}")
                 print(f"[DEBUG] Đang truy vấn dữ liệu cho ngày: {today_str}")
                 food_logs_today = firestore_service.get_food_logs_by_date(user_id, today_str) or []
 
@@ -332,9 +337,8 @@ def chat():
                 # Nếu không có dữ liệu hôm nay, thử tìm dữ liệu gần nhất (trong 7 ngày qua)
                 exercise_date = today_str  # Mặc định là hôm nay
                 if not exercise_history:
-                    from datetime import timedelta
                     for days_back in range(1, 8):  # Tìm trong 7 ngày qua
-                        past_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+                        past_date = (datetime.now(VIETNAM_TZ) - timedelta(days=days_back)).strftime("%Y-%m-%d")
                         exercise_history = firestore_service.get_exercise_history(user_id, start_date=past_date, end_date=past_date) or []
                         if exercise_history:
                             exercise_date = past_date
@@ -348,9 +352,8 @@ def chat():
                 # Nếu không có dữ liệu hôm nay, thử tìm dữ liệu gần nhất (trong 7 ngày qua)
                 water_date = today_str  # Mặc định là hôm nay
                 if not water_intake:
-                    from datetime import timedelta
                     for days_back in range(1, 8):  # Tìm trong 7 ngày qua
-                        past_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+                        past_date = (datetime.now(VIETNAM_TZ) - timedelta(days=days_back)).strftime("%Y-%m-%d")
                         water_intake = firestore_service.get_water_intake_by_date(user_id, past_date) or []
                         if water_intake:
                             water_date = past_date

@@ -430,11 +430,19 @@ def generate_meal(
                 # Tự động thêm video URL cho các món ăn mới
                 try:
                     print(f"Đang tìm kiếm video cho {len(dishes)} món ăn...")
+                    for i, dish in enumerate(dishes):
+                        print(f"  {i+1}. {dish.name} - Video trước: {dish.video_url}")
+
                     enhanced_dishes = dish_enhancement_service.enhance_dishes_with_videos(dishes)
                     dishes = enhanced_dishes
-                    print(f"Đã hoàn thành việc tìm kiếm video cho các món ăn")
+
+                    print(f"Đã hoàn thành việc tìm kiếm video cho các món ăn:")
+                    for i, dish in enumerate(dishes):
+                        print(f"  {i+1}. {dish.name} - Video sau: {dish.video_url}")
                 except Exception as e:
                     print(f"Lỗi khi tìm kiếm video cho món ăn: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
                     # Tiếp tục với dishes gốc nếu có lỗi
 
                 # Track used dish names
@@ -486,11 +494,19 @@ def generate_meal(
         # Tự động thêm video URL cho các món ăn ngẫu nhiên
         try:
             print(f"Đang tìm kiếm video cho {len(dishes)} món ăn ngẫu nhiên...")
+            for i, dish in enumerate(dishes):
+                print(f"  {i+1}. {dish.name} - Video trước: {dish.video_url}")
+
             enhanced_dishes = dish_enhancement_service.enhance_dishes_with_videos(dishes)
             dishes = enhanced_dishes
-            print(f"Đã hoàn thành việc tìm kiếm video cho các món ăn ngẫu nhiên")
+
+            print(f"Đã hoàn thành việc tìm kiếm video cho các món ăn ngẫu nhiên:")
+            for i, dish in enumerate(dishes):
+                print(f"  {i+1}. {dish.name} - Video sau: {dish.video_url}")
         except Exception as e:
             print(f"Lỗi khi tìm kiếm video cho món ăn ngẫu nhiên: {str(e)}")
+            import traceback
+            traceback.print_exc()
             # Tiếp tục với dishes gốc nếu có lỗi
 
         # Track used dish names

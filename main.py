@@ -1894,6 +1894,122 @@ async def enhance_dishes_with_videos(
             "results": []
         }
 
+# Video Cache Management endpoints
+@app.get("/video-cache/stats")
+async def get_video_cache_stats(user: TokenPayload = Depends(get_current_user)):
+    """
+    Lấy thống kê cache video
+
+    Returns:
+    - Thống kê về số lượng video đã cache, nguồn video, etc.
+    """
+    try:
+        from services.video_cache_service import video_cache_service
+
+        stats = video_cache_service.get_cache_stats()
+        return {
+            "success": True,
+            "cache_stats": stats,
+            "message": "Thống kê cache được lấy thành công"
+        }
+    except Exception as e:
+        logger.error(f"Lỗi khi lấy thống kê cache: {str(e)}")
+        return {
+            "success": False,
+            "message": f"Lỗi khi lấy thống kê cache: {str(e)}",
+            "cache_stats": {}
+        }
+
+@app.get("/video-cache/search")
+async def search_cached_video(
+    dish_name: str = Query(..., description="Tên món ăn cần tìm video"),
+    user: TokenPayload = Depends(get_current_user)
+):
+    """
+    Tìm kiếm video trong cache
+
+    Parameters:
+    - dish_name: Tên món ăn
+
+    Returns:
+    - Video URL nếu có trong cache
+    """
+    try:
+        from services.video_cache_service import video_cache_service
+
+        cached_video = video_cache_service.get_cached_video(dish_name)
+
+        if cached_video:
+            return {
+                "success": True,
+                "dish_name": dish_name,
+                "video_url": cached_video,
+                "source": "cache",
+                "message": "Video tìm thấy trong cache"
+            }
+        else:
+            return {
+                "success": False,
+                "dish_name": dish_name,
+                "video_url": None,
+                "message": "Không tìm thấy video trong cache"
+            }
+    except Exception as e:
+        logger.error(f"Lỗi khi tìm video trong cache cho '{dish_name}': {str(e)}")
+        return {
+            "success": False,
+            "dish_name": dish_name,
+            "video_url": None,
+            "message": f"Lỗi khi tìm video trong cache: {str(e)}"
+        }
+
+@app.post("/video-cache/add")
+async def add_video_to_cache(
+    dish_name: str = Body(..., description="Tên món ăn"),
+    video_url: str = Body(..., description="URL video YouTube"),
+    source: str = Body("manual", description="Nguồn video (manual, youtube_api, fallback)"),
+    user: TokenPayload = Depends(get_current_user)
+):
+    """
+    Thêm video vào cache thủ công
+
+    Parameters:
+    - dish_name: Tên món ăn
+    - video_url: URL video YouTube
+    - source: Nguồn video
+
+    Returns:
+    - Kết quả thêm video vào cache
+    """
+    try:
+        from services.video_cache_service import video_cache_service
+
+        success = video_cache_service.cache_video(dish_name, video_url, source)
+
+        if success:
+            return {
+                "success": True,
+                "dish_name": dish_name,
+                "video_url": video_url,
+                "source": source,
+                "message": "Video đã được thêm vào cache thành công"
+            }
+        else:
+            return {
+                "success": False,
+                "dish_name": dish_name,
+                "video_url": video_url,
+                "message": "Không thể thêm video vào cache"
+            }
+    except Exception as e:
+        logger.error(f"Lỗi khi thêm video vào cache cho '{dish_name}': {str(e)}")
+        return {
+            "success": False,
+            "dish_name": dish_name,
+            "video_url": video_url,
+            "message": f"Lỗi khi thêm video vào cache: {str(e)}"
+        }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

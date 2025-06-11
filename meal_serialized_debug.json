@@ -1,0 +1,132 @@
+{
+  "dishes": [
+    {
+      "name": "Sinh tố dâu với sữa chua",
+      "ingredients": [
+        {
+          "name": "dâu tây",
+          "amount": "100g"
+        },
+        {
+          "name": "sữa chua",
+          "amount": "150g"
+        },
+        {
+          "name": "mật ong",
+          "amount": "10g"
+        },
+        {
+          "name": "hạt lanh",
+          "amount": "5g"
+        }
+      ],
+      "preparation": [
+        "Xay dâu tây với sữa chua và mật ong.",
+        "Rắc hạt lanh lên trên khi phục vụ."
+      ],
+      "nutrition": {
+        "calories": 200,
+        "protein": 10,
+        "fat": 6.7,
+        "carbs": 23,
+        "fiber": null,
+        "sugar": null,
+        "saturated_fat": null,
+        "trans_fat": null,
+        "cholesterol": null,
+        "sodium": null,
+        "potassium": null,
+        "calcium": null,
+        "iron": null,
+        "vitamin_c": null,
+        "vitamin_a": null,
+        "caffeine": null,
+        "alcohol": null,
+        "glycemic_index": null,
+        "water_content": null
+      },
+      "dish_type": "main",
+      "region": "north",
+      "image_url": null,
+      "video_url": "https://www.youtube.com/watch?v=np1HMXdPqcM",
+      "preparation_time": "15-20 phút",
+      "health_benefits": [
+        "Ít calo, phù hợp cho người đang giảm cân"
+      ]
+    },
+    {
+      "name": "Bánh mì nguyên cám kẹp trứng",
+      "ingredients": [
+        {
+          "name": "bánh mì nguyên cám",
+          "amount": "2 lát"
+        },
+        {
+          "name": "trứng",
+          "amount": "2 quả"
+        },
+        {
+          "name": "rau bina",
+          "amount": "20g"
+        },
+        {
+          "name": "cà chua",
+          "amount": "50g"
+        }
+      ],
+      "preparation": [
+        "Chiên trứng, đặt lên bánh mì cùng với rau bina và cà chua thái lát."
+      ],
+      "nutrition": {
+        "calories": 200,
+        "protein": 10,
+        "fat": 6.7,
+        "carbs": 23,
+        "fiber": null,
+        "sugar": null,
+        "saturated_fat": null,
+        "trans_fat": null,
+        "cholesterol": null,
+        "sodium": null,
+        "potassium": null,
+        "calcium": null,
+        "iron": null,
+        "vitamin_c": null,
+        "vitamin_a": null,
+        "caffeine": null,
+        "alcohol": null,
+        "glycemic_index": null,
+        "water_content": null
+      },
+      "dish_type": "main",
+      "region": "north",
+      "image_url": null,
+      "video_url": "https://www.youtube.com/watch?v=np1HMXdPqcM",
+      "preparation_time": "15-20 phút",
+      "health_benefits": [
+        "Ít calo, phù hợp cho người đang giảm cân"
+      ]
+    }
+  ],
+  "nutrition": {
+    "calories": 400.0,
+    "protein": 20.0,
+    "fat": 13.4,
+    "carbs": 46.0,
+    "fiber": null,
+    "sugar": null,
+    "saturated_fat": null,
+    "trans_fat": null,
+    "cholesterol": null,
+    "sodium": null,
+    "potassium": null,
+    "calcium": null,
+    "iron": null,
+    "vitamin_c": null,
+    "vitamin_a": null,
+    "caffeine": null,
+    "alcohol": null,
+    "glycemic_index": null,
+    "water_content": null
+  }
+}

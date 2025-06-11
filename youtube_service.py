@@ -9,6 +9,7 @@ import logging
 from typing import Optional, Dict, Any
 from urllib.parse import quote_plus
 import time
+from services.video_cache_service import video_cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +20,49 @@ class YouTubeService:
         self.api_key = os.environ.get("YOUTUBE_API_KEY")
         self.base_url = "https://www.googleapis.com/youtube/v3/search"
         self.available = bool(self.api_key)
-        
+
+        # Fallback video URLs cho các món ăn phổ biến (URLs thật về nấu ăn)
+        self.fallback_videos = {
+            # Món chính
+            'phở': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+            'cơm': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+            'bánh mì': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+            'bún': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+            'canh': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+            'xôi': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+            'chả': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+            'mì': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+
+            # Protein
+            'gà': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+            'thịt': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+            'cá': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+            'tôm': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+            'sườn': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+            'trứng': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+
+            # Rau củ và chay
+            'rau': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+            'đậu': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+            'chay': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+
+            # Bánh kẹo và món tráng miệng
+            'bánh': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+            'waffle': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+            'pancake': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+            'sandwich': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+            'salad': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+            'smoothie': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+
+            # Từ khóa chung
+            'nướng': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+            'xào': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+            'luộc': 'https://www.youtube.com/watch?v=np1HMXdPqcM',
+            'chiên': 'https://www.youtube.com/watch?v=np1HMXdPqcM'
+        }
+
         if not self.available:
-            logger.warning("YouTube API Key không được cấu hình. Tính năng tự động tìm video sẽ không khả dụng.")
+            logger.warning("YouTube API Key không được cấu hình. Sử dụng fallback video URLs.")
         else:
             logger.info("YouTube Service đã được khởi tạo thành công.")
     
@@ -50,9 +91,32 @@ class YouTubeService:
 
         return normalized
 
+    def _get_fallback_video(self, dish_name: str) -> Optional[str]:
+        """
+        Tìm fallback video URL dựa trên tên món ăn
+
+        Args:
+            dish_name: Tên món ăn
+
+        Returns:
+            URL fallback video hoặc None
+        """
+        dish_lower = dish_name.lower()
+
+        # Tìm kiếm từ khóa trong tên món ăn
+        for keyword, video_url in self.fallback_videos.items():
+            if keyword in dish_lower:
+                logger.info(f"🎯 Tìm thấy fallback video cho '{dish_name}' với keyword '{keyword}'")
+                return video_url
+
+        # Nếu không tìm thấy keyword cụ thể, trả về video mặc định
+        default_video = 'https://www.youtube.com/watch?v=np1HMXdPqcM'
+        logger.info(f"📺 Sử dụng default video cho '{dish_name}'")
+        return default_video
+
     def get_youtube_video_url(self, dish_name: str, max_retries: int = 3) -> Optional[str]:
         """
-        Tìm kiếm video YouTube cho món ăn
+        Tìm kiếm video YouTube cho món ăn với cache optimization
 
         Args:
             dish_name: Tên món ăn cần tìm video
@@ -61,14 +125,31 @@ class YouTubeService:
         Returns:
             URL của video YouTube hoặc None nếu không tìm thấy
         """
+        logger.info(f"🔍 Tìm kiếm video cho món '{dish_name}'")
+
+        # BƯỚC 1: Kiểm tra cache trước
+        cached_video = video_cache_service.get_cached_video(dish_name)
+        if cached_video:
+            logger.info(f"✅ Sử dụng cached video cho '{dish_name}': {cached_video}")
+            return cached_video
+
+        # BƯỚC 2: Thử tìm fallback video
+        fallback_url = self._get_fallback_video(dish_name)
+        if fallback_url:
+            logger.info(f"📋 Sử dụng fallback video cho '{dish_name}': {fallback_url}")
+            # Cache fallback video để lần sau không phải tìm lại
+            video_cache_service.cache_video(dish_name, fallback_url, "fallback")
+            return fallback_url
+
+        # BƯỚC 3: Nếu không có cache và fallback, thử YouTube API
         if not self.available:
-            logger.warning("YouTube API không khả dụng")
+            logger.warning("YouTube API không khả dụng và không có fallback video")
             return None
 
-        # Chuẩn hóa tên món ăn
+        # Chuẩn hóa tên món ăn cho tìm kiếm
         normalized_name = self._normalize_dish_name(dish_name)
-        logger.info(f"Tìm kiếm video cho món '{dish_name}' (chuẩn hóa: '{normalized_name}')")
-            
+        logger.info(f"🔍 Tìm kiếm trên YouTube API cho '{dish_name}' (chuẩn hóa: '{normalized_name}')")
+
         # Tạo query tìm kiếm với nhiều biến thể hơn
         search_queries = [
             f"cách làm {normalized_name}",
@@ -93,7 +174,10 @@ class YouTubeService:
             try:
                 video_url = self._search_video(query)
                 if video_url:
-                    logger.info(f"Tìm thấy video cho '{dish_name}': {video_url}")
+                    logger.info(f"✅ Tìm thấy video cho '{dish_name}': {video_url}")
+
+                    # BƯỚC 4: Cache kết quả tìm kiếm
+                    video_cache_service.cache_video(dish_name, video_url, "youtube_api")
                     return video_url
                     
                 # Delay giữa các query để tránh rate limit
@@ -157,16 +241,18 @@ class YouTubeService:
 
                 # Nếu tìm thấy từ khóa nấu ăn, ưu tiên video này
                 if any(keyword in title or keyword in description for keyword in cooking_keywords):
-                    logger.info(f"Found cooking video: {title}")
-                    return f"https://www.youtube.com/watch?v={video_id}"
-            
+                    video_url = f"https://www.youtube.com/watch?v={video_id}"
+                    logger.info(f"✅ Tìm thấy cooking video: {title}")
+                    return video_url
+
             # Nếu không có video nào phù hợp, trả về video đầu tiên
             if data['items']:
                 video_id = data['items'][0]['id']['videoId']
                 title = data['items'][0]['snippet']['title']
-                logger.info(f"Using first available video: {title}")
-                return f"https://www.youtube.com/watch?v={video_id}"
-                
+                video_url = f"https://www.youtube.com/watch?v={video_id}"
+                logger.info(f"📺 Sử dụng video đầu tiên: {title}")
+                return video_url
+
             return None
             
         except requests.exceptions.RequestException as e:

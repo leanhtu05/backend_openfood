@@ -75,12 +75,20 @@ class GeminiVisionService:
             
             # Prepare prompt for Gemini Vision
             prompt = """
-            Analyze this food image and provide comprehensive nutritional information:
+            Analyze this food image and identify EACH INDIVIDUAL FOOD COMPONENT separately:
 
-            1. Identify all food items visible in the image
-            2. For each identified food item, provide:
-               - Name of the food (in Vietnamese and English)
-               - Estimate of portion size
+            IMPORTANT: Break down complex dishes into individual components!
+
+            Examples:
+            - Bún chả → ["Bún", "Chả cá", "Rau sống", "Nước mắm pha"]
+            - Mâm cơm → ["Cơm trắng", "Thịt kho", "Canh chua", "Rau muống xào"]
+            - Phở bò → ["Bánh phở", "Thịt bò", "Nước dùng", "Hành lá", "Ngò gai"]
+            - Pizza → ["Bánh pizza", "Phô mai", "Xúc xích", "Cà chua"]
+
+            1. Identify ALL individual food components visible in the image
+            2. For each component, provide:
+               - Name of the food component (in Vietnamese and English)
+               - Estimate of portion size for that component
                - Comprehensive nutritional information including:
                  * Basic: calories, protein, fat, carbs
                  * Detailed: fiber, sugar, saturated fat, trans fat, cholesterol
@@ -123,12 +131,17 @@ class GeminiVisionService:
             }
 
             Important guidelines:
-            - Provide realistic estimates based on typical nutritional values for the food type
+            - ALWAYS break down complex dishes into individual components
+            - Each component should be listed separately with its own nutrition
+            - For combo dishes (like bún chả), list each part: bún, chả, vegetables, sauce
+            - For meals with multiple dishes, list each dish separately
+            - Provide realistic estimates based on typical nutritional values for each component
             - Use null for nutrients that are not applicable (e.g., caffeine in vegetables)
             - For glycemic index: Low (0-55), Medium (56-69), High (70-100)
             - Water content as percentage (0-100)
             - All mineral/vitamin values should be reasonable for the portion size
             - Do not include explanations or text outside the JSON
+            - Focus on identifying as many individual components as possible
             """
             
             # Configure generation parameters

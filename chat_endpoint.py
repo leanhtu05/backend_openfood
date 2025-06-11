@@ -93,21 +93,24 @@ class ChatHistoryManager:
             return []
 
 # Hàm định dạng dữ liệu người dùng thành context
-def format_user_context(user_profile, meal_plan, food_logs, exercise_history=None, water_intake=None):
+def format_user_context(user_profile, meal_plan, food_logs, exercise_history=None, water_intake=None, exercise_date=None, water_date=None):
     """
     Định dạng dữ liệu người dùng thành một đoạn văn bản context cho chatbot
-    
+
     Args:
         user_profile: Dữ liệu hồ sơ người dùng
         meal_plan: Dữ liệu kế hoạch ăn uống
         food_logs: Danh sách các bản ghi thực phẩm đã ăn
         exercise_history: Lịch sử bài tập của người dùng
         water_intake: Lượng nước uống trong ngày
-        
+        exercise_date: Ngày của dữ liệu bài tập (nếu khác hôm nay)
+        water_date: Ngày của dữ liệu nước uống (nếu khác hôm nay)
+
     Returns:
         Đoạn văn bản context đã định dạng
     """
     context_parts = []
+    today_str = datetime.now().strftime("%Y-%m-%d")
     
     # Thông tin hồ sơ
     if user_profile:
@@ -220,10 +223,20 @@ def format_user_context(user_profile, meal_plan, food_logs, exercise_history=Non
                 exercise_list.append(f"{exercise_name} ({duration} phút)")
         
         if exercise_list:
-            context_parts.append(f"- Bài tập hôm nay: Đã tập {len(exercise_history)} bài tập: {', '.join(exercise_list)}. "
-                               f"Tổng calo đã đốt: {burned_calories} kcal.")
+            if exercise_date and exercise_date != today_str:
+                # Dữ liệu từ ngày khác - hiển thị rõ ràng
+                context_parts.append(f"- Bài tập hôm nay: Chưa ghi nhận bài tập nào. "
+                                   f"(Gần nhất: {exercise_date} đã tập {len(exercise_history)} bài tập: {', '.join(exercise_list)}, đốt {burned_calories} kcal)")
+            else:
+                # Dữ liệu hôm nay
+                context_parts.append(f"- Bài tập hôm nay: Đã tập {len(exercise_history)} bài tập: {', '.join(exercise_list)}. "
+                                   f"Tổng calo đã đốt: {burned_calories} kcal.")
         else:
-            context_parts.append(f"- Bài tập hôm nay: Đã ghi nhận {len(exercise_history)} hoạt động nhưng không có thông tin chi tiết.")
+            if exercise_date and exercise_date != today_str:
+                context_parts.append(f"- Bài tập hôm nay: Chưa ghi nhận bài tập nào. "
+                                   f"(Gần nhất: {exercise_date} có {len(exercise_history)} hoạt động)")
+            else:
+                context_parts.append(f"- Bài tập hôm nay: Đã ghi nhận {len(exercise_history)} hoạt động nhưng không có thông tin chi tiết.")
     else:
         context_parts.append("- Bài tập hôm nay: Chưa ghi nhận bài tập nào.")
     
@@ -255,8 +268,14 @@ def format_user_context(user_profile, meal_plan, food_logs, exercise_history=Non
         water_target_liter = water_target / 1000
         percentage = (total_water_liter / water_target_liter) * 100 if water_target_liter > 0 else 0
         
-        context_parts.append(f"- Nước uống hôm nay: Đã uống {total_water_liter:.1f} lít nước "
-                          f"({percentage:.0f}% mục tiêu {water_target_liter:.1f} lít).")
+        if water_date and water_date != today_str:
+            # Dữ liệu từ ngày khác - hiển thị rõ ràng
+            context_parts.append(f"- Nước uống hôm nay: Chưa ghi nhận lượng nước uống nào. "
+                              f"(Gần nhất: {water_date} đã uống {total_water_liter:.1f} lít - {percentage:.0f}% mục tiêu)")
+        else:
+            # Dữ liệu hôm nay
+            context_parts.append(f"- Nước uống hôm nay: Đã uống {total_water_liter:.1f} lít nước "
+                              f"({percentage:.0f}% mục tiêu {water_target_liter:.1f} lít).")
     else:
         context_parts.append("- Nước uống hôm nay: Chưa ghi nhận lượng nước uống nào.")
         
@@ -303,28 +322,53 @@ def chat():
                 
                 # 3. Lấy nhật ký ăn uống hôm nay
                 today_str = datetime.now().strftime("%Y-%m-%d")
+                print(f"[DEBUG] Đang truy vấn dữ liệu cho ngày: {today_str}")
                 food_logs_today = firestore_service.get_food_logs_by_date(user_id, today_str) or []
-                
-                # 4. Lấy thông tin bài tập hôm nay - chờ thêm để đảm bảo dữ liệu được đồng bộ
+
+                # 4. Lấy thông tin bài tập hôm nay - với fallback logic
                 print(f"[DEBUG] Đang truy vấn dữ liệu bài tập cho user {user_id}...")
-                time.sleep(0.5)  # Chờ 0.5 giây để đảm bảo dữ liệu được đồng bộ
                 exercise_history = firestore_service.get_exercise_history(user_id, start_date=today_str, end_date=today_str) or []
-                
-                # 5. Lấy thông tin nước uống hôm nay - chờ thêm để đảm bảo dữ liệu được đồng bộ
+
+                # Nếu không có dữ liệu hôm nay, thử tìm dữ liệu gần nhất (trong 7 ngày qua)
+                exercise_date = today_str  # Mặc định là hôm nay
+                if not exercise_history:
+                    from datetime import timedelta
+                    for days_back in range(1, 8):  # Tìm trong 7 ngày qua
+                        past_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+                        exercise_history = firestore_service.get_exercise_history(user_id, start_date=past_date, end_date=past_date) or []
+                        if exercise_history:
+                            exercise_date = past_date
+                            print(f"[DEBUG] Tìm thấy dữ liệu bài tập gần nhất vào ngày: {past_date}")
+                            break
+
+                # 5. Lấy thông tin nước uống hôm nay - với fallback logic
                 print(f"[DEBUG] Đang truy vấn dữ liệu nước uống cho user {user_id}...")
-                time.sleep(0.5)  # Chờ 0.5 giây để đảm bảo dữ liệu được đồng bộ
                 water_intake = firestore_service.get_water_intake_by_date(user_id, today_str) or []
+
+                # Nếu không có dữ liệu hôm nay, thử tìm dữ liệu gần nhất (trong 7 ngày qua)
+                water_date = today_str  # Mặc định là hôm nay
+                if not water_intake:
+                    from datetime import timedelta
+                    for days_back in range(1, 8):  # Tìm trong 7 ngày qua
+                        past_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+                        water_intake = firestore_service.get_water_intake_by_date(user_id, past_date) or []
+                        if water_intake:
+                            water_date = past_date
+                            print(f"[DEBUG] Tìm thấy dữ liệu nước uống gần nhất vào ngày: {past_date}")
+                            break
                 
                 # Kiểm tra các collection Firebase đang sử dụng
                 print(f"[DEBUG] Kiểm tra collections Firebase: users, exercises, exercise_histories, water_entries, water_intake")
                 
                 # Tạo context từ dữ liệu đã truy xuất
                 context_data = format_user_context(
-                    user_profile, 
-                    meal_plan_dict, 
+                    user_profile,
+                    meal_plan_dict,
                     food_logs_today,
                     exercise_history,
-                    water_intake
+                    water_intake,
+                    exercise_date,
+                    water_date
                 )
                 
                 # Xây dựng prompt thông minh

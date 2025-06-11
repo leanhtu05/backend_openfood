@@ -331,8 +331,12 @@ def chat():
                 food_logs_today = firestore_service.get_food_logs_by_date(user_id, today_str) or []
 
                 # 4. Lấy thông tin bài tập hôm nay - với fallback logic
-                print(f"[DEBUG] Đang truy vấn dữ liệu bài tập cho user {user_id}...")
+                print(f"[DEBUG] Đang truy vấn dữ liệu bài tập cho user {user_id} với ngày {today_str}...")
                 exercise_history = firestore_service.get_exercise_history(user_id, start_date=today_str, end_date=today_str) or []
+                print(f"[DEBUG] Tìm thấy {len(exercise_history)} bài tập cho ngày {today_str}")
+                if exercise_history:
+                    for ex in exercise_history:
+                        print(f"[DEBUG] Bài tập: {ex.get('exercise_name', 'N/A')} - {ex.get('date', 'N/A')}")
 
                 # Nếu không có dữ liệu hôm nay, thử tìm dữ liệu gần nhất (trong 7 ngày qua)
                 exercise_date = today_str  # Mặc định là hôm nay
@@ -346,8 +350,12 @@ def chat():
                             break
 
                 # 5. Lấy thông tin nước uống hôm nay - với fallback logic
-                print(f"[DEBUG] Đang truy vấn dữ liệu nước uống cho user {user_id}...")
+                print(f"[DEBUG] Đang truy vấn dữ liệu nước uống cho user {user_id} với ngày {today_str}...")
                 water_intake = firestore_service.get_water_intake_by_date(user_id, today_str) or []
+                print(f"[DEBUG] Tìm thấy {len(water_intake)} lượt uống nước cho ngày {today_str}")
+                if water_intake:
+                    for water in water_intake:
+                        print(f"[DEBUG] Nước uống: {water.get('amount_ml', 'N/A')}ml - {water.get('date', 'N/A')}")
 
                 # Nếu không có dữ liệu hôm nay, thử tìm dữ liệu gần nhất (trong 7 ngày qua)
                 water_date = today_str  # Mặc định là hôm nay

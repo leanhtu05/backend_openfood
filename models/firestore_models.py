@@ -244,7 +244,7 @@ class Exercise(BaseModel):
     difficulty: str = Field(default="medium", description="Độ khó (easy, medium, hard)")
     muscle_groups: List[str] = Field(default_factory=list, description="Các nhóm cơ được tác động")
     image_url: Optional[str] = Field(default=None, description="URL hình ảnh minh họa")
-    video_url: Optional[str] = Field(default=None, description="URL video hướng dẫn")
+    # video_url removed
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat(), description="Thời gian tạo")
     
     def to_dict(self) -> Dict[str, Any]:
@@ -256,7 +256,7 @@ class Exercise(BaseModel):
             "difficulty": self.difficulty,
             "muscle_groups": self.muscle_groups,
             "image_url": self.image_url,
-            "video_url": self.video_url,
+            # "video_url": removed,
             "created_at": self.created_at
         }
     

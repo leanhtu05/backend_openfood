@@ -132,7 +132,7 @@ class Dish(BaseModel):
     dish_type: str = DishType.MAIN  # Default to main dish
     region: str = VietnamRegion.NORTH  # Default to northern region
     image_url: Optional[str] = None
-    video_url: Optional[str] = None  # URL video hướng dẫn nấu ăn
+    # video_url removed
     preparation_time: Optional[str] = None  # Thời gian chuẩn bị
     health_benefits: Optional[Union[List[str], str]] = None  # Lợi ích sức khỏe
     
@@ -169,24 +169,7 @@ class Meal(BaseModel):
     dishes: List[Dish]
     nutrition: NutritionInfo
 
-    def dict(self, *args, **kwargs):
-        """Custom dict method để đảm bảo video_url được serialize"""
-        try:
-            result = super().model_dump(*args, **kwargs)
-        except AttributeError:
-            result = super().dict(*args, **kwargs)
-
-        # Đảm bảo tất cả dishes có video_url
-        if 'dishes' in result:
-            for dish in result['dishes']:
-                if 'video_url' not in dish:
-                    dish['video_url'] = None
-
-        return result
-
-    def model_dump(self, *args, **kwargs):
-        """Pydantic v2 compatible model_dump method"""
-        return self.dict(*args, **kwargs)
+    # video_url serialization logic removed
 
 class DayMealPlan(BaseModel):
     day_of_week: str

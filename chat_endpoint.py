@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import os
 import uuid
 import time
+import re
 from datetime import datetime, timezone, timedelta
 from openai import OpenAI
 from firebase_config import firebase_config
@@ -96,7 +97,7 @@ class ChatHistoryManager:
             return []
 
 # Hàm định dạng dữ liệu người dùng thành context
-def format_user_context(user_profile, meal_plan, food_logs, exercise_history=None, water_intake=None, exercise_date=None, water_date=None):
+def format_user_context(user_profile, meal_plan, food_logs, exercise_history=None, water_intake=None, exercise_date=None, water_date=None, target_date=None, context_type='today'):
     """
     Định dạng dữ liệu người dùng thành một đoạn văn bản context cho chatbot
 
@@ -108,12 +109,31 @@ def format_user_context(user_profile, meal_plan, food_logs, exercise_history=Non
         water_intake: Lượng nước uống trong ngày
         exercise_date: Ngày của dữ liệu bài tập (nếu khác hôm nay)
         water_date: Ngày của dữ liệu nước uống (nếu khác hôm nay)
+        target_date: Ngày được yêu cầu (YYYY-MM-DD)
+        context_type: Loại ngữ cảnh thời gian ('today', 'yesterday', 'specific_date', 'relative')
 
     Returns:
         Đoạn văn bản context đã định dạng
     """
     context_parts = []
     today_str = datetime.now(VIETNAM_TZ).strftime("%Y-%m-%d")
+
+    # Xác định nhãn thời gian dựa trên context_type
+    if context_type == 'yesterday':
+        time_label = "hôm qua"
+        target_date_display = target_date if target_date else (datetime.now(VIETNAM_TZ) - timedelta(days=1)).strftime("%Y-%m-%d")
+    elif context_type == 'today':
+        time_label = "hôm nay"
+        target_date_display = target_date if target_date else today_str
+    elif context_type == 'specific_date':
+        time_label = f"ngày {target_date}"
+        target_date_display = target_date
+    elif context_type == 'relative':
+        time_label = f"ngày {target_date}"
+        target_date_display = target_date
+    else:
+        time_label = "hôm nay"
+        target_date_display = today_str
     
     # Thông tin hồ sơ
     if user_profile:
@@ -192,12 +212,12 @@ def format_user_context(user_profile, meal_plan, food_logs, exercise_history=Non
                 eaten_dishes.append(log.get('description'))
         
         if eaten_dishes:
-            context_parts.append(f"- Nhật ký đã ăn hôm nay: Đã ăn {len(food_logs)} bữa với các món: {', '.join(eaten_dishes)}. "
+            context_parts.append(f"- Nhật ký đã ăn {time_label}: Đã ăn {len(food_logs)} bữa với các món: {', '.join(eaten_dishes)}. "
                               f"Tổng calo đã nạp: {eaten_calories} kcal.")
         else:
-            context_parts.append(f"- Nhật ký đã ăn hôm nay: Đã ghi nhận {len(food_logs)} bữa ăn nhưng không có thông tin chi tiết.")
+            context_parts.append(f"- Nhật ký đã ăn {time_label}: Đã ghi nhận {len(food_logs)} bữa ăn nhưng không có thông tin chi tiết.")
     else:
-        context_parts.append("- Nhật ký đã ăn hôm nay: Chưa ghi nhận bữa nào.")
+        context_parts.append(f"- Nhật ký đã ăn {time_label}: Chưa ghi nhận bữa nào.")
     
     # Thông tin bài tập
     if exercise_history:
@@ -226,34 +246,34 @@ def format_user_context(user_profile, meal_plan, food_logs, exercise_history=Non
                 exercise_list.append(f"{exercise_name} ({duration} phút)")
         
         if exercise_list:
-            if exercise_date and exercise_date != today_str:
+            if exercise_date and exercise_date != target_date_display:
                 # Dữ liệu từ ngày khác - hiển thị rõ ràng
-                context_parts.append(f"- Bài tập hôm nay: Chưa ghi nhận bài tập nào. "
+                context_parts.append(f"- Bài tập {time_label}: Chưa ghi nhận bài tập nào. "
                                    f"(Gần nhất: {exercise_date} đã tập {len(exercise_history)} bài tập: {', '.join(exercise_list)}, đốt {burned_calories} kcal)")
             else:
-                # Dữ liệu hôm nay
-                context_parts.append(f"- Bài tập hôm nay: Đã tập {len(exercise_history)} bài tập: {', '.join(exercise_list)}. "
+                # Dữ liệu đúng ngày được yêu cầu
+                context_parts.append(f"- Bài tập {time_label}: Đã tập {len(exercise_history)} bài tập: {', '.join(exercise_list)}. "
                                    f"Tổng calo đã đốt: {burned_calories} kcal.")
         else:
-            if exercise_date and exercise_date != today_str:
-                context_parts.append(f"- Bài tập hôm nay: Chưa ghi nhận bài tập nào. "
+            if exercise_date and exercise_date != target_date_display:
+                context_parts.append(f"- Bài tập {time_label}: Chưa ghi nhận bài tập nào. "
                                    f"(Gần nhất: {exercise_date} có {len(exercise_history)} hoạt động)")
             else:
-                context_parts.append(f"- Bài tập hôm nay: Đã ghi nhận {len(exercise_history)} hoạt động nhưng không có thông tin chi tiết.")
+                context_parts.append(f"- Bài tập {time_label}: Đã ghi nhận {len(exercise_history)} hoạt động nhưng không có thông tin chi tiết.")
     else:
-        context_parts.append("- Bài tập hôm nay: Chưa ghi nhận bài tập nào.")
+        context_parts.append(f"- Bài tập {time_label}: Chưa ghi nhận bài tập nào.")
     
     # Thông tin nước uống
     if water_intake:
         # Tính tổng lượng nước đã uống
         total_water_ml = 0
         for intake in water_intake:
-            # Cách 1: Từ amount_ml (cấu trúc cũ)
-            if 'amount_ml' in intake:
-                total_water_ml += intake.get('amount_ml', 0)
-            # Cách 2: Từ amount (cấu trúc mới)
-            elif 'amount' in intake:
+            # Cách 1: Từ amount (cấu trúc mới từ Flutter)
+            if 'amount' in intake:
                 total_water_ml += intake.get('amount', 0)
+            # Cách 2: Từ amount_ml (cấu trúc cũ)
+            elif 'amount_ml' in intake:
+                total_water_ml += intake.get('amount_ml', 0)
         
         # Chuyển đổi sang lít
         total_water_liter = total_water_ml / 1000
@@ -271,18 +291,95 @@ def format_user_context(user_profile, meal_plan, food_logs, exercise_history=Non
         water_target_liter = water_target / 1000
         percentage = (total_water_liter / water_target_liter) * 100 if water_target_liter > 0 else 0
         
-        if water_date and water_date != today_str:
+        if water_date and water_date != target_date_display:
             # Dữ liệu từ ngày khác - hiển thị rõ ràng
-            context_parts.append(f"- Nước uống hôm nay: Chưa ghi nhận lượng nước uống nào. "
+            context_parts.append(f"- Nước uống {time_label}: Chưa ghi nhận lượng nước uống nào. "
                               f"(Gần nhất: {water_date} đã uống {total_water_liter:.1f} lít - {percentage:.0f}% mục tiêu)")
         else:
-            # Dữ liệu hôm nay
-            context_parts.append(f"- Nước uống hôm nay: Đã uống {total_water_liter:.1f} lít nước "
+            # Dữ liệu đúng ngày được yêu cầu
+            context_parts.append(f"- Nước uống {time_label}: Đã uống {total_water_liter:.1f} lít nước "
                               f"({percentage:.0f}% mục tiêu {water_target_liter:.1f} lít).")
     else:
-        context_parts.append("- Nước uống hôm nay: Chưa ghi nhận lượng nước uống nào.")
+        context_parts.append(f"- Nước uống {time_label}: Chưa ghi nhận lượng nước uống nào.")
         
     return "\n".join(context_parts)
+
+def parse_date_context(user_message):
+    """
+    Phân tích tin nhắn người dùng để xác định ngày được hỏi
+
+    Args:
+        user_message: Tin nhắn của người dùng
+
+    Returns:
+        tuple: (target_date_str, context_type)
+        - target_date_str: Ngày được yêu cầu (YYYY-MM-DD)
+        - context_type: Loại ngữ cảnh ('today', 'yesterday', 'specific_date', 'relative')
+    """
+    vietnam_now = datetime.now(VIETNAM_TZ)
+    today_str = vietnam_now.strftime("%Y-%m-%d")
+    yesterday_str = (vietnam_now - timedelta(days=1)).strftime("%Y-%m-%d")
+
+    # Chuyển tin nhắn về chữ thường để dễ phân tích
+    message_lower = user_message.lower().strip()
+
+    # Các từ khóa chỉ thời gian
+    yesterday_keywords = ['hôm qua', 'ngày hôm qua', 'qua', 'yesterday']
+    today_keywords = ['hôm nay', 'ngày hôm nay', 'today', 'hiện tại']
+
+    # Kiểm tra từ khóa "hôm qua"
+    for keyword in yesterday_keywords:
+        if keyword in message_lower:
+            return yesterday_str, 'yesterday'
+
+    # Kiểm tra từ khóa "hôm nay"
+    for keyword in today_keywords:
+        if keyword in message_lower:
+            return today_str, 'today'
+
+    # Kiểm tra các ngày tương đối khác
+    relative_patterns = [
+        (r'(\d+)\s*ngày\s*trước', lambda x: (vietnam_now - timedelta(days=int(x))).strftime("%Y-%m-%d")),
+        (r'(\d+)\s*ngày\s*qua', lambda x: (vietnam_now - timedelta(days=int(x))).strftime("%Y-%m-%d")),
+        (r'tuần\s*trước', lambda _: (vietnam_now - timedelta(days=7)).strftime("%Y-%m-%d")),
+        (r'tuần\s*qua', lambda _: (vietnam_now - timedelta(days=7)).strftime("%Y-%m-%d"))
+    ]
+
+    for pattern, date_func in relative_patterns:
+        match = re.search(pattern, message_lower)
+        if match:
+            try:
+                if pattern.startswith(r'(\d+)'):
+                    days = match.group(1)
+                    return date_func(days), 'relative'
+                else:
+                    return date_func(None), 'relative'
+            except:
+                continue
+
+    # Kiểm tra định dạng ngày cụ thể (DD/MM/YYYY, DD-MM-YYYY)
+    date_patterns = [
+        r'(\d{1,2})[/-](\d{1,2})[/-](\d{4})',  # DD/MM/YYYY hoặc DD-MM-YYYY
+        r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})'   # YYYY/MM/DD hoặc YYYY-MM-DD
+    ]
+
+    for pattern in date_patterns:
+        match = re.search(pattern, message_lower)
+        if match:
+            try:
+                if pattern.startswith(r'(\d{1,2})'):  # DD/MM/YYYY
+                    day, month, year = match.groups()
+                    target_date = datetime(int(year), int(month), int(day))
+                else:  # YYYY/MM/DD
+                    year, month, day = match.groups()
+                    target_date = datetime(int(year), int(month), int(day))
+
+                return target_date.strftime("%Y-%m-%d"), 'specific_date'
+            except:
+                continue
+
+    # Mặc định trả về hôm nay
+    return today_str, 'today'
 
 # Khởi tạo đối tượng quản lý lịch sử chat
 chat_history = ChatHistoryManager()
@@ -315,33 +412,38 @@ def chat():
                 print(f"Chat request for user: {user_id}")
                 # Import module firestore_service
                 from services.firestore_service import firestore_service
-                
+
+                # 0. Phân tích ngữ cảnh thời gian từ tin nhắn người dùng
+                target_date, context_type = parse_date_context(user_message)
+                print(f"[DEBUG] 🕐 Phân tích ngữ cảnh: target_date={target_date}, context_type={context_type}")
+
                 # 1. Lấy hồ sơ người dùng
                 user_profile = firestore_service.get_user(user_id) or {}
-                
+
                 # 2. Lấy kế hoạch ăn mới nhất
                 meal_plan_data = firestore_service.get_latest_meal_plan(user_id)
                 meal_plan_dict = meal_plan_data.dict() if meal_plan_data else {}
-                
-                # 3. Lấy nhật ký ăn uống hôm nay
+
+                # 3. Lấy nhật ký ăn uống theo ngày được yêu cầu
                 vietnam_now = datetime.now(VIETNAM_TZ)
                 today_str = vietnam_now.strftime("%Y-%m-%d")
                 print(f"[DEBUG] ⏰ Thời gian hiện tại (VN): {vietnam_now.isoformat()}")
-                print(f"[DEBUG] 📅 Đang truy vấn dữ liệu cho ngày: {today_str}")
+                print(f"[DEBUG] 📅 Đang truy vấn dữ liệu cho ngày: {target_date} (context: {context_type})")
                 print(f"[DEBUG] 🌏 Timezone: {VIETNAM_TZ}")
-                food_logs_today = firestore_service.get_food_logs_by_date(user_id, today_str) or []
+                food_logs_target = firestore_service.get_food_logs_by_date(user_id, target_date) or []
 
-                # 4. Lấy thông tin bài tập hôm nay - với fallback logic
-                print(f"[DEBUG] Đang truy vấn dữ liệu bài tập cho user {user_id} với ngày {today_str}...")
-                exercise_history = firestore_service.get_exercise_history(user_id, start_date=today_str, end_date=today_str) or []
-                print(f"[DEBUG] Tìm thấy {len(exercise_history)} bài tập cho ngày {today_str}")
+                # 4. Lấy thông tin bài tập theo ngày được yêu cầu - với fallback logic
+                print(f"[DEBUG] Đang truy vấn dữ liệu bài tập cho user {user_id} với ngày {target_date}...")
+                exercise_history = firestore_service.get_exercise_history(user_id, start_date=target_date, end_date=target_date) or []
+                print(f"[DEBUG] Tìm thấy {len(exercise_history)} bài tập cho ngày {target_date}")
                 if exercise_history:
                     for ex in exercise_history:
                         print(f"[DEBUG] Bài tập: {ex.get('exercise_name', 'N/A')} - {ex.get('date', 'N/A')}")
 
-                # Nếu không có dữ liệu hôm nay, thử tìm dữ liệu gần nhất (trong 7 ngày qua)
-                exercise_date = today_str  # Mặc định là hôm nay
-                if not exercise_history:
+                # Nếu không có dữ liệu cho ngày được yêu cầu, thử tìm dữ liệu gần nhất (trong 7 ngày qua)
+                exercise_date = target_date  # Mặc định là ngày được yêu cầu
+                if not exercise_history and context_type in ['today', 'yesterday']:
+                    # Chỉ fallback khi hỏi về hôm nay/hôm qua
                     for days_back in range(1, 8):  # Tìm trong 7 ngày qua
                         past_date = (datetime.now(VIETNAM_TZ) - timedelta(days=days_back)).strftime("%Y-%m-%d")
                         exercise_history = firestore_service.get_exercise_history(user_id, start_date=past_date, end_date=past_date) or []
@@ -350,17 +452,18 @@ def chat():
                             print(f"[DEBUG] Tìm thấy dữ liệu bài tập gần nhất vào ngày: {past_date}")
                             break
 
-                # 5. Lấy thông tin nước uống hôm nay - với fallback logic
-                print(f"[DEBUG] Đang truy vấn dữ liệu nước uống cho user {user_id} với ngày {today_str}...")
-                water_intake = firestore_service.get_water_intake_by_date(user_id, today_str) or []
-                print(f"[DEBUG] Tìm thấy {len(water_intake)} lượt uống nước cho ngày {today_str}")
+                # 5. Lấy thông tin nước uống theo ngày được yêu cầu - với fallback logic
+                print(f"[DEBUG] Đang truy vấn dữ liệu nước uống cho user {user_id} với ngày {target_date}...")
+                water_intake = firestore_service.get_water_intake_by_date(user_id, target_date) or []
+                print(f"[DEBUG] Tìm thấy {len(water_intake)} lượt uống nước cho ngày {target_date}")
                 if water_intake:
                     for water in water_intake:
                         print(f"[DEBUG] Nước uống: {water.get('amount_ml', 'N/A')}ml - {water.get('date', 'N/A')}")
 
-                # Nếu không có dữ liệu hôm nay, thử tìm dữ liệu gần nhất (trong 7 ngày qua)
-                water_date = today_str  # Mặc định là hôm nay
-                if not water_intake:
+                # Nếu không có dữ liệu cho ngày được yêu cầu, thử tìm dữ liệu gần nhất (trong 7 ngày qua)
+                water_date = target_date  # Mặc định là ngày được yêu cầu
+                if not water_intake and context_type in ['today', 'yesterday']:
+                    # Chỉ fallback khi hỏi về hôm nay/hôm qua
                     for days_back in range(1, 8):  # Tìm trong 7 ngày qua
                         past_date = (datetime.now(VIETNAM_TZ) - timedelta(days=days_back)).strftime("%Y-%m-%d")
                         water_intake = firestore_service.get_water_intake_by_date(user_id, past_date) or []
@@ -376,21 +479,35 @@ def chat():
                 context_data = format_user_context(
                     user_profile,
                     meal_plan_dict,
-                    food_logs_today,
+                    food_logs_target,
                     exercise_history,
                     water_intake,
                     exercise_date,
-                    water_date
+                    water_date,
+                    target_date,
+                    context_type
                 )
                 
-                # Xây dựng prompt thông minh
-                augmented_prompt = f"""Bạn là một trợ lý dinh dưỡng ảo tên là DietAI. Nhiệm vụ của bạn là trả lời câu hỏi của người dùng dựa trên thông tin cá nhân và hoạt động hàng ngày của họ.
+                # Xây dựng prompt thông minh với ngữ cảnh thời gian
+                time_context_note = ""
+                if context_type == 'yesterday':
+                    time_context_note = f"\n⚠️ LƯU Ý QUAN TRỌNG: Người dùng đang hỏi về HÔM QUA ({target_date}), KHÔNG PHẢI hôm nay. Hãy trả lời chính xác về dữ liệu hôm qua."
+                elif context_type == 'specific_date':
+                    time_context_note = f"\n⚠️ LƯU Ý QUAN TRỌNG: Người dùng đang hỏi về ngày {target_date}, KHÔNG PHẢI hôm nay. Hãy trả lời chính xác về dữ liệu ngày đó."
+                elif context_type == 'relative':
+                    time_context_note = f"\n⚠️ LƯU Ý QUAN TRỌNG: Người dùng đang hỏi về ngày {target_date}, KHÔNG PHẢI hôm nay. Hãy trả lời chính xác về dữ liệu ngày đó."
+
+                augmented_prompt = f"""Bạn là một trợ lý dinh dưỡng ảo tên là DietAI. Nhiệm vụ của bạn là trả lời câu hỏi của người dùng dựa trên thông tin cá nhân và hoạt động hàng ngày của họ.{time_context_note}
 
 --- DỮ LIỆU CÁ NHÂN CỦA NGƯỜI DÙNG ---
 {context_data}
 --- KẾT THÚC DỮ LIỆU ---
 
-Dựa vào các thông tin trên, hãy trả lời câu hỏi sau của người dùng một cách thân thiện và chính xác bằng tiếng Việt:
+HƯỚNG DẪN TRẢI LỜI:
+1. Đọc kỹ dữ liệu trên và chú ý đến ngày cụ thể được đề cập
+2. Trả lời chính xác theo ngày mà người dùng hỏi (hôm nay, hôm qua, hay ngày cụ thể)
+3. Nếu không có dữ liệu cho ngày được hỏi, hãy nói rõ "không có dữ liệu" thay vì dùng dữ liệu từ ngày khác
+4. Sử dụng ngôn ngữ thân thiện và chính xác bằng tiếng Việt
 
 Câu hỏi: "{user_message}"
 """

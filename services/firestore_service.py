@@ -1323,62 +1323,101 @@ class FirestoreService:
             intakes = []
             processed_ids = set()  # Theo dõi các ID đã xử lý để tránh trùng lặp
 
-            # Truy vấn với trường user_id
-            query1 = self.db.collection('water_entries').where(
-                filter=FieldFilter('user_id', '==', user_id)
-            ).where(
-                filter=FieldFilter('date', '==', date)
-            )
+            print(f"[DEBUG] 🔍 Tìm kiếm nước uống cho user {user_id} ngày {date}")
 
-            results1 = query1.get()
+            # PHƯƠNG PHÁP 1: Truy vấn với trường date (cấu trúc cũ)
+            try:
+                query1 = self.db.collection('water_entries').where(
+                    filter=FieldFilter('user_id', '==', user_id)
+                ).where(
+                    filter=FieldFilter('date', '==', date)
+                )
+                results1 = query1.get()
+                print(f"[DEBUG] 📊 Query 1 (user_id + date): {len(results1)} kết quả")
 
-            # Truy vấn với trường userId (vì có thể một số bản ghi sử dụng userId)
-            query2 = self.db.collection('water_entries').where(
-                filter=FieldFilter('userId', '==', user_id)
-            ).where(
-                filter=FieldFilter('date', '==', date)
-            )
+                for doc in results1:
+                    if doc.id not in processed_ids:
+                        data = doc.to_dict()
+                        data['doc_id'] = doc.id
+                        intakes.append(data)
+                        processed_ids.add(doc.id)
+            except Exception as e:
+                print(f"[DEBUG] ⚠️ Query 1 failed: {e}")
 
-            results2 = query2.get()
-            
-            # Xử lý kết quả từ truy vấn thứ nhất
-            for doc in results1:
-                doc_id = doc.id
-                
-                # Nếu ID này chưa được xử lý
-                if doc_id not in processed_ids:
-                    processed_ids.add(doc_id)
-                    data = doc.to_dict()
-                    data['id'] = doc_id  # Thêm ID vào dữ liệu
-                    
-                    # Đảm bảo có trường amount_ml
-                    if 'amount' in data and 'amount_ml' not in data:
-                        data['amount_ml'] = data['amount']
-                    elif 'quantity' in data and 'amount_ml' not in data:
-                        data['amount_ml'] = data['quantity']
-                    
-                    intakes.append(data)
-            
-            # Xử lý kết quả từ truy vấn thứ hai, chỉ thêm vào nếu ID chưa tồn tại
-            for doc in results2:
-                doc_id = doc.id
-                
-                # Nếu ID này chưa được xử lý
-                if doc_id not in processed_ids:
-                    processed_ids.add(doc_id)
-                    data = doc.to_dict()
-                    data['id'] = doc_id  # Thêm ID vào dữ liệu
-                    
-                    # Đảm bảo có trường amount_ml
-                    if 'amount' in data and 'amount_ml' not in data:
-                        data['amount_ml'] = data['amount']
-                    elif 'quantity' in data and 'amount_ml' not in data:
-                        data['amount_ml'] = data['quantity']
-                    
-                    intakes.append(data)
-            
-            # Sắp xếp theo timestamp nếu có
-            # Đảm bảo chuyển đổi timestamp thành cùng kiểu dữ liệu trước khi so sánh
+            # PHƯƠNG PHÁP 2: Truy vấn với userId + date (cấu trúc cũ)
+            try:
+                query2 = self.db.collection('water_entries').where(
+                    filter=FieldFilter('userId', '==', user_id)
+                ).where(
+                    filter=FieldFilter('date', '==', date)
+                )
+                results2 = query2.get()
+                print(f"[DEBUG] 📊 Query 2 (userId + date): {len(results2)} kết quả")
+
+                for doc in results2:
+                    if doc.id not in processed_ids:
+                        data = doc.to_dict()
+                        data['doc_id'] = doc.id
+                        intakes.append(data)
+                        processed_ids.add(doc.id)
+            except Exception as e:
+                print(f"[DEBUG] ⚠️ Query 2 failed: {e}")
+
+            # PHƯƠNG PHÁP 3: Truy vấn tất cả và filter theo created_at (cấu trúc mới từ Flutter)
+            try:
+                query3 = self.db.collection('water_entries').where(
+                    filter=FieldFilter('user_id', '==', user_id)
+                )
+                results3 = query3.get()
+                print(f"[DEBUG] 📊 Query 3 (user_id only): {len(results3)} kết quả tổng")
+
+                # Filter theo ngày từ created_at hoặc timestamp
+                target_date_start = f"{date}T00:00:00"
+                target_date_end = f"{date}T23:59:59"
+
+                for doc in results3:
+                    if doc.id not in processed_ids:
+                        data = doc.to_dict()
+
+                        # Kiểm tra created_at
+                        created_at = data.get('created_at', '')
+                        if created_at and isinstance(created_at, str):
+                            if created_at.startswith(date):
+                                data['doc_id'] = doc.id
+                                intakes.append(data)
+                                processed_ids.add(doc.id)
+                                print(f"[DEBUG] ✅ Tìm thấy qua created_at: {created_at}")
+                                continue
+
+                        # Kiểm tra timestamp (nếu là milliseconds)
+                        timestamp = data.get('timestamp')
+                        if timestamp and isinstance(timestamp, (int, float)):
+                            try:
+                                # Convert timestamp to datetime
+                                from datetime import datetime, timezone, timedelta
+                                VIETNAM_TZ = timezone(timedelta(hours=7))
+                                dt = datetime.fromtimestamp(timestamp / 1000, tz=VIETNAM_TZ)
+                                dt_date = dt.strftime('%Y-%m-%d')
+                                if dt_date == date:
+                                    data['doc_id'] = doc.id
+                                    intakes.append(data)
+                                    processed_ids.add(doc.id)
+                                    print(f"[DEBUG] ✅ Tìm thấy qua timestamp: {dt.isoformat()}")
+                            except Exception as e:
+                                print(f"[DEBUG] ⚠️ Lỗi parse timestamp {timestamp}: {e}")
+
+            except Exception as e:
+                print(f"[DEBUG] ⚠️ Query 3 failed: {e}")
+
+            # Chuẩn hóa dữ liệu và sắp xếp
+            for intake in intakes:
+                # Đảm bảo có trường amount_ml để tương thích với code cũ
+                if 'amount' in intake and 'amount_ml' not in intake:
+                    intake['amount_ml'] = intake['amount']
+                elif 'quantity' in intake and 'amount_ml' not in intake:
+                    intake['amount_ml'] = intake['quantity']
+
+            # Sắp xếp theo timestamp
             def get_timestamp_value(item):
                 timestamp = item.get('timestamp', 0)
                 # Nếu timestamp là chuỗi chứa số, chuyển thành số
@@ -1387,12 +1426,29 @@ class FirestoreService:
                 # Nếu là số nguyên, giữ nguyên
                 elif isinstance(timestamp, (int, float)):
                     return timestamp
-                # Các trường hợp khác, trả về 0 (giá trị mặc định thấp nhất)
+                # Nếu có created_at, dùng nó
+                created_at = item.get('created_at', '')
+                if created_at:
+                    try:
+                        from datetime import datetime
+                        dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                        return int(dt.timestamp() * 1000)
+                    except:
+                        pass
+                # Các trường hợp khác, trả về 0
                 return 0
-                
+
             intakes.sort(key=get_timestamp_value, reverse=True)
-            
-            print(f"[DEBUG] Found {len(intakes)} water intakes for user {user_id} on date {date}")
+
+            print(f"[DEBUG] 🎯 Tổng cộng tìm thấy {len(intakes)} lượt uống nước cho user {user_id} ngày {date}")
+
+            # Debug: In ra thông tin chi tiết
+            for i, intake in enumerate(intakes):
+                amount = intake.get('amount', intake.get('amount_ml', 0))
+                timestamp = intake.get('timestamp', 'N/A')
+                created_at = intake.get('created_at', 'N/A')
+                print(f"[DEBUG] 💧 #{i+1}: amount={amount}ml, timestamp={timestamp}, created_at={created_at}")
+
             return intakes
         
         except Exception as e:

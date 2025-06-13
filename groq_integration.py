@@ -422,9 +422,12 @@ class GroqService:
 
                             print(f"📝 Recent dishes tracked: {self.recent_dishes[-5:]}")  # Show last 5
 
+                            # Kiểm tra và bổ sung calories nếu cần
+                            final_meals = self._ensure_adequate_calories(validated_meals, calories_target, meal_type)
+
                             # Cache kết quả
-                            self.cache[cache_key] = validated_meals
-                            return validated_meals
+                            self.cache[cache_key] = final_meals
+                            return final_meals
                         else:
                             print("❌ Validation failed - no valid meals after validation")
                     else:
@@ -720,6 +723,264 @@ class GroqService:
         except Exception as e:
             print(f"⚠️ Error getting official nutrition for {dish_name}: {e}")
             return None
+
+    def _generate_detailed_health_benefits(self, dish_name: str, ingredients: List[Dict], nutrition: Dict) -> str:
+        """
+        Tạo lợi ích sức khỏe chi tiết dựa trên nguyên liệu và dinh dưỡng
+
+        Args:
+            dish_name: Tên món ăn
+            ingredients: Danh sách nguyên liệu
+            nutrition: Thông tin dinh dưỡng
+
+        Returns:
+            str: Lợi ích sức khỏe chi tiết
+        """
+        benefits = []
+
+        # Phân tích nguyên liệu để tạo lợi ích cụ thể
+        ingredient_names = [ing.get('name', '').lower() for ing in ingredients if ing.get('name')]
+
+        # Lợi ích từ protein
+        protein = nutrition.get('protein', 0)
+        if protein >= 20:
+            benefits.append(f"Giàu protein ({protein}g) giúp xây dựng và phục hồi cơ bắp")
+        elif protein >= 15:
+            benefits.append(f"Cung cấp protein ({protein}g) hỗ trợ phát triển cơ thể")
+
+        # Lợi ích từ nguyên liệu cụ thể
+        if any(keyword in ' '.join(ingredient_names) for keyword in ['gà', 'thịt gà']):
+            benefits.append("Thịt gà cung cấp vitamin B6 và niacin tốt cho hệ thần kinh")
+
+        if any(keyword in ' '.join(ingredient_names) for keyword in ['cá', 'tôm', 'cua']):
+            benefits.append("Hải sản giàu omega-3 tốt cho tim mạch và não bộ")
+
+        if any(keyword in ' '.join(ingredient_names) for keyword in ['gạo', 'cơm']):
+            benefits.append("Gạo cung cấp carbohydrate phức hợp cho năng lượng bền vững")
+
+        if any(keyword in ' '.join(ingredient_names) for keyword in ['rau', 'cải', 'muống']):
+            benefits.append("Rau xanh giàu vitamin A, C và chất xơ tốt cho tiêu hóa")
+
+        if any(keyword in ' '.join(ingredient_names) for keyword in ['nước dừa', 'dừa']):
+            benefits.append("Nước dừa cung cấp kali và điện giải tự nhiên")
+
+        if any(keyword in ' '.join(ingredient_names) for keyword in ['hạt sen', 'sen']):
+            benefits.append("Hạt sen giàu magie và phosphor tốt cho xương khớp")
+
+        if any(keyword in ' '.join(ingredient_names) for keyword in ['nấm']):
+            benefits.append("Nấm cung cấp vitamin D và chất chống oxy hóa")
+
+        # Lợi ích từ calories
+        calories = nutrition.get('calories', 0)
+        if calories <= 300:
+            benefits.append("Ít calories phù hợp cho người muốn kiểm soát cân nặng")
+        elif calories >= 500:
+            benefits.append("Cung cấp năng lượng cao phù hợp cho hoạt động thể chất")
+
+        # Lợi ích từ carbs
+        carbs = nutrition.get('carbs', 0)
+        if carbs >= 50:
+            benefits.append("Carbohydrate cao cung cấp năng lượng nhanh cho cơ thể")
+        elif carbs <= 20:
+            benefits.append("Ít carbohydrate phù hợp cho chế độ ăn low-carb")
+
+        # Lợi ích chung theo loại món
+        if 'cháo' in dish_name.lower():
+            benefits.append("Dễ tiêu hóa, phù hợp cho người bệnh và trẻ em")
+        elif 'nướng' in dish_name.lower():
+            benefits.append("Chế biến nướng giữ nguyên dinh dưỡng và ít dầu mỡ")
+        elif 'chay' in dish_name.lower():
+            benefits.append("Thực phẩm chay giảm cholesterol và tốt cho môi trường")
+
+        # Nếu không có lợi ích cụ thể, thêm lợi ích chung
+        if not benefits:
+            benefits.append("Cung cấp dinh dưỡng cân bằng cho cơ thể")
+            benefits.append("Món ăn truyền thống Việt Nam tốt cho sức khỏe")
+
+        # Kết hợp thành chuỗi
+        if len(benefits) == 1:
+            return benefits[0]
+        elif len(benefits) == 2:
+            return f"{benefits[0]}. {benefits[1]}"
+        else:
+            return f"{benefits[0]}. {benefits[1]}. {benefits[2] if len(benefits) > 2 else ''}"
+
+    def _ensure_adequate_calories(self, meals: List[Dict], target_calories: int, meal_type: str) -> List[Dict]:
+        """
+        Đảm bảo tổng calories đạt target, gen thêm món nếu cần
+
+        Args:
+            meals: Danh sách món ăn hiện tại
+            target_calories: Target calories cần đạt
+            meal_type: Loại bữa ăn
+
+        Returns:
+            List[Dict]: Danh sách món ăn đã bổ sung
+        """
+        if not meals:
+            return meals
+
+        # Tính tổng calories hiện tại
+        total_calories = sum(meal.get('nutrition', {}).get('calories', 0) for meal in meals)
+        print(f"📊 Current total calories: {total_calories}, Target: {target_calories}")
+
+        # Nếu đã đủ hoặc chỉ thiếu ít (dưới 50 calories), return luôn
+        if total_calories >= target_calories * 0.9:  # 90% target là đủ
+            print(f"✅ Calories adequate: {total_calories}/{target_calories}")
+            return meals
+
+        # Tính calories còn thiếu
+        missing_calories = target_calories - total_calories
+        print(f"⚠️ Missing {missing_calories} calories, generating additional dish...")
+
+        # Tạo món bổ sung với calories còn thiếu
+        try:
+            # Tính nutrition targets cho món bổ sung
+            additional_protein = max(10, missing_calories // 20)  # ~4 cal/g protein
+            additional_fat = max(5, missing_calories // 40)       # ~9 cal/g fat
+            additional_carbs = max(15, missing_calories // 8)     # ~4 cal/g carbs
+
+            # Điều chỉnh để tổng calories khớp
+            calculated_calories = (additional_protein * 4) + (additional_fat * 9) + (additional_carbs * 4)
+            if calculated_calories > missing_calories * 1.2:  # Nếu quá cao, giảm carbs
+                additional_carbs = max(10, (missing_calories - (additional_protein * 4) - (additional_fat * 9)) // 4)
+
+            print(f"🔧 Generating additional dish: {missing_calories} cal, {additional_protein}g protein")
+
+            # Tạo món bổ sung thông minh
+            additional_meal = self._create_smart_additional_meal(
+                missing_calories, additional_protein, additional_fat, additional_carbs, meal_type
+            )
+
+            if additional_meal:
+                meals.append(additional_meal)
+                new_total = sum(meal.get('nutrition', {}).get('calories', 0) for meal in meals)
+                print(f"✅ Added additional dish. New total: {new_total} calories")
+
+        except Exception as e:
+            print(f"⚠️ Error creating additional meal: {e}")
+
+        return meals
+
+    def _create_smart_additional_meal(self, calories: int, protein: int, fat: int, carbs: int, meal_type: str) -> Dict:
+        """
+        Tạo món ăn bổ sung thông minh dựa trên calories còn thiếu
+
+        Args:
+            calories: Calories cần bổ sung
+            protein, fat, carbs: Macro targets
+            meal_type: Loại bữa ăn
+
+        Returns:
+            Dict: Món ăn bổ sung
+        """
+        # Chọn món phù hợp theo calories range
+        if calories <= 150:
+            # Món nhẹ
+            dish_templates = {
+                "bữa sáng": ["Trứng Luộc", "Sữa Đậu Nành", "Bánh Quy Yến Mạch"],
+                "bữa trưa": ["Canh Rau", "Salad Trộn", "Chả Cá Chiên"],
+                "bữa tối": ["Chè Đậu Xanh", "Yaourt", "Bánh Flan"]
+            }
+        elif calories <= 250:
+            # Món vừa
+            dish_templates = {
+                "bữa sáng": ["Bánh Mì Trứng", "Xôi Đậu Xanh", "Cháo Trứng"],
+                "bữa trưa": ["Cơm Chiên Trứng", "Bún Chả Nhỏ", "Mì Xào Rau"],
+                "bữa tối": ["Bánh Xèo Nhỏ", "Nem Rán", "Chả Giò"]
+            }
+        else:
+            # Món no
+            dish_templates = {
+                "bữa sáng": ["Phở Gà", "Bánh Mì Thịt", "Cháo Gà"],
+                "bữa trưa": ["Cơm Tấm", "Bún Bò", "Mì Quảng"],
+                "bữa tối": ["Cơm Chiên", "Bánh Xèo", "Lẩu Nhỏ"]
+            }
+
+        # Chọn template phù hợp
+        meal_type_key = meal_type.lower()
+        if "sáng" in meal_type_key:
+            templates = dish_templates.get("bữa sáng", dish_templates["bữa sáng"])
+        elif "trưa" in meal_type_key:
+            templates = dish_templates.get("bữa trưa", dish_templates["bữa trưa"])
+        else:
+            templates = dish_templates.get("bữa tối", dish_templates["bữa tối"])
+
+        # Chọn món ngẫu nhiên
+        import random
+        selected_dish = random.choice(templates)
+
+        # Tạo ingredients phù hợp
+        base_ingredients = self._get_ingredients_for_dish(selected_dish, calories)
+
+        # Tạo meal object
+        additional_meal = {
+            "name": f"{selected_dish} Bổ Sung",
+            "description": f"Món {selected_dish} bổ sung để đạt đủ mục tiêu dinh dưỡng",
+            "ingredients": base_ingredients,
+            "preparation": [
+                f"Chuẩn bị nguyên liệu cho {selected_dish}",
+                "Chế biến theo phương pháp truyền thống",
+                "Nêm nướng vừa ăn",
+                "Trình bày đẹp mắt"
+            ],
+            "nutrition": {
+                "calories": calories,
+                "protein": protein,
+                "fat": fat,
+                "carbs": carbs
+            },
+            "preparation_time": "15 phút",
+            "health_benefits": self._generate_detailed_health_benefits(selected_dish, base_ingredients, {
+                "calories": calories, "protein": protein, "fat": fat, "carbs": carbs
+            })
+        }
+
+        return additional_meal
+
+    def _get_ingredients_for_dish(self, dish_name: str, target_calories: int) -> List[Dict]:
+        """
+        Tạo danh sách nguyên liệu phù hợp cho món ăn
+
+        Args:
+            dish_name: Tên món ăn
+            target_calories: Target calories
+
+        Returns:
+            List[Dict]: Danh sách nguyên liệu
+        """
+        # Base ingredients theo loại món
+        if "trứng" in dish_name.lower():
+            return [
+                {"name": "Trứng gà", "amount": "2 quả"},
+                {"name": "Dầu ăn", "amount": "1 tsp"},
+                {"name": "Muối", "amount": "1 tsp"}
+            ]
+        elif "bánh mì" in dish_name.lower():
+            return [
+                {"name": "Bánh mì", "amount": "1 ổ"},
+                {"name": "Thịt", "amount": "50g"},
+                {"name": "Rau thơm", "amount": "20g"}
+            ]
+        elif "cháo" in dish_name.lower():
+            return [
+                {"name": "Gạo", "amount": "50g"},
+                {"name": "Thịt gà", "amount": "80g"},
+                {"name": "Hành lá", "amount": "10g"}
+            ]
+        elif "cơm" in dish_name.lower():
+            return [
+                {"name": "Cơm", "amount": "150g"},
+                {"name": "Thịt", "amount": "100g"},
+                {"name": "Rau", "amount": "50g"}
+            ]
+        else:
+            # Default ingredients
+            return [
+                {"name": "Nguyên liệu chính", "amount": "100g"},
+                {"name": "Gia vị", "amount": "vừa đủ"},
+                {"name": "Rau thơm", "amount": "20g"}
+            ]
 
     def _validate_required_keys(self, data: Dict) -> bool:
         """
@@ -1315,10 +1576,10 @@ class GroqService:
                 meal['preparation_time'] = "30 phút"
                 print(f"🔧 Added default preparation_time for {meal_name}")
 
-            # Health benefits
-            if 'health_benefits' not in meal or not isinstance(meal['health_benefits'], str):
-                meal['health_benefits'] = f"Món {meal_name} cung cấp dinh dưỡng cân bằng và tốt cho sức khỏe"
-                print(f"🔧 Added default health_benefits for {meal_name}")
+            # Health benefits - enhanced with detailed benefits
+            if 'health_benefits' not in meal or not isinstance(meal['health_benefits'], str) or len(meal['health_benefits']) < 50:
+                meal['health_benefits'] = self._generate_detailed_health_benefits(meal_name, meal.get('ingredients', []), meal.get('nutrition', {}))
+                print(f"🔧 Added detailed health_benefits for {meal_name}")
 
             # Final validation - ensure all required fields exist
             missing_fields = [field for field in required_fields if field not in meal]

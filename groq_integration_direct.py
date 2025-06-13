@@ -490,7 +490,7 @@ class GroqService:
             
             # Shuffle the list to get random ones
             random.shuffle(all_meals)
-            return all_meals[:5]  # Return maximum 5 meals
+            return all_meals[:2]  # Return maximum 1-2 meals
     
     def _fallback_meal_suggestions(self, meal_type: str) -> List[Dict]:
         """
@@ -633,51 +633,64 @@ class GroqService:
 - User goal: {goal}
 - User activity level: {activity_level}"""
         
-        # Tối ưu hóa prompt cho LLaMA 3
-        prompt = f"""You are a nutrition expert, please suggest 3-4 Vietnamese meals for {meal_type}{day_str} with the following criteria:
-- Total calories: {calories_target}kcal
-- Protein amount: {protein_target}g
-- Fat amount: {fat_target}g
-- Carbohydrate amount: {carbs_target}g
-- Preferences: {preferences_str}
-- Allergies (avoid): {allergies_str}
-- Cuisine style: {cuisine_style_str}{diversity_str}{user_info}
+        # Prompt được cải tiến để "ép" AI tuân thủ quy tắc JSON
+        prompt = f"""Bạn là một chuyên gia dinh dưỡng. Dựa trên các thông tin sau: {meal_type}{day_str} với mục tiêu dinh dưỡng {calories_target}kcal, {protein_target}g protein, {fat_target}g chất béo, {carbs_target}g carbs, sở thích: {preferences_str}, dị ứng: {allergies_str}, phong cách ẩm thực: {cuisine_style_str}{diversity_str}{user_info}, hãy tạo ra một danh sách gồm 1-2 món ăn Việt Nam.
 
-IMPORTANT REQUIREMENTS:
-1. Write ALL meal names and descriptions in Vietnamese language
-2. Include Vietnamese ingredients with Vietnamese names
-3. Write preparation instructions in Vietnamese with detailed cooking steps
-4. Make sure to create DIFFERENT meals than usual. Be creative and diverse.
-5. DO NOT include day names in meal names (no "Thứ 2", "Thứ 3", etc.)
-6. Consider the user's specific goals and requirements:
-   - For weight loss goals: Focus on filling, high-fiber, protein-rich, lower calorie options
-   - For muscle gain goals: Focus on protein-rich, nutrient-dense meals
-   - For general health: Focus on balanced, nutritious meals with variety
-   - Adjust spice levels and complexity based on user age
-   - Consider activity level for portion sizes and recovery nutrients
-7. ALWAYS include preparation time for each dish (how long it takes to prepare and cook)
-8. ALWAYS include health benefits of each dish, explaining how it supports the user's health goals
+YÊU CẦU TUYỆT ĐỐI:
 
-Your response MUST be a valid JSON array without any additional text before or after.
-Format your response like this EXACTLY:
-[
-  {{
-    "name": "Meal name",
-    "description": "Brief description of the meal",
-    "ingredients": [
-      {{"name": "Ingredient name", "amount": "Amount"}},
-      ...
-    ],
-    "preparation": "Step by step preparation instructions",
-    "nutrition": {{"calories": {calories_target}, "protein": {protein_target}, "fat": {fat_target}, "carbs": {carbs_target}}},
-    "preparation_time": "Total time needed to prepare and cook this dish (e.g., 30 phút)",
-    "health_benefits": "Detailed explanation of health benefits of this dish and how it supports the user's goals"
+Phản hồi của bạn CHỈ VÀ CHỈ được chứa một chuỗi JSON hợp lệ.
+
+Không được thêm bất kỳ văn bản, lời chào, ghi chú hay định dạng markdown nào khác như ```json ở đầu hoặc cuối.
+
+Chuỗi JSON phải là một mảng (array) các đối tượng (object).
+
+Mỗi đối tượng món ăn BẮT BUỘC phải có đầy đủ các key sau với đúng kiểu dữ liệu: name (string), description (string), ingredients (array of objects), preparation (array of strings), nutrition (object), preparation_time (string), health_benefits (string).
+
+Bên trong ingredients, mỗi đối tượng phải có name (string) và amount (string).
+
+Bên trong nutrition, mỗi đối tượng phải có calories (number), protein (number), fat (number), và carbs (number).
+
+Đây là một ví dụ về một đối tượng món ăn hợp lệ để bạn tuân theo:
+
+{{
+  "name": "Cơm Tấm Sườn Nướng",
+  "description": "Món cơm tấm truyền thống với sườn nướng thơm ngon, chả trứng và nước mắm chua ngọt.",
+  "ingredients": [
+    {{"name": "Cơm tấm", "amount": "150g"}},
+    {{"name": "Sườn heo", "amount": "100g"}},
+    {{"name": "Trứng gà", "amount": "1 quả"}},
+    {{"name": "Nước mắm", "amount": "2 thìa canh"}}
+  ],
+  "preparation": [
+    "Ướp sườn với gia vị trong 30 phút.",
+    "Nướng sườn trên than hoa đến khi chín vàng.",
+    "Chiên trứng thành chả mỏng.",
+    "Bày cơm tấm ra đĩa, xếp sườn và chả trứng lên trên."
+  ],
+  "nutrition": {{
+    "calories": {calories_target},
+    "protein": {protein_target},
+    "fat": {fat_target},
+    "carbs": {carbs_target}
   }},
-  ...
-]
+  "preparation_time": "45 phút",
+  "health_benefits": "Cung cấp protein chất lượng cao từ thịt heo và trứng, carbs từ cơm tấm giúp bổ sung năng lượng, phù hợp cho mục tiêu dinh dưỡng của người dùng."
+}}
 
-IMPORTANT: Return ONLY the JSON array with no additional text. Do not include markdown code blocks or any explanations.
-"""
+QUY TẮC BỔ SUNG:
+1. Tất cả tên món ăn và mô tả phải bằng tiếng Việt
+2. Nguyên liệu phải có tên tiếng Việt
+3. Hướng dẫn chuẩn bị phải bằng tiếng Việt với các bước chi tiết
+4. Tạo các món ăn KHÁC NHAU và sáng tạo
+5. KHÔNG bao gồm tên ngày trong tên món ăn
+6. Xem xét mục tiêu cụ thể của người dùng:
+   - Giảm cân: Tập trung vào món ăn no bụng, nhiều chất xơ, protein cao, ít calo
+   - Tăng cân: Tập trung vào món ăn giàu protein, dinh dưỡng dày đặc
+   - Sức khỏe tổng quát: Tập trung vào món ăn cân bằng, đa dạng dinh dưỡng
+7. Luôn bao gồm thời gian chuẩn bị cho mỗi món
+8. Luôn bao gồm lợi ích sức khỏe của mỗi món
+
+Bây giờ, hãy tạo danh sách món ăn của bạn."""
         
         return prompt
 

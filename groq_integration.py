@@ -236,74 +236,64 @@ class GroqService:
         allergies_str = ", ".join(allergies) if allergies else "không có"
         cuisine_style_str = cuisine_style if cuisine_style else "không có yêu cầu cụ thể"
 
-        # Tối ưu prompt cho LLaMA 3
-        prompt = """Hãy tạo một kế hoạch ăn uống cho 7 ngày với các yêu cầu sau:
+        # Prompt được cải tiến để "ép" AI tuân thủ quy tắc JSON cho meal suggestions
+        prompt = f"""Bạn là một chuyên gia dinh dưỡng. Dựa trên các thông tin sau: {meal_type} với mục tiêu dinh dưỡng {calories_target}kcal, {protein_target}g protein, {fat_target}g chất béo, {carbs_target}g carbs, sở thích: {preferences_str}, dị ứng: {allergies_str}, phong cách ẩm thực: {cuisine_style_str}, hãy tạo ra một danh sách gồm 1-2 món ăn Việt Nam.
 
-1. Mỗi ngày gồm 3 bữa chính (sáng, trưa, tối) và 1 bữa phụ (nếu cần)
-2. Mỗi bữa chỉ có tối đa 2-3 món ăn
-3. Chỉ sử dụng các món ăn phổ biến và dễ tìm tại Việt Nam
-4. Ưu tiên các món ăn phổ biến trong ẩm thực Việt Nam, có thể kết hợp các món từ cả ba miền
-5. Món ăn phải đơn giản, dễ chế biến, và có thể tìm nguyên liệu ở các chợ/siêu thị địa phương
-6. Cân đối các nhóm dinh dưỡng (tinh bột, đạm, rau củ)
-7. Đảm bảo có sự đa dạng giữa các ngày, tránh lặp lại món ăn
-8. Mỗi món cần có thông tin về các giá trị dinh dưỡng (calories, protein, carbs, fat)
+YÊU CẦU TUYỆT ĐỐI:
 
-Thông tin bổ sung:
-- Mục tiêu: Giảm cân
-- Nhu cầu calories mỗi ngày: 1800 kcal
-- Nhu cầu protein mỗi ngày: 120 g
-- Nhu cầu carbs mỗi ngày: 180 g
-- Nhu cầu chất béo mỗi ngày: 60 g
-- Các hạn chế/dị ứng: không có
-- Sở thích: không có
+Phản hồi của bạn CHỈ VÀ CHỈ được chứa một chuỗi JSON hợp lệ.
 
-YÊU CẦU QUAN TRỌNG:
-1. Đảm bảo tổng lượng calories trong ngày phù hợp với mục tiêu người dùng
-2. Chỉ sử dụng các món ăn Việt Nam hoặc các món ăn đã được Việt hóa phổ biến
-3. Trả về kết quả chính xác theo định dạng JSON sau
+Không được thêm bất kỳ văn bản, lời chào, ghi chú hay định dạng markdown nào khác như ```json ở đầu hoặc cuối.
 
-Trả về kết quả theo định dạng JSON sau:
-```json
-{
-  "days": [
-    {
-      "day_index": 0,
-      "day_name": "Thứ 2",
-      "breakfast": {
-        "meal_type": "breakfast",
-        "dishes": [
-          {
-            "name": "Tên món ăn",
-            "ingredients": [
-              {"name": "Tên nguyên liệu", "amount": "Số lượng"}
-            ],
-            "preparation": ["Bước 1", "Bước 2", "Bước 3"],
-            "preparation_time": "30 phút",
-            "nutrition": {"calories": 300, "protein": 15, "carbs": 40, "fat": 10},
-            "health_benefits": ["Lợi ích 1", "Lợi ích 2"]
-          }
-        ]
-      },
-      "lunch": {
-        "meal_type": "lunch",
-        "dishes": []
-      },
-      "dinner": {
-        "meal_type": "dinner",
-        "dishes": []
-      },
-      "snack": {
-        "meal_type": "snack",
-        "dishes": []
-      }
-    }
-  ]
-}
-```
+Chuỗi JSON phải là một mảng (array) các đối tượng (object).
 
-Đối với mỗi ngày, hãy đảm bảo tạo đủ cả 3 bữa chính và 1 bữa phụ, mỗi bữa có 2-3 món ăn.
-Hãy trả về CHÍNH XÁC định dạng JSON như trên không thêm bất kỳ nội dung nào khác.
-"""
+Mỗi đối tượng món ăn BẮT BUỘC phải có đầy đủ các key sau với đúng kiểu dữ liệu: name (string), description (string), ingredients (array of objects), preparation (array of strings), nutrition (object), preparation_time (string), health_benefits (string).
+
+Bên trong ingredients, mỗi đối tượng phải có name (string) và amount (string).
+
+Bên trong nutrition, mỗi đối tượng phải có calories (number), protein (number), fat (number), và carbs (number).
+
+Đây là một ví dụ về một đối tượng món ăn hợp lệ để bạn tuân theo:
+
+{{
+  "name": "Cơm Tấm Sườn Nướng",
+  "description": "Món cơm tấm truyền thống với sườn nướng thơm ngon, chả trứng và nước mắm chua ngọt.",
+  "ingredients": [
+    {{"name": "Cơm tấm", "amount": "150g"}},
+    {{"name": "Sườn heo", "amount": "100g"}},
+    {{"name": "Trứng gà", "amount": "1 quả"}},
+    {{"name": "Nước mắm", "amount": "2 thìa canh"}}
+  ],
+  "preparation": [
+    "Ướp sườn với gia vị trong 30 phút.",
+    "Nướng sườn trên than hoa đến khi chín vàng.",
+    "Chiên trứng thành chả mỏng.",
+    "Bày cơm tấm ra đĩa, xếp sườn và chả trứng lên trên."
+  ],
+  "nutrition": {{
+    "calories": {calories_target},
+    "protein": {protein_target},
+    "fat": {fat_target},
+    "carbs": {carbs_target}
+  }},
+  "preparation_time": "45 phút",
+  "health_benefits": "Cung cấp protein chất lượng cao từ thịt heo và trứng, carbs từ cơm tấm giúp bổ sung năng lượng, phù hợp cho mục tiêu dinh dưỡng của người dùng."
+}}
+
+QUY TẮC BỔ SUNG:
+1. Tất cả tên món ăn và mô tả phải bằng tiếng Việt
+2. Nguyên liệu phải có tên tiếng Việt
+3. Hướng dẫn chuẩn bị phải bằng tiếng Việt với các bước chi tiết
+4. Tạo các món ăn KHÁC NHAU và sáng tạo
+5. KHÔNG bao gồm tên ngày trong tên món ăn
+6. Xem xét mục tiêu cụ thể của người dùng:
+   - Giảm cân: Tập trung vào món ăn no bụng, nhiều chất xơ, protein cao, ít calo
+   - Tăng cân: Tập trung vào món ăn giàu protein, dinh dưỡng dày đặc
+   - Sức khỏe tổng quát: Tập trung vào món ăn cân bằng, đa dạng dinh dưỡng
+7. Luôn bao gồm thời gian chuẩn bị cho mỗi món
+8. Luôn bao gồm lợi ích sức khỏe của mỗi món
+
+Bây giờ, hãy tạo danh sách món ăn của bạn."""
         
         try:
             # Gọi API Groq
@@ -321,52 +311,24 @@ Hãy trả về CHÍNH XÁC định dạng JSON như trên không thêm bất k�
                     
                     # Trích xuất kết quả JSON từ phản hồi
                     result_text = response.choices[0].message.content.strip()
-                    
-                    # Trích xuất JSON từ kết quả (có thể có các ký tự khác)
-                    json_start = result_text.find("[")
-                    json_end = result_text.rfind("]") + 1
-                    
-                    if json_start >= 0 and json_end > json_start:
-                        json_str = result_text[json_start:json_end]
-                        try:
-                            meal_data = json.loads(json_str)
-                            
-                            # Validate meal data
-                            if isinstance(meal_data, list) and len(meal_data) > 0:
-                                # Thêm kiểm tra chi tiết hơn để đảm bảo dữ liệu hợp lệ
-                                valid_meals = []
-                                for meal in meal_data:
-                                    if (isinstance(meal, dict) and 
-                                        'name' in meal and 
-                                        'ingredients' in meal and 
-                                        isinstance(meal['ingredients'], list)):
-                                        
-                                        # Nếu thiếu preparation, thêm một mô tả mặc định
-                                        if 'preparation' not in meal or not meal['preparation']:
-                                            meal['preparation'] = f"Chế biến {meal['name']} với các nguyên liệu đã liệt kê."
-                                        
-                                        # Thêm trường preparation_time nếu chưa có
-                                        if 'preparation_time' not in meal:
-                                            meal['preparation_time'] = "30 phút"
-                                            
-                                        # Thêm trường health_benefits nếu chưa có
-                                        if 'health_benefits' not in meal:
-                                            meal['health_benefits'] = f"Cung cấp dinh dưỡng cân bằng với {meal.get('total_nutrition', {}).get('protein', 0)}g protein giúp xây dựng cơ bắp."
-                                        
-                                        # Đảm bảo ingredients không trống
-                                        if not meal['ingredients']:
-                                            meal['ingredients'] = [{'name': 'Nguyên liệu chính', 'amount': '100g'}]
-                                        
-                                        valid_meals.append(meal)
-                                
-                                if valid_meals:
-                                    # Lưu vào cache
-                                    self.cache[cache_key] = valid_meals
-                                    return valid_meals
-                                else:
-                                    print("Không có món ăn hợp lệ trong kết quả từ AI. Sử dụng dữ liệu dự phòng.")
-                        except json.JSONDecodeError:
-                            print(f"Error parsing JSON from LLaMA response. Attempt {attempt + 1}")
+                    print(f"Raw content from Groq:\n{result_text}")
+
+                    # Phân tích JSON từ response
+                    meal_data = self._extract_json_from_response(result_text)
+
+                    if meal_data and isinstance(meal_data, list) and len(meal_data) > 0:
+                        # Validate and process meal data
+                        validated_meals = self._validate_meals(meal_data)
+
+                        if validated_meals:
+                            print(f"Successfully generated {len(validated_meals)} meal suggestions")
+                            # Cache kết quả
+                            self.cache[cache_key] = validated_meals
+                            return validated_meals
+                        else:
+                            print("Validation failed for meal data")
+                    else:
+                        print("No valid meal data in response")
                     
                     # Nếu không trích xuất được dữ liệu hợp lệ, thử lại
                     print(f"Invalid response format. Retrying... ({attempt + 1}/{self.max_retries})")
@@ -388,7 +350,129 @@ Hãy trả về CHÍNH XÁC định dạng JSON như trên không thêm bất k�
         except Exception as e:
             print(f"Error generating meal suggestions: {str(e)}")
             return self._fallback_meal_suggestions(meal_type)
-    
+
+    def _extract_json_from_response(self, response_text: str) -> List[Dict]:
+        """
+        Trích xuất dữ liệu JSON từ phản hồi của AI
+
+        Args:
+            response_text: Văn bản phản hồi từ API
+
+        Returns:
+            List[Dict]: Dữ liệu món ăn dạng JSON hoặc None nếu không thể phân tích
+        """
+        try:
+            # Phương pháp 1: Thử phân tích toàn bộ phản hồi là JSON
+            print("Trying to parse entire response as JSON...")
+            meal_data = json.loads(response_text)
+            if isinstance(meal_data, list) and len(meal_data) > 0:
+                print(f"Successfully parsed entire response as JSON array with {len(meal_data)} items")
+                return meal_data
+        except json.JSONDecodeError:
+            print("Entire response is not valid JSON, trying to extract JSON portion...")
+
+            # Phương pháp 2: Trích xuất JSON sử dụng regex
+            import re
+            json_pattern = r'\[\s*\{.*\}\s*\]'
+            matches = re.search(json_pattern, response_text, re.DOTALL)
+            if matches:
+                json_str = matches.group(0)
+                print(f"Found JSON-like pattern: {json_str[:100]}...")
+                try:
+                    meal_data = json.loads(json_str)
+                    if isinstance(meal_data, list) and len(meal_data) > 0:
+                        print(f"Successfully parsed extracted JSON with {len(meal_data)} items")
+                        return meal_data
+                except json.JSONDecodeError:
+                    print("Extracted pattern is not valid JSON")
+
+            # Phương pháp 3: Tìm mảng JSON giữa dấu ngoặc vuông
+            json_start = response_text.find("[")
+            json_end = response_text.rfind("]") + 1
+
+            if json_start >= 0 and json_end > json_start:
+                json_str = response_text[json_start:json_end]
+                print(f"Extracted JSON between brackets: {json_str[:100]}...")
+                try:
+                    meal_data = json.loads(json_str)
+                    if isinstance(meal_data, list) and len(meal_data) > 0:
+                        print(f"Successfully parsed extracted JSON array with {len(meal_data)} items")
+                        return meal_data
+                except json.JSONDecodeError:
+                    print("Error parsing JSON from response")
+
+        # Không tìm thấy JSON hợp lệ
+        return None
+
+    def _validate_meals(self, meal_data: List[Dict]) -> List[Dict]:
+        """
+        Validate meal data and ensure it has the expected structure
+
+        Args:
+            meal_data: List of meal dictionaries to validate
+
+        Returns:
+            List of validated meal dictionaries
+        """
+        valid_meals = []
+
+        for meal in meal_data:
+            if not isinstance(meal, dict):
+                print(f"Skipping non-dict meal: {meal}")
+                continue
+
+            if 'name' not in meal:
+                print(f"Skipping meal without name: {meal}")
+                continue
+
+            # Ensure ingredients list exists
+            if 'ingredients' not in meal or not isinstance(meal['ingredients'], list):
+                print(f"Adding empty ingredients list to meal: {meal['name']}")
+                meal['ingredients'] = []
+
+            # Kiểm tra và chuyển đổi trường preparation thành List[str]
+            if 'preparation' not in meal:
+                meal['preparation'] = [f"Prepare {meal['name']} with the listed ingredients."]
+            elif isinstance(meal['preparation'], str):
+                # Nếu là chuỗi, chuyển thành danh sách với một phần tử
+                meal['preparation'] = [meal['preparation']]
+            elif isinstance(meal['preparation'], list):
+                # Nếu là danh sách, đảm bảo tất cả các phần tử đều là chuỗi
+                meal['preparation'] = [str(step) for step in meal['preparation']]
+            else:
+                # Nếu là kiểu dữ liệu khác, đặt giá trị mặc định
+                print(f"Invalid preparation format for meal: {meal['name']}, replacing with default")
+                meal['preparation'] = [f"Prepare {meal['name']} with the listed ingredients."]
+
+            # Ensure ingredients is not empty
+            if not meal['ingredients']:
+                meal['ingredients'] = [{'name': 'Main ingredient', 'amount': '100g'}]
+
+            # Ensure nutrition exists
+            if 'nutrition' not in meal:
+                print(f"Adding default nutrition to meal: {meal['name']}")
+                meal['nutrition'] = {
+                    'calories': 400,
+                    'protein': 20,
+                    'fat': 15,
+                    'carbs': 45
+                }
+
+            # Kiểm tra và đặt giá trị mặc định cho trường preparation_time nếu cần
+            if 'preparation_time' not in meal or not meal['preparation_time']:
+                meal['preparation_time'] = "30-45 phút"
+                print(f"Adding default preparation time to meal: {meal['name']}")
+
+            # Kiểm tra và đặt giá trị mặc định cho trường health_benefits nếu cần
+            if 'health_benefits' not in meal or not meal['health_benefits']:
+                meal['health_benefits'] = f"Món ăn {meal['name']} cung cấp đầy đủ dinh dưỡng cần thiết và năng lượng cân bằng cho cơ thể."
+                print(f"Adding default health benefits to meal: {meal['name']}")
+
+            valid_meals.append(meal)
+
+        print(f"Validated {len(valid_meals)} out of {len(meal_data)} meals")
+        return valid_meals
+
     def _get_fallback_meals(self, meal_type: str) -> List[Dict]:
         """
         Lấy dữ liệu món ăn dự phòng
@@ -415,7 +499,7 @@ Hãy trả về CHÍNH XÁC định dạng JSON như trên không thêm bất k�
             
             # Trộn danh sách để lấy ngẫu nhiên
             random.shuffle(all_meals)
-            return all_meals[:5]  # Trả về tối đa 5 món
+            return all_meals[:2]  # Trả về tối đa 1-2 món
     
     def _fallback_meal_suggestions(self, meal_type: str) -> List[Dict]:
         """

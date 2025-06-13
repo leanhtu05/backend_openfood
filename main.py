@@ -1675,6 +1675,23 @@ async def replace_day(
             detail=f"Error replacing day: {str(e)}"
         )
 
+# Test endpoint để kiểm tra authentication
+@app.post("/api/test-auth", tags=["Test"])
+async def test_auth(
+    user: Optional[TokenPayload] = Depends(get_optional_current_user)
+):
+    """Test endpoint để kiểm tra authentication"""
+    try:
+        print(f"🔍 Test auth - User: {user.uid if user else 'Anonymous'}")
+        return {
+            "authenticated": user is not None,
+            "user_id": user.uid if user else None,
+            "message": "Authentication test successful"
+        }
+    except Exception as e:
+        print(f"❌ Error in test_auth: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Test auth error: {str(e)}")
+
 # Cập nhật endpoint thay thế một bữa ăn cụ thể
 @app.post("/api/meal-plan/replace-meal", tags=["Meal Plan"])
 async def replace_meal(
@@ -1682,6 +1699,9 @@ async def replace_meal(
     user: Optional[TokenPayload] = Depends(get_optional_current_user)
 ):
     try:
+        print(f"🔄 Replace meal request received")
+        print(f"📋 User: {user.uid if user else 'Anonymous'}")
+        print(f"📋 Request data: {meal_plan_request.model_dump()}")
         # Extract data from request
         user_id = meal_plan_request.user_id
         day_of_week = meal_plan_request.day_of_week
@@ -1725,12 +1745,28 @@ async def replace_meal(
             use_ai=use_ai,
             user_data=user_data
         )
-        
-        # Return a placeholder response for now
-        return {"message": f"Replacement for {meal_type} on {day_of_week} is in progress"}
+
+        print(f"✅ Generated {len(new_meals) if new_meals else 0} new meals")
+
+        # Return the generated meals
+        return {
+            "message": f"Successfully replaced {meal_type} on {day_of_week}",
+            "user_id": user_id,
+            "day_of_week": day_of_week,
+            "meal_type": meal_type,
+            "new_meals": new_meals,
+            "success": True
+        }
     
+    except HTTPException as he:
+        # Re-raise HTTP exceptions (like 403, 401, etc.)
+        print(f"❌ HTTP Exception in replace_meal: {he.status_code} - {he.detail}")
+        raise he
     except Exception as e:
-        # Handle exceptions
+        # Handle other exceptions
+        print(f"❌ Unexpected error in replace_meal: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=500,
             detail=f"Error replacing meal: {str(e)}"

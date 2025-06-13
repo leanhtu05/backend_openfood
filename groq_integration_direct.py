@@ -7,6 +7,37 @@ import httpx
 from typing import List, Dict, Optional, Tuple
 from models import NutritionInfo, Dish, Ingredient
 
+# Helper function to ensure regex operations work
+def safe_regex_sub(pattern, replacement, text, flags=0, count=0):
+    """Safe regex substitution to prevent 're' variable access errors"""
+    try:
+        import re as local_re
+        if count > 0:
+            return local_re.sub(pattern, replacement, text, count=count, flags=flags)
+        else:
+            return local_re.sub(pattern, replacement, text, flags=flags)
+    except Exception as e:
+        print(f"⚠️ Regex substitution failed: {e}")
+        return text
+
+def safe_regex_findall(pattern, text, flags=0):
+    """Safe regex findall to prevent 're' variable access errors"""
+    try:
+        import re as local_re
+        return local_re.findall(pattern, text, flags)
+    except Exception as e:
+        print(f"⚠️ Regex findall failed: {e}")
+        return []
+
+def safe_regex_search(pattern, text, flags=0):
+    """Safe regex search to prevent 're' variable access errors"""
+    try:
+        import re as local_re
+        return local_re.search(pattern, text, flags)
+    except Exception as e:
+        print(f"⚠️ Regex search failed: {e}")
+        return None
+
 # Import fallback data
 from fallback_meals import FALLBACK_MEALS
 
@@ -543,18 +574,17 @@ class GroqService:
             
             # Phương pháp 1.5: Sửa lỗi cụ thể - chuyển đổi {"String value", ...} thành {"name": "String value", ...}
             try:
-                fixed_text = re.sub(r'{\s*"([^"]+)",', r'{"name": "\1",', response_text)
+                fixed_text = safe_regex_sub(r'{\s*"([^"]+)",', r'{"name": "\1",', response_text)
                 meal_data = json.loads(fixed_text)
                 if isinstance(meal_data, list) and len(meal_data) > 0:
                     print(f"Successfully parsed fixed JSON with {len(meal_data)} items")
                     return meal_data
             except json.JSONDecodeError:
                 print("Format fixing failed, trying JSON extraction...")
-            
+
             # Phương pháp 2: Trích xuất JSON sử dụng regex
-            import re
             json_pattern = r'\[\s*\{.*\}\s*\]'
-            matches = re.search(json_pattern, response_text, re.DOTALL)
+            matches = safe_regex_search(json_pattern, response_text, 16)  # re.DOTALL = 16
             if matches:
                 json_str = matches.group(0)
                 print(f"Found JSON-like pattern: {json_str[:100]}...")
@@ -568,7 +598,7 @@ class GroqService:
             
                 # Phương pháp 2.5: Sửa lỗi cụ thể cho pattern đã tìm thấy
                 try:
-                    fixed_text = re.sub(r'{\s*"([^"]+)",', r'{"name": "\1",', json_str)
+                    fixed_text = safe_regex_sub(r'{\s*"([^"]+)",', r'{"name": "\1",', json_str)
                     meal_data = json.loads(fixed_text)
                     if isinstance(meal_data, list) and len(meal_data) > 0:
                         print(f"Successfully parsed fixed JSON pattern with {len(meal_data)} items")
@@ -593,7 +623,7 @@ class GroqService:
                     
                     # Phương pháp 3.5: Sửa lỗi cụ thể cho mảng đã tìm thấy
                     try:
-                        fixed_text = re.sub(r'{\s*"([^"]+)",', r'{"name": "\1",', json_str)
+                        fixed_text = safe_regex_sub(r'{\s*"([^"]+)",', r'{"name": "\1",', json_str)
                         meal_data = json.loads(fixed_text)
                         if isinstance(meal_data, list) and len(meal_data) > 0:
                             print(f"Successfully parsed fixed JSON array with {len(meal_data)} items")
@@ -606,15 +636,15 @@ class GroqService:
             result = []
             try:
                 # Parse các dish riêng lẻ
-                dish_texts = re.findall(r'{\s*(?:"[^"]+"|"name":\s*"[^"]+")(.*?)},?(?=\s*{|\s*\])', response_text, re.DOTALL)
+                dish_texts = safe_regex_findall(r'{\s*(?:"[^"]+"|"name":\s*"[^"]+")(.*?)},?(?=\s*{|\s*\])', response_text, 16)  # re.DOTALL = 16
                 
                 for dish_text in dish_texts:
                     full_text = "{" + dish_text + "}"
                     dish = {}
                     
                     # Extract name
-                    name_match = re.search(r'^\s*"([^"]+)"', dish_text)
-                    name_key_match = re.search(r'"name":\s*"([^"]+)"', full_text)
+                    name_match = safe_regex_search(r'^\s*"([^"]+)"', dish_text)
+                    name_key_match = safe_regex_search(r'"name":\s*"([^"]+)"', full_text)
                     
                     if name_match:
                         dish['name'] = name_match.group(1)
@@ -624,38 +654,38 @@ class GroqService:
                         continue
                     
                     # Extract description
-                    desc_match = re.search(r'"description":\s*"([^"]+)"', full_text)
+                    desc_match = safe_regex_search(r'"description":\s*"([^"]+)"', full_text)
                     if desc_match:
                         dish['description'] = desc_match.group(1)
-                    
+
                     # Extract ingredients
                     ingredients = []
-                    ingredients_block = re.search(r'"ingredients":\s*\[(.*?)\]', full_text, re.DOTALL)
+                    ingredients_block = safe_regex_search(r'"ingredients":\s*\[(.*?)\]', full_text, 16)  # re.DOTALL = 16
                     if ingredients_block:
                         ingredients_text = ingredients_block.group(1)
-                        ingredient_matches = re.findall(r'{\s*"name":\s*"([^"]+)",\s*"amount":\s*"([^"]+)"\s*}', ingredients_text)
+                        ingredient_matches = safe_regex_findall(r'{\s*"name":\s*"([^"]+)",\s*"amount":\s*"([^"]+)"\s*}', ingredients_text)
                         for name, amount in ingredient_matches:
                             ingredients.append({"name": name, "amount": amount})
                     dish['ingredients'] = ingredients if ingredients else [{"name": "Nguyên liệu chính", "amount": "100g"}]
                     
                     # Extract preparation steps
                     preparation = []
-                    prep_block = re.search(r'"preparation":\s*\[(.*?)\]', full_text, re.DOTALL)
+                    prep_block = safe_regex_search(r'"preparation":\s*\[(.*?)\]', full_text, 16)  # re.DOTALL = 16
                     if prep_block:
                         prep_text = prep_block.group(1)
-                        step_matches = re.findall(r'"([^"]+)"', prep_text)
+                        step_matches = safe_regex_findall(r'"([^"]+)"', prep_text)
                         for step in step_matches:
                             preparation.append(step)
                     dish['preparation'] = preparation if preparation else ["Chế biến theo hướng dẫn"]
                     
                     # Extract nutrition
                     nutrition = {}
-                    nutrition_block = re.search(r'"nutrition":\s*{\s*(.*?)\s*}', full_text, re.DOTALL)
+                    nutrition_block = safe_regex_search(r'"nutrition":\s*{\s*(.*?)\s*}', full_text, 16)  # re.DOTALL = 16
                     if nutrition_block:
                         nutrition_text = nutrition_block.group(1)
-                        
+
                         for key in ["calories", "protein", "fat", "carbs"]:
-                            value_match = re.search(fr'"{key}":\s*(\d+)', nutrition_text)
+                            value_match = safe_regex_search(fr'"{key}":\s*(\d+)', nutrition_text)
                             if value_match:
                                 nutrition[key] = int(value_match.group(1))
                     
@@ -663,7 +693,7 @@ class GroqService:
                     
                     # Extract other fields
                     for field in ["preparation_time", "health_benefits"]:
-                        field_match = re.search(fr'"{field}":\s*"([^"]+)"', full_text)
+                        field_match = safe_regex_search(fr'"{field}":\s*"([^"]+)"', full_text)
                         if field_match:
                             dish[field] = field_match.group(1)
                     

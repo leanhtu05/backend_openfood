@@ -3,7 +3,6 @@ import json
 import time
 import threading
 import random
-import re  # Ensure regex module is available
 from typing import List, Dict, Optional, Tuple
 from models import NutritionInfo, Dish, Ingredient
 
@@ -673,7 +672,7 @@ class GroqService:
         ]
 
         for pattern in patterns:
-            matches = safe_regex_findall(pattern, text, re.DOTALL)
+            matches = safe_regex_findall(pattern, text, 16)  # re.DOTALL = 16
             for match in matches:
                 try:
                     data = json.loads(match)
@@ -757,11 +756,11 @@ class GroqService:
         text = safe_regex_sub(r'\[\s*\{\s*"([^"]+)",', r'[{"name": "\1",', text)
 
         # Bước 3: Sửa missing quotes cho keys
-        text = re.sub(r'(\w+):', r'"\1":', text)
+        text = safe_regex_sub(r'(\w+):', r'"\1":', text)
 
         # Bước 4: Sửa trailing commas
-        text = re.sub(r',\s*}', '}', text)
-        text = re.sub(r',\s*]', ']', text)
+        text = safe_regex_sub(r',\s*}', '}', text)
+        text = safe_regex_sub(r',\s*]', ']', text)
 
         # Bước 5: Đảm bảo cân bằng brackets
         open_brackets = text.count('[')
@@ -854,7 +853,7 @@ class GroqService:
             print(f"🔧 Creating JSON from text response...")
 
             # Phương pháp 1: Tìm tên món ăn từ quotes
-            dish_names = safe_regex_findall(r'"([^"]*(?:Bánh|Cơm|Phở|Bún|Cháo|Chả|Gỏi|Canh|Xôi|Nem|Gà|Heo|Bò)[^"]*)"', text, re.IGNORECASE)
+            dish_names = safe_regex_findall(r'"([^"]*(?:Bánh|Cơm|Phở|Bún|Cháo|Chả|Gỏi|Canh|Xôi|Nem|Gà|Heo|Bò)[^"]*)"', text, 2)  # re.IGNORECASE = 2
 
             # Phương pháp 2: Tìm từ pattern Vietnamese dish names
             if not dish_names:
@@ -875,7 +874,7 @@ class GroqService:
             carbs_match = safe_regex_search(r'"?carbs"?\s*:\s*(\d+)', text)
 
             # Tìm ingredients từ text
-            ingredients_text = safe_regex_search(r'"?ingredients"?\s*:\s*\[(.*?)\]', text, re.DOTALL)
+            ingredients_text = safe_regex_search(r'"?ingredients"?\s*:\s*\[(.*?)\]', text, 16)  # re.DOTALL = 16
             ingredients = []
             if ingredients_text:
                 ingredient_matches = safe_regex_findall(r'"?name"?\s*:\s*"([^"]+)".*?"?amount"?\s*:\s*"([^"]+)"', ingredients_text.group(1))
@@ -931,8 +930,8 @@ class GroqService:
         Làm sạch response text để cải thiện khả năng parse JSON
         """
         # Loại bỏ markdown code blocks
-        text = re.sub(r'```json\s*', '', text)
-        text = re.sub(r'```\s*', '', text)
+        text = safe_regex_sub(r'```json\s*', '', text)
+        text = safe_regex_sub(r'```\s*', '', text)
 
         # Loại bỏ các ký tự không cần thiết ở đầu và cuối
         text = text.strip()
@@ -987,53 +986,53 @@ class GroqService:
 
         # Bước 1: Sửa pattern phổ biến nhất - missing "name" key
         # Pattern cực kỳ cụ thể: { "Bánh Mì Chay", "description": -> { "name": "Bánh Mì Chay", "description":
-        json_str = re.sub(r'\{\s*"([^"]+)",\s*"description":', r'{"name": "\1", "description":', json_str)
+        json_str = safe_regex_sub(r'\{\s*"([^"]+)",\s*"description":', r'{"name": "\1", "description":', json_str)
 
         # Pattern: { "Dish Name", "Món ăn..." -> { "name": "Dish Name", "description": "Món ăn..."
-        json_str = re.sub(r'\{\s*"([^"]+)",\s*"(Món [^"]*)"', r'{"name": "\1", "description": "\2"', json_str)
+        json_str = safe_regex_sub(r'\{\s*"([^"]+)",\s*"(Món [^"]*)"', r'{"name": "\1", "description": "\2"', json_str)
 
         # Pattern đặc biệt cho trường hợp chỉ có tên món: { "Bánh Mì Chay", -> { "name": "Bánh Mì Chay",
-        json_str = re.sub(r'\{\s*"([^"]+)",\s*([^"])', r'{"name": "\1", \2', json_str)
+        json_str = safe_regex_sub(r'\{\s*"([^"]+)",\s*([^"])', r'{"name": "\1", \2', json_str)
 
         # Pattern: [ { "Dish Name", -> [ { "name": "Dish Name",
-        json_str = re.sub(r'\[\s*\{\s*"([^"]+)",', r'[{"name": "\1",', json_str)
+        json_str = safe_regex_sub(r'\[\s*\{\s*"([^"]+)",', r'[{"name": "\1",', json_str)
 
         # Pattern đặc biệt cho trường hợp không có field name: { "Bánh Mì Chay", [array]
-        json_str = re.sub(r'\{\s*"([^"]+)",\s*\[', r'{"name": "\1", "ingredients": [', json_str)
+        json_str = safe_regex_sub(r'\{\s*"([^"]+)",\s*\[', r'{"name": "\1", "ingredients": [', json_str)
 
         # Pattern mới: Xử lý trường hợp có text description nhưng không có key
         # { "Bánh Mì Chay", "Bánh mì chay thơm ngon..." -> { "name": "Bánh Mì Chay", "description": "Bánh mì chay thơm ngon..."
-        json_str = re.sub(r'\{\s*"([^"]+)",\s*"([^"]*[a-z][^"]*)",', r'{"name": "\1", "description": "\2",', json_str)
+        json_str = safe_regex_sub(r'\{\s*"([^"]+)",\s*"([^"]*[a-z][^"]*)",', r'{"name": "\1", "description": "\2",', json_str)
 
         # Bước 2: Sửa missing field names cho các trường hợp phức tạp
         # Pattern: "name": "...", "text without field", -> "name": "...", "description": "text",
-        json_str = re.sub(r'"name":\s*"([^"]+)",\s*"([^"]+)",\s*\[', r'"name": "\1", "description": "\2", "ingredients": [', json_str)
+        json_str = safe_regex_sub(r'"name":\s*"([^"]+)",\s*"([^"]+)",\s*\[', r'"name": "\1", "description": "\2", "ingredients": [', json_str)
 
         # Sửa trường hợp thiếu key cho ingredients, preparation, etc.
-        json_str = re.sub(r'",\s*\[\s*\{', r'", "ingredients": [{', json_str)
-        json_str = re.sub(r'\],\s*\[\s*"', r'], "preparation": ["', json_str)
-        json_str = re.sub(r'"\],\s*\{', r'"], "nutrition": {', json_str)
-        json_str = re.sub(r'\},\s*"([^"]+)",\s*"([^"]+)"\s*\}', r'}, "preparation_time": "\1", "health_benefits": "\2"}', json_str)
+        json_str = safe_regex_sub(r'",\s*\[\s*\{', r'", "ingredients": [{', json_str)
+        json_str = safe_regex_sub(r'\],\s*\[\s*"', r'], "preparation": ["', json_str)
+        json_str = safe_regex_sub(r'"\],\s*\{', r'"], "nutrition": {', json_str)
+        json_str = safe_regex_sub(r'\},\s*"([^"]+)",\s*"([^"]+)"\s*\}', r'}, "preparation_time": "\1", "health_benefits": "\2"}', json_str)
 
         # Bước 4: Sửa malformed arrays - loại bỏ quotes xung quanh arrays
-        json_str = re.sub(r'"\s*\[\s*', r'[', json_str)
-        json_str = re.sub(r'\s*\]\s*"', r']', json_str)
+        json_str = safe_regex_sub(r'"\s*\[\s*', r'[', json_str)
+        json_str = safe_regex_sub(r'\s*\]\s*"', r']', json_str)
 
         # Bước 5: Sửa missing field names cho arrays
         # Pattern: , [ -> , "ingredients": [
-        json_str = re.sub(r',\s*\[\s*\{', r', "ingredients": [{', json_str)
-        json_str = re.sub(r',\s*\[\s*"', r', "preparation": ["', json_str)
+        json_str = safe_regex_sub(r',\s*\[\s*\{', r', "ingredients": [{', json_str)
+        json_str = safe_regex_sub(r',\s*\[\s*"', r', "preparation": ["', json_str)
 
         # Bước 6: Sửa missing quotes cho object keys
-        json_str = re.sub(r'(\w+):', r'"\1":', json_str)
+        json_str = safe_regex_sub(r'(\w+):', r'"\1":', json_str)
 
         # Bước 7: Sửa trailing commas
-        json_str = re.sub(r',\s*}', '}', json_str)
-        json_str = re.sub(r',\s*]', ']', json_str)
+        json_str = safe_regex_sub(r',\s*}', '}', json_str)
+        json_str = safe_regex_sub(r',\s*]', ']', json_str)
 
         # Bước 8: Sửa single quotes thành double quotes
-        json_str = re.sub(r"'([^']*)':", r'"\1":', json_str)
-        json_str = re.sub(r":\s*'([^']*)'", r': "\1"', json_str)
+        json_str = safe_regex_sub(r"'([^']*)':", r'"\1":', json_str)
+        json_str = safe_regex_sub(r":\s*'([^']*)'", r': "\1"', json_str)
 
         # Bước 9: Sửa broken objects - thêm missing closing braces
         open_braces = json_str.count('{')
@@ -1052,23 +1051,23 @@ class GroqService:
         # Bước 11: Đảm bảo có đủ required fields
         if '"name"' not in json_str:
             print("⚠️ Missing name field, attempting to add...")
-            json_str = re.sub(r'\{', r'{"name": "Vietnamese Dish",', json_str, count=1)
+            json_str = safe_regex_sub(r'\{', r'{"name": "Vietnamese Dish",', json_str, count=1)
 
         if '"description"' not in json_str:
             print("⚠️ Missing description field, attempting to add...")
-            json_str = re.sub(r'"name":\s*"([^"]*)",', r'"name": "\1", "description": "Món ăn Việt Nam truyền thống",', json_str)
+            json_str = safe_regex_sub(r'"name":\s*"([^"]*)",', r'"name": "\1", "description": "Món ăn Việt Nam truyền thống",', json_str)
 
         if '"ingredients"' not in json_str:
             print("⚠️ Missing ingredients field, attempting to add...")
-            json_str = re.sub(r'"description":\s*"[^"]*",', r'\g<0> "ingredients": [{"name": "Nguyên liệu", "amount": "100g"}],', json_str)
+            json_str = safe_regex_sub(r'"description":\s*"[^"]*",', r'\g<0> "ingredients": [{"name": "Nguyên liệu", "amount": "100g"}],', json_str)
 
         # Bước 12: Sửa malformed nutrition objects
         if '"nutrition"' in json_str:
             # Ensure nutrition has proper structure
             nutrition_pattern = r'"nutrition":\s*\{[^}]*\}'
-            if not re.search(nutrition_pattern, json_str):
+            if not safe_regex_search(nutrition_pattern, json_str):
                 print("⚠️ Fixing malformed nutrition object...")
-                json_str = re.sub(r'"nutrition":\s*[^,}]+', r'"nutrition": {"calories": 300, "protein": 20, "fat": 10, "carbs": 40}', json_str)
+                json_str = safe_regex_sub(r'"nutrition":\s*[^,}]+', r'"nutrition": {"calories": 300, "protein": 20, "fat": 10, "carbs": 40}', json_str)
 
         if original_json != json_str:
             print(f"🔧 JSON was extensively modified during fixing")

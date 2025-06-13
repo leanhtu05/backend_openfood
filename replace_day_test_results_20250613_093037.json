@@ -1,0 +1,17 @@
+[
+  {
+    "test_case": "Thay thế Thứ 2 - Giảm cân",
+    "status": "CONNECTION_ERROR",
+    "error": "Cannot connect to server"
+  },
+  {
+    "test_case": "Thay thế Thứ 4 - Tăng cân",
+    "status": "CONNECTION_ERROR",
+    "error": "Cannot connect to server"
+  },
+  {
+    "test_case": "Thay thế Chủ nhật - Cân bằng",
+    "status": "CONNECTION_ERROR",
+    "error": "Cannot connect to server"
+  }
+]

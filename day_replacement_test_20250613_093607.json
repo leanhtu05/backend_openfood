@@ -1,0 +1,231 @@
+[
+  {
+    "meal_type": "Bữa sáng",
+    "target": {
+      "name": "Bữa sáng",
+      "calories": 300,
+      "protein": 20,
+      "fat": 10,
+      "carbs": 30
+    },
+    "dishes": [
+      {
+        "name": "Bánh Mì Chay",
+        "description": "Món bánh mì chay thơm ngon với rau củ tươi",
+        "ingredients": [
+          {
+            "name": "Bánh mì",
+            "amount": "100g"
+          },
+          {
+            "name": "Đậu hũ",
+            "amount": "50g"
+          },
+          {
+            "name": "Rau củ",
+            "amount": "100g"
+          }
+        ],
+        "preparation": [
+          "Sơ chế rau củ và đậu hũ",
+          "Assemble bánh mì với rau củ và đậu hũ"
+        ],
+        "nutrition": {
+          "calories": 300.0,
+          "fat": 10.0,
+          "carbs": 30.0,
+          "protein": 20
+        },
+        "preparation_time": "30 phút",
+        "health_benefits": "Cung cấp chất xơ và vitamin dồi dào"
+      },
+      {
+        "name": "Cháo Gà",
+        "description": "Món cháo gà thơm ngon và bổ dưỡng",
+        "ingredients": [
+          {
+            "name": "Gà",
+            "amount": "100g"
+          },
+          {
+            "name": "Gạo",
+            "amount": "50g"
+          },
+          {
+            "name": "Rau thơm",
+            "amount": "20g"
+          }
+        ],
+        "preparation": [
+          "Nấu gà và gạo trong nước dùng",
+          "Thêm rau thơm và gia vị vào cháo"
+        ],
+        "nutrition": {
+          "calories": 300.0,
+          "protein": 20.0,
+          "fat": 10.0,
+          "carbs": 30.0
+        },
+        "preparation_time": "40 phút",
+        "health_benefits": "Cung cấp protein và năng lượng cân bằng"
+      }
+    ],
+    "status": "SUCCESS",
+    "actual": {
+      "calories": 600.0,
+      "protein": 40.0,
+      "fat": 20.0,
+      "carbs": 60.0
+    }
+  },
+  {
+    "meal_type": "Bữa trưa",
+    "target": {
+      "name": "Bữa trưa",
+      "calories": 480,
+      "protein": 32,
+      "fat": 16,
+      "carbs": 48
+    },
+    "dishes": [
+      {
+        "name": "Bún Chay",
+        "description": "Món bún chay thơm ngon và bổ dưỡng",
+        "ingredients": [
+          {
+            "name": "Bún gạo",
+            "amount": "150g"
+          },
+          {
+            "name": "Đậu hũ",
+            "amount": "100g"
+          }
+        ],
+        "preparation": [
+          "Luộc bún gạo cho chín",
+          "Xào đậu hũ với gia vị cho thơm"
+        ],
+        "nutrition": {
+          "calories": 240.0,
+          "protein": 16.0,
+          "fat": 8.0,
+          "carbs": 48.0
+        },
+        "preparation_time": "30 phút",
+        "health_benefits": "Cung cấp protein chất lượng cao và năng lượng cân bằng"
+      },
+      {
+        "name": "Cơm Sườn Chay",
+        "description": "Món cơm tấm chay thơm ngon và bổ dưỡng",
+        "ingredients": [
+          {
+            "name": "Cơm tấm",
+            "amount": "150g"
+          },
+          {
+            "name": "Sườn chay",
+            "amount": "100g"
+          }
+        ],
+        "preparation": [
+          "Ướp sườn chay với gia vị trong 30 phút",
+          "Nướng sườn chay trên than hoa đến khi chín vàng"
+        ],
+        "nutrition": {
+          "calories": 240.0,
+          "protein": 16.0,
+          "fat": 8.0,
+          "carbs": 48.0
+        },
+        "preparation_time": "45 phút",
+        "health_benefits": "Cung cấp protein chất lượng cao và năng lượng cân bằng"
+      }
+    ],
+    "status": "SUCCESS",
+    "actual": {
+      "calories": 480.0,
+      "protein": 32.0,
+      "fat": 16.0,
+      "carbs": 96.0
+    }
+  },
+  {
+    "meal_type": "Bữa tối",
+    "target": {
+      "name": "Bữa tối",
+      "calories": 420,
+      "protein": 28,
+      "fat": 14,
+      "carbs": 42
+    },
+    "dishes": [
+      {
+        "name": "Bún Chay Hà Nội",
+        "description": "Món bún chay truyền thống của Hà Nội",
+        "ingredients": [
+          {
+            "name": "Bún gạo",
+            "amount": "200g"
+          },
+          {
+            "name": "Đậu hũ",
+            "amount": "100g"
+          },
+          {
+            "name": "Nấm hương",
+            "amount": "g"
+          }
+        ],
+        "preparation": [
+          "Luộc bún gạo trong nước sôi",
+          "Xào đậu hũ và nấm hương với gia vị"
+        ],
+        "nutrition": {
+          "calories": 210.0,
+          "protein": 28.0,
+          "fat": 14.0,
+          "carbs": 42.0
+        },
+        "preparation_time": "30 phút",
+        "health_benefits": "Cung cấp chất xơ và vitamin dồi dào"
+      },
+      {
+        "name": "Cơm Gà Xối",
+        "description": "Món cơm gà xối thơm ngon của người Việt",
+        "ingredients": [
+          {
+            "name": "Cơm trắng",
+            "amount": "150g"
+          },
+          {
+            "name": "Thịt gà",
+            "amount": "100g"
+          },
+          {
+            "name": "Rau thơm",
+            "amount": "20g"
+          }
+        ],
+        "preparation": [
+          "Luộc cơm trắng trong nước sôi",
+          "Xối thịt gà với gia vị và rau thơm"
+        ],
+        "nutrition": {
+          "calories": 210.0,
+          "protein": 28.0,
+          "fat": 14.0,
+          "carbs": 42.0
+        },
+        "preparation_time": "40 phút",
+        "health_benefits": "Cung cấp protein và chất béo có lợi"
+      }
+    ],
+    "status": "SUCCESS",
+    "actual": {
+      "calories": 420.0,
+      "protein": 56.0,
+      "fat": 28.0,
+      "carbs": 84.0
+    }
+  }
+]

@@ -237,16 +237,27 @@ class GroqService:
         allergies_str = ", ".join(allergies) if allergies else "không có"
         cuisine_style_str = cuisine_style if cuisine_style else "không có yêu cầu cụ thể"
 
-        # Prompt siêu nghiêm ngặt với format cố định
-        prompt = f"""ONLY return valid JSON. NO other text.
+        # Ultra Strict Prompt - Template Based
+        template_json = f'{{"name":"DISH_NAME","description":"DESCRIPTION","ingredients":[{{"name":"INGREDIENT","amount":"AMOUNT"}}],"preparation":["STEP1","STEP2"],"nutrition":{{"calories":{calories_target//2 if calories_target > 400 else calories_target},"protein":{protein_target//2 if protein_target > 30 else protein_target},"fat":{fat_target//2 if fat_target > 20 else fat_target},"carbs":{carbs_target//2 if carbs_target > 50 else carbs_target}}},"preparation_time":"TIME","health_benefits":"BENEFITS"}}'
 
-Format: [{{"name":"Vietnamese dish","description":"Vietnamese description","ingredients":[{{"name":"item","amount":"qty"}}],"preparation":["step1","step2"],"nutrition":{{"calories":{calories_target//2 if calories_target > 400 else calories_target},"protein":{protein_target//2 if protein_target > 30 else protein_target},"fat":{fat_target//2 if fat_target > 20 else fat_target},"carbs":{carbs_target//2 if carbs_target > 50 else carbs_target}}},"preparation_time":"time","health_benefits":"benefits"}}]
+        prompt = f"""Fill this EXACT template with Vietnamese {meal_type} dish data:
 
-Create 1 Vietnamese {meal_type} dish. Target: {calories_target}kcal, {protein_target}g protein.
+[{template_json}]
 
-Example: [{{"name":"Phở Gà","description":"Món phở gà truyền thống","ingredients":[{{"name":"Bánh phở","amount":"200g"}}],"preparation":["Luộc gà","Bày ra tô"],"nutrition":{{"calories":300,"protein":20,"fat":10,"carbs":40}},"preparation_time":"30 phút","health_benefits":"Giàu protein"}}]
+Replace:
+- DISH_NAME: Vietnamese dish name
+- DESCRIPTION: Brief description in Vietnamese
+- INGREDIENT: Ingredient name
+- AMOUNT: Amount like "100g"
+- STEP1, STEP2: Preparation steps in Vietnamese
+- TIME: Time like "30 phút"
+- BENEFITS: Health benefits in Vietnamese
 
-JSON:"""
+Target nutrition: {calories_target}kcal, {protein_target}g protein, {fat_target}g fat, {carbs_target}g carbs.
+Preferences: {preferences_str}
+Allergies: {allergies_str}
+
+Return ONLY the filled JSON array. NO other text:"""
         
         try:
             # Gọi API Groq
@@ -581,49 +592,58 @@ JSON:"""
 
     def _fix_malformed_json(self, json_str: str) -> str:
         """
-        Cố gắng sửa JSON bị lỗi format với nhiều phương pháp mạnh mẽ
+        Ultra-robust JSON fixing với nhiều pattern matching
         """
-        print(f"🔧 Attempting to fix malformed JSON...")
+        print(f"🔧 Attempting ultra-robust JSON fixing...")
         original_json = json_str
 
-        # Bước 1: Sửa missing "name" key - pattern phổ biến nhất
+        # Bước 1: Sửa pattern phổ biến nhất - missing "name" key
+        # Pattern: { "Dish Name", "description": -> { "name": "Dish Name", "description":
         json_str = re.sub(r'\{\s*"([^"]+)",\s*"([^"]+)":', r'{"name": "\1", "description": "\2",', json_str)
 
-        # Bước 2: Sửa missing quotes cho các keys
-        json_str = re.sub(r'\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*,', r'{"name": "\1",', json_str)
+        # Bước 2: Sửa pattern chỉ có tên món
+        # Pattern: { "Dish Name", -> { "name": "Dish Name",
+        json_str = re.sub(r'\{\s*"([^"]+)",\s*([^"])', r'{"name": "\1", \2', json_str)
 
-        # Bước 3: Sửa malformed arrays - loại bỏ quotes xung quanh arrays
+        # Bước 3: Sửa missing "description" key
+        # Pattern: "name": "...", "text", -> "name": "...", "description": "text",
+        json_str = re.sub(r'"name":\s*"([^"]+)",\s*"([^"]+)",', r'"name": "\1", "description": "\2",', json_str)
+
+        # Bước 4: Sửa malformed arrays - loại bỏ quotes xung quanh arrays
         json_str = re.sub(r'"\s*\[\s*', r'[', json_str)
         json_str = re.sub(r'\s*\]\s*"', r']', json_str)
 
-        # Bước 4: Sửa missing field names cho arrays
-        json_str = re.sub(r',\s*\[\s*\{', r', "ingredients": [{"', json_str)
+        # Bước 5: Sửa missing field names cho arrays
+        # Pattern: , [ -> , "ingredients": [
+        json_str = re.sub(r',\s*\[\s*\{', r', "ingredients": [{', json_str)
         json_str = re.sub(r',\s*\[\s*"', r', "preparation": ["', json_str)
 
-        # Bước 5: Sửa missing quotes cho object keys
+        # Bước 6: Sửa missing quotes cho object keys
         json_str = re.sub(r'(\w+):', r'"\1":', json_str)
 
-        # Bước 6: Sửa trailing commas
+        # Bước 7: Sửa trailing commas
         json_str = re.sub(r',\s*}', '}', json_str)
         json_str = re.sub(r',\s*]', ']', json_str)
 
-        # Bước 7: Sửa single quotes thành double quotes
+        # Bước 8: Sửa single quotes thành double quotes
         json_str = re.sub(r"'([^']*)':", r'"\1":', json_str)
         json_str = re.sub(r":\s*'([^']*)'", r': "\1"', json_str)
 
-        # Bước 8: Sửa broken objects - thêm missing closing braces
+        # Bước 9: Sửa broken objects - thêm missing closing braces
         open_braces = json_str.count('{')
         close_braces = json_str.count('}')
         if open_braces > close_braces:
             json_str += '}' * (open_braces - close_braces)
+            print(f"⚠️ Added {open_braces - close_braces} missing closing braces")
 
-        # Bước 9: Sửa broken arrays - thêm missing closing brackets
+        # Bước 10: Sửa broken arrays - thêm missing closing brackets
         open_brackets = json_str.count('[')
         close_brackets = json_str.count(']')
         if open_brackets > close_brackets:
             json_str += ']' * (open_brackets - close_brackets)
+            print(f"⚠️ Added {open_brackets - close_brackets} missing closing brackets")
 
-        # Bước 10: Đảm bảo có đủ required fields
+        # Bước 11: Đảm bảo có đủ required fields
         if '"name"' not in json_str:
             print("⚠️ Missing name field, attempting to add...")
             json_str = re.sub(r'\{', r'{"name": "Vietnamese Dish",', json_str, count=1)
@@ -636,10 +656,24 @@ JSON:"""
             print("⚠️ Missing ingredients field, attempting to add...")
             json_str = re.sub(r'"description":\s*"[^"]*",', r'\g<0> "ingredients": [{"name": "Nguyên liệu", "amount": "100g"}],', json_str)
 
+        # Bước 12: Sửa malformed nutrition objects
+        if '"nutrition"' in json_str:
+            # Ensure nutrition has proper structure
+            nutrition_pattern = r'"nutrition":\s*\{[^}]*\}'
+            if not re.search(nutrition_pattern, json_str):
+                print("⚠️ Fixing malformed nutrition object...")
+                json_str = re.sub(r'"nutrition":\s*[^,}]+', r'"nutrition": {"calories": 300, "protein": 20, "fat": 10, "carbs": 40}', json_str)
+
         if original_json != json_str:
-            print(f"🔧 JSON was modified during fixing")
+            print(f"🔧 JSON was extensively modified during fixing")
             print(f"Original length: {len(original_json)}")
             print(f"Fixed length: {len(json_str)}")
+
+            # Show key changes
+            if '"name":' in json_str and '"name":' not in original_json:
+                print("✅ Added missing 'name' field")
+            if '"description":' in json_str and '"description":' not in original_json:
+                print("✅ Added missing 'description' field")
 
         return json_str
 

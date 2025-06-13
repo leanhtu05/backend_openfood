@@ -1,0 +1,172 @@
+[
+  {
+    "test_case": "Bữa sáng giảm cân",
+    "status": "SUCCESS",
+    "meals_count": 1,
+    "validation": [
+      {
+        "meal_index": 0,
+        "name": "Bánh Mì Chay",
+        "missing_fields": [],
+        "field_types": {
+          "name": "str",
+          "description": "str",
+          "ingredients": "list",
+          "preparation": "list",
+          "nutrition": "dict",
+          "preparation_time": "str",
+          "health_benefits": "str"
+        },
+        "is_valid": true
+      }
+    ],
+    "meals": [
+      {
+        "name": "Bánh Mì Chay",
+        "description": "Bánh mì chay là một món ăn sáng phổ biến ở Việt Nam",
+        "ingredients": [
+          {
+            "name": "Bánh mì",
+            "amount": "100g"
+          },
+          {
+            "name": "Đậu phụ",
+            "amount": "50g"
+          },
+          {
+            "name": "Rau thơm",
+            "amount": "20g"
+          },
+          {
+            "name": "Nước tương",
+            "amount": "10g"
+          }
+        ],
+        "preparation": [
+          "Cho bánh mì vào lò nướng 5 phút",
+          "Cho đậu phụ và rau thơm vào bánh mì"
+        ],
+        "nutrition": {
+          "calories": 300.0,
+          "protein": 20.0,
+          "fat": 10.0,
+          "carbs": 30.0
+        },
+        "preparation_time": "30 phút",
+        "health_benefits": "Giúp giảm cân, tốt cho sức khỏe"
+      }
+    ]
+  },
+  {
+    "test_case": "Bữa trưa tăng cân",
+    "status": "SUCCESS",
+    "meals_count": 1,
+    "validation": [
+      {
+        "meal_index": 0,
+        "name": "Bún bò Huế",
+        "missing_fields": [],
+        "field_types": {
+          "name": "str",
+          "description": "str",
+          "ingredients": "list",
+          "preparation": "list",
+          "nutrition": "dict",
+          "preparation_time": "str",
+          "health_benefits": "str"
+        },
+        "is_valid": true
+      }
+    ],
+    "meals": [
+      {
+        "name": "Bún bò Huế",
+        "ingredients": [
+          {
+            "name": "Bún",
+            "amount": "200g"
+          },
+          {
+            "name": "Thịt bò",
+            "amount": "100g"
+          },
+          {
+            "name": "Rau sống",
+            "amount": "50g"
+          }
+        ],
+        "preparation": [
+          "Luộc bún",
+          "Nấu thịt bò"
+        ],
+        "nutrition": {
+          "calories": 600.0,
+          "protein": 35.0,
+          "fat": 25.0,
+          "carbs": 70.0
+        },
+        "preparation_time": "45 phút",
+        "health_benefits": "Giúp tăng cường sức khỏe, cung cấp đủ dinh dưỡng cho ngày dài",
+        "description": "Món ăn Bún bò Huế ngon và bổ dưỡng"
+      }
+    ]
+  },
+  {
+    "test_case": "Bữa tối cân bằng",
+    "status": "SUCCESS",
+    "meals_count": 1,
+    "validation": [
+      {
+        "meal_index": 0,
+        "name": "Cơm Gà Xối",
+        "missing_fields": [],
+        "field_types": {
+          "name": "str",
+          "description": "str",
+          "ingredients": "list",
+          "preparation": "list",
+          "nutrition": "dict",
+          "preparation_time": "str",
+          "health_benefits": "str"
+        },
+        "is_valid": true
+      }
+    ],
+    "meals": [
+      {
+        "name": "Cơm Gà Xối",
+        "description": "Món cơm gà xối thơm ngon, được chế biến từ gà tươi và các loại gia vị đặc biệt.",
+        "ingredients": [
+          {
+            "name": "Gà",
+            "amount": "300g"
+          },
+          {
+            "name": "Gạo",
+            "amount": "200g"
+          },
+          {
+            "name": "Dầu ăn",
+            "amount": "20g"
+          },
+          {
+            "name": "Hành lá",
+            "amount": "50g"
+          }
+        ],
+        "preparation": [
+          "Bước 1: Luộc gà trong nước sôi.",
+          "Bước 2: Xối cơm với dầu ăn và hành lá"
+        ],
+        "nutrition": {
+          "calories": 450.0,
+          "protein": 25.0,
+          "fat": 15.0,
+          "carbs": 50.0
+        },
+        "preparation_time": "30 phút",
+        "health_benefits": "Tốt cho tim mạch, cung cấp đủ dinh dưỡng cho cơ thể."
+      }
+    ]
+  }
+]

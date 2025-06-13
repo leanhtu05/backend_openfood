@@ -189,7 +189,7 @@ async def replace_meal_endpoint(
         if clear_cache:
             try:
                 # Import AI service
-                from groq_integration import groq_service  # Enhanced version
+                from groq_integration_direct import groq_service
                 if groq_service and hasattr(groq_service, 'clear_cache'):
                     logger.info("Đang xóa cache AI để tạo món ăn mới...")
                     groq_service.clear_cache()

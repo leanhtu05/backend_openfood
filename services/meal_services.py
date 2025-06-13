@@ -26,7 +26,7 @@ from services.meal_tracker import used_dishes_tracker
 
 # Import Groq integration
 try:
-    from groq_integration_direct import groq_service  # Fixed version
+    from groq_integration import groq_service  # Enhanced version  # Fixed version
     AI_SERVICE = groq_service
     AI_AVAILABLE = groq_service.available
 except ImportError:

@@ -11,7 +11,7 @@ from datetime import datetime
 # Add the current directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from groq_integration import GroqService  # Enhanced version  # Fixed version
+from groq_integration_direct import GroqService  # Fixed version
 
 def print_separator(title):
     """In separator với title"""

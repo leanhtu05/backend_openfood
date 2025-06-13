@@ -237,7 +237,7 @@ def test_groq_service_under_load():
     print("=" * 50)
     
     try:
-        from groq_integration import GroqService  # Enhanced version  # Fixed version
+        from groq_integration_direct import GroqService  # Fixed version
         
         def test_groq_request(thread_id: int):
             """Single Groq request for threading test"""

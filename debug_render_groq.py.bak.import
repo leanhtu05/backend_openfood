@@ -243,7 +243,7 @@ def check_environment():
     
     # Check if groq_integration.py exists and is importable
     try:
-        from groq_integration import GroqService  # Enhanced version  # Fixed version
+        from groq_integration_direct import GroqService  # Fixed version
         print("✅ GroqService importable")
         
         # Test GroqService initialization

@@ -343,14 +343,16 @@ class GroqService:
             user_data_str = "_".join([f"{k}:{v}" for k, v in user_data.items() if k in ['gender', 'age', 'goal', 'activity_level']])
             cache_key += f"_user:{user_data_str}"
         
+        # DISABLE CACHE để luôn tạo món mới
         # Thêm thời gian hiện tại vào cache key để đảm bảo luôn có kết quả mới
-        current_time = int(time.time() / 300)  # Thay đổi mỗi 5 phút
+        current_time = int(time.time() / 60)  # Thay đổi mỗi phút để tăng đa dạng
         cache_key += f"_time={current_time}"
-        
-        # Kiểm tra cache
-        if cache_key in self.cache:
-            print(f"Using cached meal suggestions for {meal_type}")
-            return self.cache[cache_key]
+
+        # TEMPORARILY DISABLE CACHE để test đa dạng món ăn
+        # if cache_key in self.cache:
+        #     print(f"Using cached meal suggestions for {meal_type}")
+        #     return self.cache[cache_key]
+        print(f"Generating fresh meal suggestions for {meal_type} (cache disabled)")
         
         # Chuẩn bị prompt
         prompt = self._prepare_meal_prompt(
@@ -774,8 +776,18 @@ class GroqService:
 - User goal: {goal}
 - User activity level: {activity_level}"""
         
+        # Danh sách món ăn đa dạng để AI tham khảo
+        diverse_dishes = {
+            "bữa sáng": ["Phở bò", "Bún bò Huế", "Cháo gà", "Bánh cuốn", "Xôi xéo", "Bánh mì pate", "Cháo đậu xanh", "Bánh bao", "Chè đậu đỏ", "Bánh flan"],
+            "bữa trưa": ["Cơm tấm", "Bún chả", "Mì Quảng", "Cao lầu", "Bánh xèo", "Gỏi cuốn", "Cơm gà", "Bún riêu", "Bánh canh", "Cơm chiên"],
+            "bữa tối": ["Lẩu thái", "Cá kho tộ", "Thịt kho tàu", "Canh chua", "Gà nướng", "Tôm rang me", "Sườn xào chua ngọt", "Cà ri gà", "Bò lúc lắc", "Chả cá"]
+        }
+
+        suggested_dishes = diverse_dishes.get(meal_type.lower(), diverse_dishes["bữa sáng"])
+        dishes_suggestion = f"\n\nMột số gợi ý món ăn {meal_type}: {', '.join(suggested_dishes[:5])}. Hãy tạo món KHÁC với những món này để tăng tính đa dạng."
+
         # Prompt được cải tiến để "ép" AI tuân thủ quy tắc JSON
-        prompt = f"""Bạn là một chuyên gia dinh dưỡng. Dựa trên các thông tin sau: {meal_type}{day_str} với mục tiêu dinh dưỡng {calories_target}kcal, {protein_target}g protein, {fat_target}g chất béo, {carbs_target}g carbs, sở thích: {preferences_str}, dị ứng: {allergies_str}, phong cách ẩm thực: {cuisine_style_str}{diversity_str}{user_info}, hãy tạo ra một danh sách gồm 1-2 món ăn Việt Nam.
+        prompt = f"""Bạn là một chuyên gia dinh dưỡng. Dựa trên các thông tin sau: {meal_type}{day_str} với mục tiêu dinh dưỡng {calories_target}kcal, {protein_target}g protein, {fat_target}g chất béo, {carbs_target}g carbs, sở thích: {preferences_str}, dị ứng: {allergies_str}, phong cách ẩm thực: {cuisine_style_str}{diversity_str}{user_info}{dishes_suggestion}, hãy tạo ra một danh sách gồm 1-2 món ăn Việt Nam.
 
 YÊU CẦU TUYỆT ĐỐI:
 
@@ -803,10 +815,11 @@ Bên trong nutrition, mỗi đối tượng phải có calories (number), protei
     {{"name": "Nước mắm", "amount": "2 thìa canh"}}
   ],
   "preparation": [
-    "Ướp sườn với gia vị trong 30 phút.",
-    "Nướng sườn trên than hoa đến khi chín vàng.",
-    "Chiên trứng thành chả mỏng.",
-    "Bày cơm tấm ra đĩa, xếp sườn và chả trứng lên trên."
+    "Bước 1: Ướp sườn với nước mắm, đường, tỏi băm, tiêu trong 30 phút.",
+    "Bước 2: Nướng sườn trên than hoa hoặc lò nướng ở 200°C trong 15-20 phút, lật đều 2 mặt.",
+    "Bước 3: Đánh trứng với chút muối, chiên thành chả mỏng rồi cắt thành miếng.",
+    "Bước 4: Nấu cơm tấm với tỷ lệ nước vừa đủ để cơm dẻo nhưng không bị nhão.",
+    "Bước 5: Bày cơm tấm ra đĩa, xếp sườn nướng và chả trứng lên trên, ăn kèm với dưa chua và nước mắm pha."
   ],
   "nutrition": {{
     "calories": {calories_target},
@@ -820,16 +833,21 @@ Bên trong nutrition, mỗi đối tượng phải có calories (number), protei
 
 QUY TẮC BỔ SUNG:
 1. Tất cả tên món ăn và mô tả phải bằng tiếng Việt
-2. Nguyên liệu phải có tên tiếng Việt
-3. Hướng dẫn chuẩn bị phải bằng tiếng Việt với các bước chi tiết
-4. Tạo các món ăn KHÁC NHAU và sáng tạo
+2. Nguyên liệu phải có tên tiếng Việt và lượng cụ thể (gram, thìa, quả...)
+3. Hướng dẫn chuẩn bị phải bằng tiếng Việt với các bước chi tiết:
+   - Mỗi bước phải bắt đầu bằng "Bước 1:", "Bước 2:", v.v.
+   - Bao gồm thời gian nấu, nhiệt độ nếu cần
+   - Mô tả cụ thể cách thức chế biến (ướp, nướng, xào, luộc...)
+   - Không được viết "Chế biến theo hướng dẫn" hay các câu chung chung
+4. Tạo các món ăn KHÁC NHAU và sáng tạo, tránh lặp lại món cũ
 5. KHÔNG bao gồm tên ngày trong tên món ăn
 6. Xem xét mục tiêu cụ thể của người dùng:
    - Giảm cân: Tập trung vào món ăn no bụng, nhiều chất xơ, protein cao, ít calo
    - Tăng cân: Tập trung vào món ăn giàu protein, dinh dưỡng dày đặc
    - Sức khỏe tổng quát: Tập trung vào món ăn cân bằng, đa dạng dinh dưỡng
-7. Luôn bao gồm thời gian chuẩn bị cho mỗi món
-8. Luôn bao gồm lợi ích sức khỏe của mỗi món
+7. Luôn bao gồm thời gian chuẩn bị cho mỗi món (ví dụ: "25-30 phút")
+8. Luôn bao gồm lợi ích sức khỏe cụ thể của mỗi món
+9. Đa dạng hóa món ăn: không chỉ bánh mì, hãy tạo cháo, phở, cơm, bún, v.v.
 
 Bây giờ, hãy tạo danh sách món ăn của bạn."""
         

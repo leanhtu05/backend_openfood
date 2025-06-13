@@ -6,7 +6,7 @@ Kiểm tra các cải tiến trong việc xử lý JSON từ Groq API
 
 import json
 import re
-from groq_integration import GroqService  # Enhanced version  # Fixed version
+from groq_integration_direct import GroqService  # Fixed version
 
 def test_json_parsing():
     """Test các trường hợp JSON parsing khác nhau"""

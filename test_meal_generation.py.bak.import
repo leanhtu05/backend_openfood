@@ -4,7 +4,7 @@ Script kiểm tra tạo meal plan với các thay đổi mới
 """
 import os
 import json
-from groq_integration import GroqService  # Enhanced version  # Fixed version
+from groq_integration_direct import GroqService  # Fixed version
 
 def test_meal_generation():
     """Test meal generation with the fixed implementation"""

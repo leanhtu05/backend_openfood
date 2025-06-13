@@ -31,7 +31,7 @@ if not logger.handlers:
 # Thêm các import còn thiếu
 try:
     # Import groq_service từ groq_integration_direct
-    from groq_integration import groq_service  # Enhanced version
+    from groq_integration_direct import groq_service
 except ImportError:
     logger.warning("Không thể import groq_service từ groq_integration_direct. Tạo một dịch vụ giả lập.")
     # Tạo một dịch vụ giả lập nếu không thể import
@@ -395,7 +395,7 @@ async def debug_groq():
 
     # Test GroqService integration
     try:
-        from groq_integration import GroqService  # Enhanced version  # Fixed version
+        from groq_integration_direct import GroqService  # Fixed version
         debug_info["groq_service_import"] = "success"
 
         service = GroqService()
@@ -526,7 +526,7 @@ async def check_ai_availability():
     try:
         # Kiểm tra Groq LLaMA 3
         try:
-            from groq_integration import groq_service  # Enhanced version  # Fixed version
+            from groq_integration_direct import groq_service  # Fixed version
             if groq_service.available:
                 return {
                     "ai_available": True,
@@ -557,7 +557,7 @@ async def get_cache_info():
     - Thông tin về cache và rate limiting
     """
     try:
-        from groq_integration import groq_service  # Enhanced version  # Fixed version
+        from groq_integration_direct import groq_service  # Fixed version
         cache_info = groq_service.get_cache_info()
         
         rate_limiter_info = {
@@ -593,7 +593,7 @@ async def get_api_status():
         
         # Kiểm tra Groq LLaMA 3
         try:
-            from groq_integration import groq_service  # Enhanced version  # Fixed version
+            from groq_integration_direct import groq_service  # Fixed version
             if groq_service.available:
                 current_time = time.time()
                 quota_status = {
@@ -658,7 +658,7 @@ async def clear_cache():
         
         # Xóa cache của Groq
         try:
-            from groq_integration import groq_service  # Enhanced version  # Fixed version
+            from groq_integration_direct import groq_service  # Fixed version
             groq_service.clear_cache()
             result["details"].append("Groq cache cleared")
         except ImportError:

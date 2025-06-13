@@ -6,7 +6,7 @@ Kiểm tra và sửa lỗi JSON parsing từ Groq API
 
 import json
 import re
-from groq_integration import GroqService  # Enhanced version  # Fixed version
+from groq_integration_direct import GroqService  # Fixed version
 
 def test_malformed_json_samples():
     """Test với các mẫu JSON bị lỗi thực tế từ Groq"""

@@ -76,7 +76,7 @@ class SimpleComprehensiveTest:
         print("=" * 40)
         
         try:
-            from groq_integration import GroqService  # Enhanced version  # Fixed version
+            from groq_integration_direct import GroqService  # Fixed version
             
             start_time = time.time()
             groq_service = GroqService()

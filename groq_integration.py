@@ -904,10 +904,11 @@ class GroqService:
             meals = []
             for i, name in enumerate(dish_names[:2]):  # Tối đa 2 món
                 # Sử dụng nutrition từ text nếu có, nếu không thì dùng default
-                calories = int(calories_match.group(1)) if calories_match else (300 + i * 50)
-                protein = int(protein_match.group(1)) if protein_match else (20 + i * 5)
-                fat = int(fat_match.group(1)) if fat_match else (12 + i * 3)
-                carbs = int(carbs_match.group(1)) if carbs_match else (35 + i * 10)
+                # CRITICAL: Ensure values are NEVER zero to prevent division by zero
+                calories = max(int(calories_match.group(1)), 200) if calories_match else (300 + i * 50)
+                protein = max(int(protein_match.group(1)), 10) if protein_match else (20 + i * 5)
+                fat = max(int(fat_match.group(1)), 5) if fat_match else (12 + i * 3)
+                carbs = max(int(carbs_match.group(1)), 20) if carbs_match else (35 + i * 10)
 
                 meal = {
                     "name": name.strip(),
@@ -1168,21 +1169,28 @@ class GroqService:
                 meal['preparation'] = [f"Chuẩn bị {meal_name} theo hướng dẫn"]
                 print(f"🔧 Fixed invalid preparation format for {meal_name}")
 
-            # Nutrition - must be object with numeric values
+            # Nutrition - must be object with numeric values and NEVER zero
+            default_nutrition = {'calories': 400, 'protein': 20, 'fat': 15, 'carbs': 45}
             if 'nutrition' not in meal or not isinstance(meal['nutrition'], dict):
-                meal['nutrition'] = {'calories': 400, 'protein': 20, 'fat': 15, 'carbs': 45}
+                meal['nutrition'] = default_nutrition.copy()
                 print(f"🔧 Added default nutrition for {meal_name}")
             else:
-                # Ensure all nutrition values are numbers
+                # Ensure all nutrition values are numbers and NOT zero
                 nutrition = meal['nutrition']
                 for key in ['calories', 'protein', 'fat', 'carbs']:
                     if key not in nutrition:
-                        nutrition[key] = {'calories': 400, 'protein': 20, 'fat': 15, 'carbs': 45}[key]
+                        nutrition[key] = default_nutrition[key]
                     else:
                         try:
-                            nutrition[key] = float(nutrition[key])
+                            value = float(nutrition[key])
+                            # CRITICAL: Ensure value is never zero to prevent division by zero
+                            if value <= 0:
+                                nutrition[key] = default_nutrition[key]
+                                print(f"🔧 Fixed zero/negative {key} value for {meal_name}")
+                            else:
+                                nutrition[key] = value
                         except (ValueError, TypeError):
-                            nutrition[key] = {'calories': 400, 'protein': 20, 'fat': 15, 'carbs': 45}[key]
+                            nutrition[key] = default_nutrition[key]
                             print(f"🔧 Fixed invalid {key} value for {meal_name}")
 
             # Preparation time

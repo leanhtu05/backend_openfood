@@ -91,7 +91,11 @@ class GroqService:
         self.cache = {}
         self.rate_limiter = RateLimiter(requests_per_minute=60, requests_per_day=1000)
         self.max_retries = 3
-        
+
+        # Anti-duplication tracking
+        self.recent_dishes = []  # Track recent dishes to avoid duplication
+        self.max_recent_dishes = 20  # Keep track of last 20 dishes
+
         # Thêm biến để theo dõi trạng thái quota
         self.quota_exceeded = False
         self.quota_reset_time = None
@@ -212,8 +216,10 @@ class GroqService:
             print("Groq API not available. Using fallback data.")
             return self._fallback_meal_suggestions(meal_type)
         
-        # Tạo cache key
-        cache_key = f"{meal_type}_{calories_target}_{protein_target}_{fat_target}_{carbs_target}"
+        # Tạo cache key với anti-duplication
+        import hashlib
+        recent_dishes_hash = hashlib.md5(str(sorted(self.recent_dishes[-5:])).encode()).hexdigest()[:8]
+        cache_key = f"{meal_type}_{calories_target}_{protein_target}_{fat_target}_{carbs_target}_{recent_dishes_hash}"
         if preferences:
             cache_key += f"_prefs:{'|'.join(preferences)}"
         if allergies:
@@ -237,27 +243,46 @@ class GroqService:
         allergies_str = ", ".join(allergies) if allergies else "không có"
         cuisine_style_str = cuisine_style if cuisine_style else "không có yêu cầu cụ thể"
 
-        # Ultra Strict Prompt - Template Based
+        # DIVERSE VIETNAMESE DISH DATABASE
+        diverse_dishes = self._get_diverse_dish_suggestions(meal_type, preferences, allergies)
+
+        # ANTI-DUPLICATION: Exclude recent dishes
+        recent_dishes_str = ", ".join(self.recent_dishes[-10:]) if self.recent_dishes else "không có"
+
+        # ULTRA-STRICT JSON SCHEMA ENFORCEMENT
+        required_keys = ["name", "description", "ingredients", "preparation", "nutrition", "preparation_time", "health_benefits"]
         template_json = f'{{"name":"DISH_NAME","description":"DESCRIPTION","ingredients":[{{"name":"INGREDIENT","amount":"AMOUNT"}}],"preparation":["STEP1","STEP2"],"nutrition":{{"calories":{calories_target//2 if calories_target > 400 else calories_target},"protein":{protein_target//2 if protein_target > 30 else protein_target},"fat":{fat_target//2 if fat_target > 20 else fat_target},"carbs":{carbs_target//2 if carbs_target > 50 else carbs_target}}},"preparation_time":"TIME","health_benefits":"BENEFITS"}}'
 
-        prompt = f"""Fill this EXACT template with Vietnamese {meal_type} dish data:
+        prompt = f"""CRITICAL: Output must exactly follow this JSON schema. NO additional or missing keys allowed.
 
+REQUIRED KEYS: {', '.join(required_keys)}
+
+EXACT TEMPLATE:
 [{template_json}]
 
-Replace:
-- DISH_NAME: Vietnamese dish name
-- DESCRIPTION: Brief description in Vietnamese
-- INGREDIENT: Ingredient name
-- AMOUNT: Amount like "100g"
-- STEP1, STEP2: Preparation steps in Vietnamese
-- TIME: Time like "30 phút"
-- BENEFITS: Health benefits in Vietnamese
+DIVERSE VIETNAMESE DISHES TO CHOOSE FROM:
+{diverse_dishes}
 
-Target nutrition: {calories_target}kcal, {protein_target}g protein, {fat_target}g fat, {carbs_target}g carbs.
-Preferences: {preferences_str}
-Allergies: {allergies_str}
+ANTI-DUPLICATION: DO NOT use these recent dishes:
+{recent_dishes_str}
 
-Return ONLY the filled JSON array. NO other text:"""
+INSTRUCTIONS:
+- Choose 1-2 DIFFERENT dishes from the diverse list above
+- AVOID dishes from the recent list to ensure variety
+- Replace DISH_NAME with chosen Vietnamese {meal_type} dish name
+- Replace DESCRIPTION with brief description in Vietnamese
+- Replace INGREDIENT with ingredient name
+- Replace AMOUNT with amount like "100g"
+- Replace STEP1, STEP2 with preparation steps in Vietnamese
+- Replace TIME with time like "30 phút"
+- Replace BENEFITS with health benefits in Vietnamese
+
+NUTRITION TARGETS: {calories_target}kcal, {protein_target}g protein, {fat_target}g fat, {carbs_target}g carbs
+PREFERENCES: {preferences_str}
+ALLERGIES: {allergies_str}
+
+CRITICAL: Return ONLY valid JSON array. NO markdown, NO explanations, NO other text.
+If you cannot follow this exact format, return empty array []."""
         
         try:
             # Gọi API Groq
@@ -271,11 +296,11 @@ Return ONLY the filled JSON array. NO other text:"""
                             {"role": "system", "content": "You are a JSON-only response system. Respond ONLY with valid JSON arrays, no other text."},
                             {"role": "user", "content": prompt}
                         ],
-                        temperature=0.3,  # Giảm temperature để có response ổn định hơn
-                        max_tokens=2000,  # Giảm max_tokens cho meal suggestions
-                        top_p=0.9,       # Giảm top_p để tập trung hơn
-                        frequency_penalty=0.1,  # Tránh lặp lại
-                        presence_penalty=0.1    # Khuyến khích đa dạng
+                        temperature=0.0,  # ULTRA-STRICT: Maximum determinism for JSON compliance
+                        max_tokens=2000,  # Sufficient tokens for meal suggestions
+                        top_p=0.1,       # ULTRA-STRICT: Very low top_p for format adherence
+                        frequency_penalty=0.0,  # No penalties for strict JSON format
+                        presence_penalty=0.0    # No penalties for strict JSON format
                     )
                     
                     # Trích xuất kết quả JSON từ phản hồi
@@ -298,6 +323,18 @@ Return ONLY the filled JSON array. NO other text:"""
 
                         if validated_meals:
                             print(f"🎉 Successfully generated {len(validated_meals)} validated meal suggestions")
+
+                            # ANTI-DUPLICATION: Track recent dishes
+                            for meal in validated_meals:
+                                dish_name = meal.get('name', '')
+                                if dish_name and dish_name not in self.recent_dishes:
+                                    self.recent_dishes.append(dish_name)
+                                    # Keep only last N dishes
+                                    if len(self.recent_dishes) > self.max_recent_dishes:
+                                        self.recent_dishes.pop(0)
+
+                            print(f"📝 Recent dishes tracked: {self.recent_dishes[-5:]}")  # Show last 5
+
                             # Cache kết quả
                             self.cache[cache_key] = validated_meals
                             return validated_meals
@@ -337,9 +374,179 @@ Return ONLY the filled JSON array. NO other text:"""
             print(f"Error generating meal suggestions: {str(e)}")
             return self._fallback_meal_suggestions(meal_type)
 
+    def _get_diverse_dish_suggestions(self, meal_type: str, preferences: List[str], allergies: List[str]) -> str:
+        """
+        Tạo danh sách món ăn Việt Nam đa dạng theo meal_type
+        """
+        # Database món ăn Việt Nam phong phú
+        vietnamese_dishes = {
+            "bữa sáng": [
+                # Món nước
+                "Phở Gà", "Phở Bò", "Bún Bò Huế", "Bún Riêu", "Bún Chả", "Bún Thịt Nướng",
+                "Hủ Tiếu", "Mì Quảng", "Cao Lầu", "Bánh Canh", "Cháo Gà", "Cháo Lòng",
+                "Cháo Đậu Xanh", "Cháo Sườn", "Súp Cua",
+
+                # Món khô
+                "Bánh Mì Thịt", "Bánh Mì Chả Cá", "Bánh Mì Xíu Mại", "Bánh Mì Chay",
+                "Xôi Xéo", "Xôi Mặn", "Xôi Gấc", "Xôi Đậu Xanh", "Xôi Lạc",
+                "Bánh Cuốn", "Bánh Ướt", "Bánh Bèo", "Bánh Nậm",
+
+                # Món chay
+                "Cháo Chay", "Phở Chay", "Bún Chay", "Bánh Mì Chay", "Xôi Chay"
+            ],
+
+            "bữa trưa": [
+                # Cơm
+                "Cơm Tấm Sườn", "Cơm Gà Xối Mỡ", "Cơm Chiên Dương Châu", "Cơm Âm Phủ",
+                "Cơm Hến", "Cơm Niêu", "Cơm Dẻo", "Cơm Bò Lúc Lắc", "Cơm Gà Nướng",
+
+                # Bún/Phở
+                "Bún Bò Huế", "Bún Riêu Cua", "Bún Chả Hà Nội", "Bún Thịt Nướng",
+                "Bún Mắm", "Bún Đậu Mắm Tôm", "Phở Bò", "Phở Gà", "Phở Chay",
+
+                # Mì/Hủ tiếu
+                "Mì Quảng", "Hủ Tiếu Nam Vang", "Hủ Tiếu Khô", "Cao Lầu",
+                "Mì Xào Giòn", "Mì Xào Mềm", "Hủ Tiếu Xào",
+
+                # Món nướng
+                "Nem Nướng", "Chả Cá Lã Vọng", "Cá Nướng", "Thịt Nướng",
+                "Tôm Nướng", "Mực Nướng", "Gà Nướng",
+
+                # Món chay
+                "Cơm Chay", "Bún Chay", "Phở Chay", "Mì Chay"
+            ],
+
+            "bữa tối": [
+                # Món nhẹ
+                "Chả Cá", "Nem Rán", "Bánh Xèo", "Bánh Khọt", "Bánh Tráng Nướng",
+                "Bánh Căn", "Bánh Bột Lọc", "Bánh Ít", "Bánh Bao",
+
+                # Lẩu
+                "Lẩu Thái", "Lẩu Cá", "Lẩu Gà", "Lẩu Riêu Cua", "Lẩu Chay",
+
+                # Cháo/Súp
+                "Cháo Vịt", "Cháo Cá", "Cháo Trai", "Súp Cua", "Súp Măng Cua",
+
+                # Cơm chiều
+                "Cơm Chiên", "Cơm Âm Phủ", "Cơm Hến", "Cơm Niêu",
+
+                # Món nướng
+                "Bánh Tráng Nướng", "Chả Cá Nướng", "Tôm Nướng", "Mực Nướng",
+
+                # Món chay
+                "Cháo Chay", "Lẩu Chay", "Bánh Xèo Chay", "Nem Chay"
+            ]
+        }
+
+        # Lấy danh sách món theo meal_type
+        meal_type_lower = meal_type.lower()
+        if "sáng" in meal_type_lower:
+            dishes = vietnamese_dishes["bữa sáng"]
+        elif "trưa" in meal_type_lower:
+            dishes = vietnamese_dishes["bữa trưa"]
+        elif "tối" in meal_type_lower:
+            dishes = vietnamese_dishes["bữa tối"]
+        else:
+            # Mix tất cả món
+            dishes = []
+            for dish_list in vietnamese_dishes.values():
+                dishes.extend(dish_list)
+
+        # Filter theo preferences
+        if preferences:
+            filtered_dishes = []
+            for dish in dishes:
+                dish_lower = dish.lower()
+
+                # Healthy preference
+                if "healthy" in [p.lower() for p in preferences]:
+                    if any(keyword in dish_lower for keyword in ["cháo", "súp", "chay", "gà", "cá"]):
+                        filtered_dishes.append(dish)
+
+                # High protein preference
+                elif "high-protein" in [p.lower() for p in preferences]:
+                    if any(keyword in dish_lower for keyword in ["bò", "gà", "cá", "tôm", "thịt", "trứng"]):
+                        filtered_dishes.append(dish)
+
+                # Vegetarian preference
+                elif "vegetarian" in [p.lower() for p in preferences] or "chay" in [p.lower() for p in preferences]:
+                    if "chay" in dish_lower:
+                        filtered_dishes.append(dish)
+
+                # Low carb preference
+                elif "low-carb" in [p.lower() for p in preferences]:
+                    if not any(keyword in dish_lower for keyword in ["cơm", "xôi", "bánh", "bún", "phở", "mì"]):
+                        filtered_dishes.append(dish)
+
+                else:
+                    filtered_dishes.append(dish)
+
+            if filtered_dishes:
+                dishes = filtered_dishes
+
+        # Filter theo allergies
+        if allergies:
+            filtered_dishes = []
+            for dish in dishes:
+                dish_lower = dish.lower()
+                has_allergen = False
+
+                for allergy in allergies:
+                    allergy_lower = allergy.lower()
+                    if allergy_lower in ["seafood", "hải sản"]:
+                        if any(keyword in dish_lower for keyword in ["cá", "tôm", "cua", "mực", "hến", "trai"]):
+                            has_allergen = True
+                            break
+                    elif allergy_lower in ["dairy", "sữa"]:
+                        if any(keyword in dish_lower for keyword in ["sữa", "kem", "phô mai"]):
+                            has_allergen = True
+                            break
+                    elif allergy_lower in ["gluten", "gluten"]:
+                        if any(keyword in dish_lower for keyword in ["bánh", "mì", "bún", "phở"]):
+                            has_allergen = True
+                            break
+
+                if not has_allergen:
+                    filtered_dishes.append(dish)
+
+            if filtered_dishes:
+                dishes = filtered_dishes
+
+        # Filter out recent dishes to avoid duplication
+        filtered_dishes = []
+        for dish in dishes:
+            if dish not in self.recent_dishes:
+                filtered_dishes.append(dish)
+
+        # If too few dishes after filtering, use all dishes
+        if len(filtered_dishes) < 5:
+            filtered_dishes = dishes
+
+        # Shuffle để tăng tính ngẫu nhiên
+        import random
+        random.shuffle(filtered_dishes)
+
+        # Trả về top 10-15 món để AI chọn
+        selected_dishes = filtered_dishes[:15]
+        return ", ".join(selected_dishes)
+
+    def _validate_required_keys(self, data: Dict) -> bool:
+        """
+        Validate that all required keys are present in the meal data
+        """
+        required_keys = ["name", "description", "ingredients", "preparation", "nutrition", "preparation_time", "health_benefits"]
+
+        for key in required_keys:
+            if key not in data:
+                print(f"❌ Missing required key: {key}")
+                return False
+
+        print(f"✅ All required keys present: {required_keys}")
+        return True
+
     def _extract_json_from_response(self, response_text: str) -> List[Dict]:
         """
-        Trích xuất dữ liệu JSON từ phản hồi của AI với nhiều phương pháp fallback
+        Trích xuất dữ liệu JSON từ phản hồi của AI với strict key validation
 
         Args:
             response_text: Văn bản phản hồi từ API
@@ -351,12 +558,30 @@ Return ONLY the filled JSON array. NO other text:"""
         cleaned_text = self._clean_response_text(response_text)
 
         try:
-            # Phương pháp 1: Thử phân tích toàn bộ phản hồi là JSON
+            # Phương pháp 1: Thử phân tích toàn bộ phản hồi là JSON với strict validation
             print("Trying to parse entire response as JSON...")
             meal_data = json.loads(cleaned_text)
             if isinstance(meal_data, list) and len(meal_data) > 0:
-                print(f"Successfully parsed entire response as JSON array with {len(meal_data)} items")
-                return meal_data
+                # Validate each item has required keys
+                valid_items = []
+                for item in meal_data:
+                    if isinstance(item, dict) and self._validate_required_keys(item):
+                        valid_items.append(item)
+                    else:
+                        print(f"⚠️ Skipping invalid item: {item}")
+
+                if valid_items:
+                    print(f"✅ Successfully parsed entire response as JSON array with {len(valid_items)} valid items")
+                    return valid_items
+                else:
+                    print("❌ No valid items found in parsed JSON")
+
+            elif isinstance(meal_data, dict):
+                if self._validate_required_keys(meal_data):
+                    print(f"✅ Successfully parsed entire response as single valid JSON item")
+                    return [meal_data]
+                else:
+                    print("❌ Single item missing required keys")
         except json.JSONDecodeError as e:
             print(f"Entire response is not valid JSON: {e}")
             print("Trying to extract JSON portion...")

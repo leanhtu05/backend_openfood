@@ -40,17 +40,17 @@ def get_strict_json_prompt(meal_type: str, calories_target: int, protein_target:
         "health_benefits": "Lợi ích sức khỏe"
     }
     
-    prompt = f"""CRITICAL INSTRUCTION: Return ONLY valid JSON array. NO other text allowed.
+    prompt = f"""ABSOLUTE REQUIREMENT: Return ONLY valid JSON array. NO other text allowed.
 
-MANDATORY JSON STRUCTURE - Each object MUST have ALL these keys:
+MANDATORY JSON STRUCTURE - Each object MUST have ALL these keys in EXACT order:
 {{"name": "string", "description": "string", "ingredients": [object], "preparation": [string], "nutrition": object, "preparation_time": "string", "health_benefits": "string"}}
 
-EXACT EXAMPLE OUTPUT:
+PERFECT EXAMPLE OUTPUT (copy this structure exactly):
 [{template_example}]
 
 TASK: Create 1-2 Vietnamese {meal_type} dishes with these nutrition targets:
 - Calories: {calories_target}kcal
-- Protein: {protein_target}g  
+- Protein: {protein_target}g
 - Fat: {fat_target}g
 - Carbs: {carbs_target}g
 
@@ -63,17 +63,18 @@ AVOID THESE RECENT DISHES:
 PREFERENCES: {preferences}
 ALLERGIES: {allergies}
 
-STRICT RULES:
+CRITICAL RULES (FAILURE TO FOLLOW = INVALID RESPONSE):
 1. Output MUST start with [ and end with ]
-2. Each object MUST have "name" as first key
-3. All nutrition values MUST be numbers (not strings)
-4. Ingredients MUST be array of objects with "name" and "amount"
-5. Preparation MUST be array of strings
-6. NO markdown formatting (```json)
-7. NO explanatory text before or after JSON
-8. If you cannot create valid JSON, return: []
+2. Each object MUST start with "name" as the FIRST key
+3. NEVER write {{"Dish Name", "description": ...}} - ALWAYS write {{"name": "Dish Name", "description": ...}}
+4. All nutrition values MUST be numbers (not strings)
+5. Ingredients MUST be array of objects with "name" and "amount"
+6. Preparation MUST be array of strings
+7. NO markdown formatting (```json)
+8. NO explanatory text before or after JSON
+9. If you cannot create valid JSON, return: []
 
-RESPOND WITH ONLY THE JSON ARRAY:"""
+RESPOND WITH ONLY THE JSON ARRAY (starting with [ and ending with ]):"""
 
     return prompt
 

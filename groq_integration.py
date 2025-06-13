@@ -121,9 +121,13 @@ class GroqService:
                 print("\n=== INITIALIZING GROQ SERVICE ===")
                 print(f"API Key: {'***' + self.api_key[-4:] if self.api_key else 'None'}")
                 
-                # Khởi tạo client một cách đơn giản (phiên bản Groq 0.4.0)
+                # Khởi tạo client với timeout cho Render (phiên bản Groq 0.4.0)
                 try:
-                    self.client = groq.Groq(api_key=self.api_key)
+                    self.client = groq.Groq(
+                        api_key=self.api_key,
+                        timeout=60.0  # 60 second timeout for Render
+                    )
+                    print(f"✅ Groq client initialized with timeout=60s")
                 except Exception as e:
                     print(f"Error initializing Groq client: {str(e)}")
                     self.available = False
@@ -298,7 +302,8 @@ class GroqService:
                         max_tokens=2000,
                         top_p=temp_settings["top_p"],
                         frequency_penalty=temp_settings["frequency_penalty"],
-                        presence_penalty=temp_settings["presence_penalty"]
+                        presence_penalty=temp_settings["presence_penalty"],
+                        timeout=60  # Explicit timeout for each request
                     )
                     
                     # Trích xuất kết quả JSON từ phản hồi
@@ -367,9 +372,11 @@ class GroqService:
                     else:
                         print(f"❌ No valid meal data in response. meal_data type: {type(meal_data)}, length: {len(meal_data) if meal_data else 'None'}")
                     
-                    # Nếu không trích xuất được dữ liệu hợp lệ, thử lại
+                    # Nếu không trích xuất được dữ liệu hợp lệ, thử lại với exponential backoff
                     print(f"Invalid response format. Retrying... ({attempt + 1}/{self.max_retries})")
-                    time.sleep(2)
+                    backoff_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                    print(f"Waiting {backoff_time}s before retry...")
+                    time.sleep(backoff_time)
                     
                 except Exception as e:
                     print(f"Error calling Groq API: {str(e)} - Attempt {attempt + 1}/{self.max_retries}")
@@ -378,7 +385,11 @@ class GroqService:
                         self.quota_exceeded = True
                         self.quota_reset_time = time.time() + 3600  # Thử lại sau 1 giờ
                         break
-                    time.sleep(2)
+
+                    # Exponential backoff for API errors
+                    backoff_time = 2 ** attempt  # 1s, 2s, 4s
+                    print(f"Waiting {backoff_time}s before retry...")
+                    time.sleep(backoff_time)
             
             # Nếu không nhận được kết quả sau tất cả các lần thử
             print("Failed to get valid response from Groq API after multiple attempts.")
@@ -655,13 +666,19 @@ class GroqService:
                 data = json.loads(json_str)
                 return self._validate_and_filter_meals(data if isinstance(data, list) else [data])
             except json.JSONDecodeError:
-                # Thử sửa JSON trước khi parse
-                fixed_json = self._fix_malformed_json(json_str)
+                # Bước 1: Thử fix missing name key trước
+                name_fixed = self._fix_missing_name_key(json_str)
                 try:
-                    data = json.loads(fixed_json)
+                    data = json.loads(name_fixed)
                     return self._validate_and_filter_meals(data if isinstance(data, list) else [data])
                 except json.JSONDecodeError:
-                    pass
+                    # Bước 2: Thử sửa JSON toàn diện
+                    fixed_json = self._fix_malformed_json(name_fixed)
+                    try:
+                        data = json.loads(fixed_json)
+                        return self._validate_and_filter_meals(data if isinstance(data, list) else [data])
+                    except json.JSONDecodeError:
+                        pass
         return None
 
     def _try_advanced_json_fix(self, text: str) -> List[Dict]:
@@ -899,6 +916,31 @@ class GroqService:
 
         return text
 
+    def _fix_missing_name_key(self, json_str: str) -> str:
+        """
+        Đặc biệt xử lý trường hợp missing "name" key - vấn đề phổ biến nhất
+        """
+        print(f"🔧 Fixing missing 'name' key specifically...")
+
+        # Pattern 1: { "Bánh Mì Chay", "description": -> { "name": "Bánh Mì Chay", "description":
+        fixed = re.sub(r'\{\s*"([^"]+)",\s*"description":', r'{"name": "\1", "description":', json_str)
+
+        # Pattern 2: [ { "Dish Name", -> [ { "name": "Dish Name",
+        fixed = re.sub(r'\[\s*\{\s*"([^"]+)",', r'[{"name": "\1",', fixed)
+
+        # Pattern 3: { "Bánh Mì Chay", "Món bánh mì..." -> { "name": "Bánh Mì Chay", "description": "Món bánh mì..."
+        fixed = re.sub(r'\{\s*"([^"]+)",\s*"([^"]*[a-z][^"]*)",', r'{"name": "\1", "description": "\2",', fixed)
+
+        # Pattern 4: }, { "Next Dish", -> }, { "name": "Next Dish",
+        fixed = re.sub(r'\},\s*\{\s*"([^"]+)",', r'}, {"name": "\1",', fixed)
+
+        if fixed != json_str:
+            print(f"✅ Successfully fixed missing 'name' key patterns")
+            return fixed
+        else:
+            print(f"⚠️ No missing 'name' key patterns found")
+            return json_str
+
     def _fix_malformed_json(self, json_str: str) -> str:
         """
         Ultra-robust JSON fixing với nhiều pattern matching - Enhanced version
@@ -910,18 +952,34 @@ class GroqService:
         json_str = json_str.strip()
 
         # Bước 1: Sửa pattern phổ biến nhất - missing "name" key
-        # Pattern: { "Dish Name", "description": -> { "name": "Dish Name", "description":
+        # Pattern cực kỳ cụ thể: { "Bánh Mì Chay", "description": -> { "name": "Bánh Mì Chay", "description":
         json_str = re.sub(r'\{\s*"([^"]+)",\s*"description":', r'{"name": "\1", "description":', json_str)
 
-        # Pattern: { "Bánh Mì Chay", -> { "name": "Bánh Mì Chay",
+        # Pattern: { "Dish Name", "Món ăn..." -> { "name": "Dish Name", "description": "Món ăn..."
+        json_str = re.sub(r'\{\s*"([^"]+)",\s*"(Món [^"]*)"', r'{"name": "\1", "description": "\2"', json_str)
+
+        # Pattern đặc biệt cho trường hợp chỉ có tên món: { "Bánh Mì Chay", -> { "name": "Bánh Mì Chay",
         json_str = re.sub(r'\{\s*"([^"]+)",\s*([^"])', r'{"name": "\1", \2', json_str)
 
         # Pattern: [ { "Dish Name", -> [ { "name": "Dish Name",
         json_str = re.sub(r'\[\s*\{\s*"([^"]+)",', r'[{"name": "\1",', json_str)
 
-        # Bước 2: Sửa missing field names
+        # Pattern đặc biệt cho trường hợp không có field name: { "Bánh Mì Chay", [array]
+        json_str = re.sub(r'\{\s*"([^"]+)",\s*\[', r'{"name": "\1", "ingredients": [', json_str)
+
+        # Pattern mới: Xử lý trường hợp có text description nhưng không có key
+        # { "Bánh Mì Chay", "Bánh mì chay thơm ngon..." -> { "name": "Bánh Mì Chay", "description": "Bánh mì chay thơm ngon..."
+        json_str = re.sub(r'\{\s*"([^"]+)",\s*"([^"]*[a-z][^"]*)",', r'{"name": "\1", "description": "\2",', json_str)
+
+        # Bước 2: Sửa missing field names cho các trường hợp phức tạp
         # Pattern: "name": "...", "text without field", -> "name": "...", "description": "text",
-        json_str = re.sub(r'"name":\s*"([^"]+)",\s*"([^"]+)",\s*"ingredients"', r'"name": "\1", "description": "\2", "ingredients"', json_str)
+        json_str = re.sub(r'"name":\s*"([^"]+)",\s*"([^"]+)",\s*\[', r'"name": "\1", "description": "\2", "ingredients": [', json_str)
+
+        # Sửa trường hợp thiếu key cho ingredients, preparation, etc.
+        json_str = re.sub(r'",\s*\[\s*\{', r'", "ingredients": [{', json_str)
+        json_str = re.sub(r'\],\s*\[\s*"', r'], "preparation": ["', json_str)
+        json_str = re.sub(r'"\],\s*\{', r'"], "nutrition": {', json_str)
+        json_str = re.sub(r'\},\s*"([^"]+)",\s*"([^"]+)"\s*\}', r'}, "preparation_time": "\1", "health_benefits": "\2"}', json_str)
 
         # Bước 4: Sửa malformed arrays - loại bỏ quotes xung quanh arrays
         json_str = re.sub(r'"\s*\[\s*', r'[', json_str)

@@ -9,6 +9,82 @@ from datetime import datetime
 import logging
 from groq import Groq
 import requests
+import re
+from groq_client_fixed import fix_json_response
+
+def fix_meal_json(response_text):
+    """
+    Fix JSON response specifically for meal data from Groq API
+    """
+    try:
+        # 1. Clean up response
+        response_text = re.sub(r'```json\s*', '', response_text)
+        response_text = re.sub(r'```\s*', '', response_text)
+        response_text = response_text.strip()
+        
+        # 2. Fix missing "name" key in objects
+        fixed_text = re.sub(r'{\s*"([^"]+)",', r'{"name": "\1",', response_text)
+        
+        # 3. Try to parse
+        meals = json.loads(fixed_text)
+        return meals
+    except json.JSONDecodeError as e:
+        print(f"Error fixing JSON: {e}, trying manual parsing")
+        
+        # Manual parsing for specific patterns
+        result = []
+        try:
+            # Split into dishes
+            dish_texts = re.findall(r'{\s*(?:"[^"]+"|\s*"name":\s*"[^"]+")(.*?)},?(?=\s*{|\s*\])', response_text, re.DOTALL)
+            
+            for dish_text in dish_texts:
+                full_text = "{" + dish_text + "}"
+                dish = {}
+                
+                # Extract name
+                name_match = re.search(r'^\s*"([^"]+)"', dish_text)
+                name_key_match = re.search(r'"name":\s*"([^"]+)"', full_text)
+                
+                if name_match:
+                    dish['name'] = name_match.group(1)
+                elif name_key_match:
+                    dish['name'] = name_key_match.group(1)
+                else:
+                    continue
+                
+                # Extract other fields
+                for field in ["description", "preparation_time", "health_benefits"]:
+                    match = re.search(fr'"{field}":\s*"([^"]+)"', full_text)
+                    if match:
+                        dish[field] = match.group(1)
+                
+                # Get nutrition
+                nutrition_match = re.search(r'"nutrition":\s*{\s*(.*?)\s*}', full_text, re.DOTALL)
+                if nutrition_match:
+                    nutrition = {}
+                    nutrition_text = nutrition_match.group(1)
+                    
+                    for key in ["calories", "protein", "fat", "carbs"]:
+                        value_match = re.search(fr'"{key}":\s*(\d+)', nutrition_text)
+                        if value_match:
+                            nutrition[key] = int(value_match.group(1))
+                    
+                    dish["nutrition"] = nutrition
+                
+                # Get basic fields if not empty
+                if dish.get('name') and dish.get('nutrition'):
+                    if "ingredients" not in dish:
+                        dish["ingredients"] = [{"name": "Nguyên liệu chính", "amount": "100g"}]
+                    if "preparation" not in dish:
+                        dish["preparation"] = ["Chế biến theo hướng dẫn"]
+                    result.append(dish)
+            
+            if result:
+                return result
+        except Exception as e:
+            print(f"Manual parsing failed: {e}")
+        
+        return []  # Return empty array if all parsing attempts fail
 
 # Import fallback data
 from fallback_meals import FALLBACK_MEALS
@@ -226,19 +302,26 @@ class GroqService:
             
             # Parse response
             response_text = completion.choices[0].message.content
-            response_json = json.loads(response_text)
-            
-            # Process meals
-            if "meals" in response_json:
-                meals = response_json["meals"]
+            try:
+                # First try to repair any JSON syntax issues
+                fixed_json_text = fix_json_response(response_text)
+                response_json = json.loads(fixed_json_text)
                 
-                # Update cache
-                self._cache[cache_key] = meals
-                self._rate_limiter.record_request()
-                
-                return meals
-            else:
-                logger.error("Response format error: 'meals' key missing")
+                # Process meals
+                if "meals" in response_json:
+                    meals = response_json["meals"]
+                    
+                    # Update cache
+                    self._cache[cache_key] = meals
+                    self._rate_limiter.record_request()
+                    
+                    return meals
+                else:
+                    logger.error("Response format error: 'meals' key missing")
+                    return self._fallback_meal_suggestions(meal_type)
+            except Exception as e:
+                logger.error(f"Error parsing JSON response: {str(e)}")
+                logger.error(f"Raw response: {response_text[:200]}")  # Log first 200 chars
                 return self._fallback_meal_suggestions(meal_type)
                 
         except Exception as e:
@@ -332,13 +415,7 @@ Please respond with a JSON object with the following structure:
   ]
 }
 
-Ensure that each meal:
-1. Is appropriate for the specified meal type and meets the nutritional targets
-2. Avoids ALL allergens and dietary restrictions completely
-3. Is suitable for the health conditions listed
-4. Includes detailed ingredients with approximate amounts
-5. Provides clear preparation instructions
-6. Has complete nutritional information
+DO NOT use commas instead of colons between key and value. Always format as: "key": "value"
 """
         # Log prompt for debugging
         logger.debug(f"Generated prompt: {prompt}")

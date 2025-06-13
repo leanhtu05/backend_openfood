@@ -348,6 +348,79 @@ async def root():
     """Root endpoint to check if API is running"""
     return {"message": "Welcome to DietAI API. Visit /docs for API documentation."}
 
+@app.get("/debug/groq")
+async def debug_groq():
+    """Debug endpoint to check Groq integration on Render"""
+    import sys
+
+    debug_info = {
+        "groq_api_key_set": bool(os.getenv("GROQ_API_KEY")),
+        "groq_api_key_length": len(os.getenv("GROQ_API_KEY", "")),
+        "python_version": sys.version,
+        "environment": "render" if os.getenv("RENDER") else "local",
+        "timestamp": datetime.now().isoformat()
+    }
+
+    # Test Groq import
+    try:
+        import groq
+        debug_info["groq_import"] = "success"
+        debug_info["groq_version"] = getattr(groq, "__version__", "unknown")
+
+        # Test Groq client
+        api_key = os.getenv("GROQ_API_KEY")
+        if api_key:
+            try:
+                client = groq.Groq(api_key=api_key)
+                debug_info["groq_client"] = "success"
+
+                # Test simple API call
+                completion = client.chat.completions.create(
+                    model="llama3-70b-8192",
+                    messages=[{"role": "user", "content": "Hello"}],
+                    max_tokens=10,
+                    temperature=0.0,
+                    timeout=30
+                )
+                debug_info["groq_api_call"] = "success"
+                debug_info["groq_response"] = completion.choices[0].message.content
+
+            except Exception as e:
+                debug_info["groq_client"] = f"failed: {str(e)}"
+        else:
+            debug_info["groq_client"] = "no_api_key"
+
+    except ImportError as e:
+        debug_info["groq_import"] = f"failed: {str(e)}"
+
+    # Test GroqService integration
+    try:
+        from groq_integration import GroqService
+        debug_info["groq_service_import"] = "success"
+
+        service = GroqService()
+        debug_info["groq_service_available"] = service.available
+
+        if service.available:
+            # Test meal generation
+            meals = service.generate_meal_suggestions(
+                calories_target=300,
+                protein_target=20,
+                fat_target=10,
+                carbs_target=40,
+                meal_type="bữa sáng",
+                use_ai=True
+            )
+            debug_info["groq_service_test"] = "success" if meals else "no_meals_generated"
+            debug_info["generated_meals_count"] = len(meals) if meals else 0
+        else:
+            debug_info["groq_service_test"] = "service_not_available"
+
+    except Exception as e:
+        debug_info["groq_service_import"] = f"failed: {str(e)}"
+
+    return debug_info
+
 # Endpoint /replace-day đã được xử lý trong api_router và compat_router
 
 @app.get("/meal-plan-history", response_model=List[Dict])

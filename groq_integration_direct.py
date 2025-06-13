@@ -539,7 +539,17 @@ class GroqService:
                 print(f"Successfully parsed entire response as JSON array with {len(meal_data)} items")
                 return meal_data
         except json.JSONDecodeError:
-            print("Entire response is not valid JSON, trying to extract JSON portion...")
+            print("Entire response is not valid JSON, trying to fix format...")
+            
+            # Phương pháp 1.5: Sửa lỗi cụ thể - chuyển đổi {"String value", ...} thành {"name": "String value", ...}
+            try:
+                fixed_text = re.sub(r'{\s*"([^"]+)",', r'{"name": "\1",', response_text)
+                meal_data = json.loads(fixed_text)
+                if isinstance(meal_data, list) and len(meal_data) > 0:
+                    print(f"Successfully parsed fixed JSON with {len(meal_data)} items")
+                    return meal_data
+            except json.JSONDecodeError:
+                print("Format fixing failed, trying JSON extraction...")
             
             # Phương pháp 2: Trích xuất JSON sử dụng regex
             import re
@@ -556,6 +566,16 @@ class GroqService:
                 except json.JSONDecodeError:
                     print("Extracted pattern is not valid JSON")
             
+                # Phương pháp 2.5: Sửa lỗi cụ thể cho pattern đã tìm thấy
+                try:
+                    fixed_text = re.sub(r'{\s*"([^"]+)",', r'{"name": "\1",', json_str)
+                    meal_data = json.loads(fixed_text)
+                    if isinstance(meal_data, list) and len(meal_data) > 0:
+                        print(f"Successfully parsed fixed JSON pattern with {len(meal_data)} items")
+                        return meal_data
+                except json.JSONDecodeError:
+                    print("Fixed JSON pattern is still invalid")
+            
             # Phương pháp 3: Tìm mảng JSON giữa dấu ngoặc vuông
             json_start = response_text.find("[")
             json_end = response_text.rfind("]") + 1
@@ -569,7 +589,98 @@ class GroqService:
                         print(f"Successfully parsed extracted JSON array with {len(meal_data)} items")
                         return meal_data
                 except json.JSONDecodeError:
-                    print("Error parsing JSON from response")
+                    print("Extracted JSON array is invalid, trying to fix...")
+                    
+                    # Phương pháp 3.5: Sửa lỗi cụ thể cho mảng đã tìm thấy
+                    try:
+                        fixed_text = re.sub(r'{\s*"([^"]+)",', r'{"name": "\1",', json_str)
+                        meal_data = json.loads(fixed_text)
+                        if isinstance(meal_data, list) and len(meal_data) > 0:
+                            print(f"Successfully parsed fixed JSON array with {len(meal_data)} items")
+                            return meal_data
+                    except json.JSONDecodeError:
+                        print("Error parsing fixed JSON array")
+            
+            # Phương pháp 4: Tạo dữ liệu thủ công từ các pattern có thể nhận ra
+            print("Trying manual extraction...")
+            result = []
+            try:
+                # Parse các dish riêng lẻ
+                dish_texts = re.findall(r'{\s*(?:"[^"]+"|"name":\s*"[^"]+")(.*?)},?(?=\s*{|\s*\])', response_text, re.DOTALL)
+                
+                for dish_text in dish_texts:
+                    full_text = "{" + dish_text + "}"
+                    dish = {}
+                    
+                    # Extract name
+                    name_match = re.search(r'^\s*"([^"]+)"', dish_text)
+                    name_key_match = re.search(r'"name":\s*"([^"]+)"', full_text)
+                    
+                    if name_match:
+                        dish['name'] = name_match.group(1)
+                    elif name_key_match:
+                        dish['name'] = name_key_match.group(1)
+                    else:
+                        continue
+                    
+                    # Extract description
+                    desc_match = re.search(r'"description":\s*"([^"]+)"', full_text)
+                    if desc_match:
+                        dish['description'] = desc_match.group(1)
+                    
+                    # Extract ingredients
+                    ingredients = []
+                    ingredients_block = re.search(r'"ingredients":\s*\[(.*?)\]', full_text, re.DOTALL)
+                    if ingredients_block:
+                        ingredients_text = ingredients_block.group(1)
+                        ingredient_matches = re.findall(r'{\s*"name":\s*"([^"]+)",\s*"amount":\s*"([^"]+)"\s*}', ingredients_text)
+                        for name, amount in ingredient_matches:
+                            ingredients.append({"name": name, "amount": amount})
+                    dish['ingredients'] = ingredients if ingredients else [{"name": "Nguyên liệu chính", "amount": "100g"}]
+                    
+                    # Extract preparation steps
+                    preparation = []
+                    prep_block = re.search(r'"preparation":\s*\[(.*?)\]', full_text, re.DOTALL)
+                    if prep_block:
+                        prep_text = prep_block.group(1)
+                        step_matches = re.findall(r'"([^"]+)"', prep_text)
+                        for step in step_matches:
+                            preparation.append(step)
+                    dish['preparation'] = preparation if preparation else ["Chế biến theo hướng dẫn"]
+                    
+                    # Extract nutrition
+                    nutrition = {}
+                    nutrition_block = re.search(r'"nutrition":\s*{\s*(.*?)\s*}', full_text, re.DOTALL)
+                    if nutrition_block:
+                        nutrition_text = nutrition_block.group(1)
+                        
+                        for key in ["calories", "protein", "fat", "carbs"]:
+                            value_match = re.search(fr'"{key}":\s*(\d+)', nutrition_text)
+                            if value_match:
+                                nutrition[key] = int(value_match.group(1))
+                    
+                    dish['nutrition'] = nutrition if nutrition else {"calories": 400, "protein": 25, "fat": 15, "carbs": 45}
+                    
+                    # Extract other fields
+                    for field in ["preparation_time", "health_benefits"]:
+                        field_match = re.search(fr'"{field}":\s*"([^"]+)"', full_text)
+                        if field_match:
+                            dish[field] = field_match.group(1)
+                    
+                    if 'preparation_time' not in dish:
+                        dish['preparation_time'] = "30 phút"
+                    if 'health_benefits' not in dish:
+                        dish['health_benefits'] = f"Món ăn {dish['name']} cung cấp dinh dưỡng cân bằng cho cơ thể"
+                    
+                    # Add to result if has minimum required fields
+                    if dish.get('name'):
+                        result.append(dish)
+                
+                if result:
+                    print(f"Manual extraction succeeded, created {len(result)} items")
+                    return result
+            except Exception as e:
+                print(f"Error during manual extraction: {str(e)}")
         
         # Không tìm thấy JSON hợp lệ
         return None

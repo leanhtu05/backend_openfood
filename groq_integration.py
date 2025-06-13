@@ -3,9 +3,43 @@ import json
 import time
 import threading
 import random
-import re
+import re  # Ensure regex module is available
 from typing import List, Dict, Optional, Tuple
 from models import NutritionInfo, Dish, Ingredient
+
+# Ensure re module is globally accessible to prevent "cannot access local variable 're'" error
+import re as regex_module
+
+# Helper function to ensure regex operations work
+def safe_regex_sub(pattern, replacement, text, flags=0, count=0):
+    """Safe regex substitution to prevent 're' variable access errors"""
+    try:
+        import re as local_re
+        if count > 0:
+            return local_re.sub(pattern, replacement, text, count=count, flags=flags)
+        else:
+            return local_re.sub(pattern, replacement, text, flags=flags)
+    except Exception as e:
+        print(f"⚠️ Regex substitution failed: {e}")
+        return text
+
+def safe_regex_findall(pattern, text, flags=0):
+    """Safe regex findall to prevent 're' variable access errors"""
+    try:
+        import re as local_re
+        return local_re.findall(pattern, text, flags)
+    except Exception as e:
+        print(f"⚠️ Regex findall failed: {e}")
+        return []
+
+def safe_regex_search(pattern, text, flags=0):
+    """Safe regex search to prevent 're' variable access errors"""
+    try:
+        import re as local_re
+        return local_re.search(pattern, text, flags)
+    except Exception as e:
+        print(f"⚠️ Regex search failed: {e}")
+        return None
 
 # Import fallback data
 from fallback_meals import FALLBACK_MEALS
@@ -639,7 +673,7 @@ class GroqService:
         ]
 
         for pattern in patterns:
-            matches = re.findall(pattern, text, re.DOTALL)
+            matches = safe_regex_findall(pattern, text, re.DOTALL)
             for match in matches:
                 try:
                     data = json.loads(match)
@@ -716,11 +750,11 @@ class GroqService:
 
         # Bước 1: Tìm và sửa pattern thiếu "name" key phổ biến
         # Pattern: { "Bánh Mì Chay", "description": -> { "name": "Bánh Mì Chay", "description":
-        text = re.sub(r'\{\s*"([^"]+)",\s*"description":', r'{"name": "\1", "description":', text)
+        text = safe_regex_sub(r'\{\s*"([^"]+)",\s*"description":', r'{"name": "\1", "description":', text)
 
         # Bước 2: Sửa pattern object đầu tiên thiếu name
         # Pattern: [{ "Dish Name", -> [{ "name": "Dish Name",
-        text = re.sub(r'\[\s*\{\s*"([^"]+)",', r'[{"name": "\1",', text)
+        text = safe_regex_sub(r'\[\s*\{\s*"([^"]+)",', r'[{"name": "\1",', text)
 
         # Bước 3: Sửa missing quotes cho keys
         text = re.sub(r'(\w+):', r'"\1":', text)
@@ -820,11 +854,11 @@ class GroqService:
             print(f"🔧 Creating JSON from text response...")
 
             # Phương pháp 1: Tìm tên món ăn từ quotes
-            dish_names = re.findall(r'"([^"]*(?:Bánh|Cơm|Phở|Bún|Cháo|Chả|Gỏi|Canh|Xôi|Nem|Gà|Heo|Bò)[^"]*)"', text, re.IGNORECASE)
+            dish_names = safe_regex_findall(r'"([^"]*(?:Bánh|Cơm|Phở|Bún|Cháo|Chả|Gỏi|Canh|Xôi|Nem|Gà|Heo|Bò)[^"]*)"', text, re.IGNORECASE)
 
             # Phương pháp 2: Tìm từ pattern Vietnamese dish names
             if not dish_names:
-                dish_names = re.findall(r'([A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ][a-zàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ\s]+(?:Bánh|Cơm|Phở|Bún|Cháo|Chả|Gỏi|Canh|Xôi|Nem|Gà|Heo|Bò)[a-zàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ\s]*)', text)
+                dish_names = safe_regex_findall(r'([A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ][a-zàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ\s]+(?:Bánh|Cơm|Phở|Bún|Cháo|Chả|Gỏi|Canh|Xôi|Nem|Gà|Heo|Bò)[a-zàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ\s]*)', text)
 
             # Phương pháp 3: Fallback với common Vietnamese dishes
             if not dish_names:
@@ -835,16 +869,16 @@ class GroqService:
             print(f"🍽️ Found dish names: {dish_names}")
 
             # Tìm thông tin dinh dưỡng từ text nếu có
-            calories_match = re.search(r'"?calories"?\s*:\s*(\d+)', text)
-            protein_match = re.search(r'"?protein"?\s*:\s*(\d+)', text)
-            fat_match = re.search(r'"?fat"?\s*:\s*(\d+)', text)
-            carbs_match = re.search(r'"?carbs"?\s*:\s*(\d+)', text)
+            calories_match = safe_regex_search(r'"?calories"?\s*:\s*(\d+)', text)
+            protein_match = safe_regex_search(r'"?protein"?\s*:\s*(\d+)', text)
+            fat_match = safe_regex_search(r'"?fat"?\s*:\s*(\d+)', text)
+            carbs_match = safe_regex_search(r'"?carbs"?\s*:\s*(\d+)', text)
 
             # Tìm ingredients từ text
-            ingredients_text = re.search(r'"?ingredients"?\s*:\s*\[(.*?)\]', text, re.DOTALL)
+            ingredients_text = safe_regex_search(r'"?ingredients"?\s*:\s*\[(.*?)\]', text, re.DOTALL)
             ingredients = []
             if ingredients_text:
-                ingredient_matches = re.findall(r'"?name"?\s*:\s*"([^"]+)".*?"?amount"?\s*:\s*"([^"]+)"', ingredients_text.group(1))
+                ingredient_matches = safe_regex_findall(r'"?name"?\s*:\s*"([^"]+)".*?"?amount"?\s*:\s*"([^"]+)"', ingredients_text.group(1))
                 ingredients = [{"name": name, "amount": amount} for name, amount in ingredient_matches[:4]]
 
             if not ingredients:
@@ -923,16 +957,16 @@ class GroqService:
         print(f"🔧 Fixing missing 'name' key specifically...")
 
         # Pattern 1: { "Bánh Mì Chay", "description": -> { "name": "Bánh Mì Chay", "description":
-        fixed = re.sub(r'\{\s*"([^"]+)",\s*"description":', r'{"name": "\1", "description":', json_str)
+        fixed = safe_regex_sub(r'\{\s*"([^"]+)",\s*"description":', r'{"name": "\1", "description":', json_str)
 
         # Pattern 2: [ { "Dish Name", -> [ { "name": "Dish Name",
-        fixed = re.sub(r'\[\s*\{\s*"([^"]+)",', r'[{"name": "\1",', fixed)
+        fixed = safe_regex_sub(r'\[\s*\{\s*"([^"]+)",', r'[{"name": "\1",', fixed)
 
         # Pattern 3: { "Bánh Mì Chay", "Món bánh mì..." -> { "name": "Bánh Mì Chay", "description": "Món bánh mì..."
-        fixed = re.sub(r'\{\s*"([^"]+)",\s*"([^"]*[a-z][^"]*)",', r'{"name": "\1", "description": "\2",', fixed)
+        fixed = safe_regex_sub(r'\{\s*"([^"]+)",\s*"([^"]*[a-z][^"]*)",', r'{"name": "\1", "description": "\2",', fixed)
 
         # Pattern 4: }, { "Next Dish", -> }, { "name": "Next Dish",
-        fixed = re.sub(r'\},\s*\{\s*"([^"]+)",', r'}, {"name": "\1",', fixed)
+        fixed = safe_regex_sub(r'\},\s*\{\s*"([^"]+)",', r'}, {"name": "\1",', fixed)
 
         if fixed != json_str:
             print(f"✅ Successfully fixed missing 'name' key patterns")

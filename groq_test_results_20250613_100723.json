@@ -1,0 +1,175 @@
+[
+  {
+    "test_case": "Bữa sáng giảm cân",
+    "status": "SUCCESS",
+    "meals_count": 1,
+    "validation": [
+      {
+        "meal_index": 0,
+        "name": "Bánh Mì Chay",
+        "missing_fields": [],
+        "field_types": {
+          "name": "str",
+          "description": "str",
+          "ingredients": "list",
+          "preparation": "list",
+          "nutrition": "dict",
+          "preparation_time": "str",
+          "health_benefits": "str"
+        },
+        "is_valid": true
+      }
+    ],
+    "meals": [
+      {
+        "name": "Bánh Mì Chay",
+        "description": "Món bánh mì chay truyền thống",
+        "ingredients": [
+          {
+            "name": "Bánh mì",
+            "amount": "100g"
+          },
+          {
+            "name": "Đậu phụ",
+            "amount": "50g"
+          },
+          {
+            "name": "Rau thơm",
+            "amount": "20g"
+          }
+        ],
+        "preparation": [
+          "Chế biến đậu phụ",
+          "Bày ra bánh mì"
+        ],
+        "nutrition": {
+          "calories": 300.0,
+          "protein": 20.0,
+          "fat": 10.0,
+          "carbs": 40.0
+        },
+        "preparation_time": "20 phút",
+        "health_benefits": "Giàu protein và chất xơ"
+      }
+    ]
+  },
+  {
+    "test_case": "Bữa trưa tăng cân",
+    "status": "SUCCESS",
+    "meals_count": 1,
+    "validation": [
+      {
+        "meal_index": 0,
+        "name": "Bún Thang",
+        "missing_fields": [],
+        "field_types": {
+          "name": "str",
+          "description": "str",
+          "ingredients": "list",
+          "preparation": "list",
+          "nutrition": "dict",
+          "preparation_time": "str",
+          "health_benefits": "str"
+        },
+        "is_valid": true
+      }
+    ],
+    "meals": [
+      {
+        "name": "Bún Thang",
+        "ingredients": [
+          {
+            "name": "Bún",
+            "amount": "200g"
+          },
+          {
+            "name": "Thịt gà",
+            "amount": "100g"
+          },
+          {
+            "name": "Rau sống",
+            "amount": "50g"
+          },
+          {
+            "name": "Nước dùng",
+            "amount": "100ml"
+          }
+        ],
+        "preparation": [
+          "Luộc bún",
+          "Luộc thịt gà",
+          "Trộn đều",
+          "Bày ra tô"
+        ],
+        "nutrition": {
+          "calories": 600.0,
+          "fat": 20.0,
+          "protein": 35.0,
+          "carbs": 60.0
+        },
+        "preparation_time": "45 phút",
+        "health_benefits": "Giàu protein, ít chất béo",
+        "description": "Món ăn Bún Thang ngon và bổ dưỡng"
+      }
+    ]
+  },
+  {
+    "test_case": "Bữa tối cân bằng",
+    "status": "SUCCESS",
+    "meals_count": 1,
+    "validation": [
+      {
+        "meal_index": 0,
+        "name": "Bún Chả",
+        "missing_fields": [],
+        "field_types": {
+          "name": "str",
+          "description": "str",
+          "ingredients": "list",
+          "preparation": "list",
+          "nutrition": "dict",
+          "preparation_time": "str",
+          "health_benefits": "str"
+        },
+        "is_valid": true
+      }
+    ],
+    "meals": [
+      {
+        "name": "Bún Chả",
+        "ingredients": [
+          {
+            "name": "Bún",
+            "amount": "150g"
+          },
+          {
+            "name": "Thịt lợn",
+            "amount": "100g"
+          },
+          {
+            "name": "Rau sống",
+            "amount": "50g"
+          },
+          {
+            "name": "Nước mắm",
+            "amount": "20ml"
+          }
+        ],
+        "preparation": [
+          "Nướng thịt",
+          "Luộc bún",
+          "Bày ra tô"
+        ],
+        "nutrition": {
+          "calories": 450.0,
+          "fat": 20.0,
+          "carbs": 60.0,
+          "protein": 25.0
+        },
+        "preparation_time": "45 phút",
+        "health_benefits": "Giàu protein, ít chất béo",
+        "description": "Món ăn Bún Chả ngon và bổ dưỡng"
+      }
+    ]
+  }
+]

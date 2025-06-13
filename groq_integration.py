@@ -54,6 +54,9 @@ from json_prompt_templates import (
     validate_json_response
 )
 
+# Import Vietnamese specialty dishes
+from vietnamese_specialty_dishes import get_specialty_dish_names, get_specialty_dish
+
 # Thử import thư viện Groq hoặc fallback
 try:
     import groq
@@ -463,60 +466,101 @@ class GroqService:
         # Database món ăn Việt Nam phong phú
         vietnamese_dishes = {
             "bữa sáng": [
-                # Món nước
+                # Món nước truyền thống
                 "Phở Gà", "Phở Bò", "Bún Bò Huế", "Bún Riêu", "Bún Chả", "Bún Thịt Nướng",
                 "Hủ Tiếu", "Mì Quảng", "Cao Lầu", "Bánh Canh", "Cháo Gà", "Cháo Lòng",
                 "Cháo Đậu Xanh", "Cháo Sườn", "Súp Cua",
 
-                # Món khô
-                "Bánh Mì Thịt", "Bánh Mì Chả Cá", "Bánh Mì Xíu Mại", "Bánh Mì Chay",
+                # Món nước mới lạ
+                "Cháo Cá Hồi Nấu Dừa", "Bún Măng Vịt", "Phở Cuốn Tôm Thịt", "Bánh Canh Cua Đồng",
+                "Hủ Tiếu Mì Tôm Cua", "Cháo Trai Nấu Riêu", "Bún Sứa", "Mì Quảng Tôm Càng",
+                "Cháo Nghêu Hến", "Bánh Canh Chả Cá", "Phở Chua", "Bún Mắm Nêm",
+
+                # Món khô truyền thống
+                "Bánh Mì Thịt", "Bánh Mì Chả Cá", "Bánh Mì Xíu Mái", "Bánh Mì Chay",
                 "Xôi Xéo", "Xôi Mặn", "Xôi Gấc", "Xôi Đậu Xanh", "Xôi Lạc",
                 "Bánh Cuốn", "Bánh Ướt", "Bánh Bèo", "Bánh Nậm",
 
-                # Món chay
-                "Cháo Chay", "Phở Chay", "Bún Chay", "Bánh Mì Chay", "Xôi Chay"
+                # Món khô mới lạ
+                "Bánh Mì Chả Cá Nha Trang", "Xôi Chiên Phồng", "Bánh Cuốn Thanh Trì",
+                "Bánh Ướt Lòng Gà", "Bánh Bèo Chén", "Bánh Căn", "Bánh Khọt Vũng Tàu",
+                "Xôi Ngũ Sắc", "Bánh Tráng Nướng", "Bánh Tráng Phơi Sương",
+
+                # Món chay đặc sắc
+                "Cháo Chay", "Phở Chay", "Bún Chay", "Bánh Mì Chay", "Xôi Chay",
+                "Cháo Hạt Sen", "Bún Riêu Chay", "Bánh Cuốn Chay", "Xôi Đậu Đen"
             ],
 
             "bữa trưa": [
-                # Cơm
+                # Cơm truyền thống
                 "Cơm Tấm Sườn", "Cơm Gà Xối Mỡ", "Cơm Chiên Dương Châu", "Cơm Âm Phủ",
                 "Cơm Hến", "Cơm Niêu", "Cơm Dẻo", "Cơm Bò Lúc Lắc", "Cơm Gà Nướng",
 
-                # Bún/Phở
+                # Cơm đặc sắc
+                "Cơm Âm Phủ Huế", "Cơm Hến Huế", "Cơm Niêu Sài Gòn", "Cơm Tấm Bì Chả",
+                "Cơm Gà Hội An", "Cơm Chiên Hải Sản", "Cơm Chiên Cá Mặn", "Cơm Rang Dưa Bò",
+                "Cơm Âm Phủ Chay", "Cơm Cháy Chà Bông", "Cơm Lam", "Cơm Nắm",
+
+                # Bún/Phở truyền thống
                 "Bún Bò Huế", "Bún Riêu Cua", "Bún Chả Hà Nội", "Bún Thịt Nướng",
                 "Bún Mắm", "Bún Đậu Mắm Tôm", "Phở Bò", "Phở Gà", "Phở Chay",
+
+                # Bún/Phở đặc sắc
+                "Bún Bò Huế Chay", "Bún Riêu Cua Đồng", "Bún Chả Cá", "Bún Ốc",
+                "Bún Măng Vịt", "Bún Sứa", "Phở Cuốn", "Phở Xào", "Phở Áp Chảo",
+                "Bún Thái", "Bún Mắm Nêm", "Bún Cá Kiên Giang",
 
                 # Mì/Hủ tiếu
                 "Mì Quảng", "Hủ Tiếu Nam Vang", "Hủ Tiếu Khô", "Cao Lầu",
                 "Mì Xào Giòn", "Mì Xào Mềm", "Hủ Tiếu Xào",
+                "Mì Quảng Tôm Cua", "Hủ Tiếu Gò Vấp", "Cao Lầu Hội An", "Mì Vịt Tiềm",
 
                 # Món nướng
                 "Nem Nướng", "Chả Cá Lã Vọng", "Cá Nướng", "Thịt Nướng",
                 "Tôm Nướng", "Mực Nướng", "Gà Nướng",
+                "Nem Nướng Ninh Hòa", "Chả Cá Nha Trang", "Cá Nướng Lá Chuối",
 
-                # Món chay
-                "Cơm Chay", "Bún Chay", "Phở Chay", "Mì Chay"
+                # Món chay đặc sắc
+                "Cơm Chay", "Bún Chay", "Phở Chay", "Mì Chay",
+                "Cơm Âm Phủ Chay", "Bún Riêu Chay", "Mì Quảng Chay"
             ],
 
             "bữa tối": [
-                # Món nhẹ
+                # Món nhẹ truyền thống
                 "Chả Cá", "Nem Rán", "Bánh Xèo", "Bánh Khọt", "Bánh Tráng Nướng",
                 "Bánh Căn", "Bánh Bột Lọc", "Bánh Ít", "Bánh Bao",
 
-                # Lẩu
+                # Món nhẹ đặc sắc
+                "Bánh Xèo Miền Tây", "Bánh Khọt Vũng Tàu", "Bánh Căn Phan Thiết",
+                "Bánh Bột Lọc Huế", "Bánh Ít Lá Gai", "Bánh Tráng Phơi Sương",
+                "Nem Chua Rán", "Chả Ram Tôm Đất", "Bánh Tôm Hồ Tây",
+                "Bánh Cuốn Tôm Chấy", "Bánh Flan Nướng", "Chè Cung Đình",
+
+                # Lẩu truyền thống
                 "Lẩu Thái", "Lẩu Cá", "Lẩu Gà", "Lẩu Riêu Cua", "Lẩu Chay",
+
+                # Lẩu đặc sắc
+                "Lẩu Mắm", "Lẩu Cá Kèo", "Lẩu Cá Linh", "Lẩu Ếch", "Lẩu Gà Lá É",
+                "Lẩu Cá Đuối", "Lẩu Hến", "Lẩu Cá Bông Lau", "Lẩu Măng Chua",
+                "Lẩu Cá Tầm", "Lẩu Nấm", "Lẩu Đuôi Bò",
 
                 # Cháo/Súp
                 "Cháo Vịt", "Cháo Cá", "Cháo Trai", "Súp Cua", "Súp Măng Cua",
+                "Cháo Ếch Singapore", "Cháo Cá Chép", "Súp Bào Ngư", "Cháo Hến",
+                "Súp Cua Đồng", "Cháo Sò Huyết", "Súp Gà Ác Tần",
 
                 # Cơm chiều
                 "Cơm Chiên", "Cơm Âm Phủ", "Cơm Hến", "Cơm Niêu",
+                "Cơm Chiên Hải Sản", "Cơm Chiên Cá Mặn", "Cơm Cháy Chà Bông",
 
-                # Món nướng
+                # Món nướng đặc sắc
                 "Bánh Tráng Nướng", "Chả Cá Nướng", "Tôm Nướng", "Mực Nướng",
+                "Cá Nướng Lá Chuối", "Thịt Nướng Lá Lốt", "Tôm Nướng Muối Ớt",
+                "Mực Nướng Sa Tế", "Gà Nướng Lá Chanh", "Cá Saba Nướng",
 
-                # Món chay
-                "Cháo Chay", "Lẩu Chay", "Bánh Xèo Chay", "Nem Chay"
+                # Món chay đặc sắc
+                "Cháo Chay", "Lẩu Chay", "Bánh Xèo Chay", "Nem Chay",
+                "Lẩu Nấm Chay", "Cháo Hạt Sen", "Bánh Căn Chay", "Cơm Âm Phủ Chay"
             ]
         }
 
@@ -604,12 +648,22 @@ class GroqService:
         if len(filtered_dishes) < 5:
             filtered_dishes = dishes
 
+        # Thêm món ăn đặc sắc từ database riêng
+        try:
+            specialty_names = get_specialty_dish_names(meal_type)
+            if specialty_names:
+                # Thêm một số món đặc sắc vào danh sách
+                filtered_dishes.extend(specialty_names[:5])  # Thêm tối đa 5 món đặc sắc
+                print(f"🍽️ Added {len(specialty_names[:5])} specialty dishes: {specialty_names[:5]}")
+        except Exception as e:
+            print(f"⚠️ Could not load specialty dishes: {e}")
+
         # Shuffle để tăng tính ngẫu nhiên
         import random
         random.shuffle(filtered_dishes)
 
-        # Trả về top 10-15 món để AI chọn
-        selected_dishes = filtered_dishes[:15]
+        # Trả về top 15-20 món để AI chọn (tăng từ 15 lên 20 để có thêm món đặc sắc)
+        selected_dishes = filtered_dishes[:20]
         return ", ".join(selected_dishes)
 
     def _validate_required_keys(self, data: Dict) -> bool:

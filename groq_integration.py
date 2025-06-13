@@ -221,11 +221,14 @@ class GroqService:
         preferences: List[str] = None,
         allergies: List[str] = None,
         cuisine_style: str = None,
-        use_ai: bool = True  # Thêm tham số để có thể tắt AI
+        use_ai: bool = True,  # Thêm tham số để có thể tắt AI
+        day_of_week: str = None,  # Thêm ngày để tăng tính đa dạng
+        random_seed: int = None,  # Thêm random seed để tăng tính đa dạng
+        user_data: Dict = None  # Add parameter for user data
     ) -> List[Dict]:
         """
         Tạo gợi ý món ăn sử dụng LLaMA 3 qua Groq
-        
+
         Args:
             calories_target: Mục tiêu calo
             protein_target: Mục tiêu protein (g)
@@ -236,7 +239,10 @@ class GroqService:
             allergies: Danh sách dị ứng thực phẩm (tùy chọn)
             cuisine_style: Phong cách ẩm thực (tùy chọn)
             use_ai: Có sử dụng AI không hay dùng dữ liệu dự phòng
-            
+            day_of_week: Ngày trong tuần (tùy chọn, để tăng tính đa dạng)
+            random_seed: Random seed (tùy chọn, để tăng tính đa dạng)
+            user_data: Dictionary chứa thông tin người dùng (tùy chọn)
+
         Returns:
             Danh sách các gợi ý món ăn dưới dạng từ điển
         """
@@ -269,11 +275,19 @@ class GroqService:
         recent_dishes_hash = hashlib.md5(str(sorted(self.recent_dishes[-5:])).encode()).hexdigest()[:8]
         cache_key = f"{meal_type}_{calories_target}_{protein_target}_{fat_target}_{carbs_target}_{recent_dishes_hash}"
         if preferences:
-            cache_key += f"_prefs:{'|'.join(preferences)}"
+            cache_key += f"_pref={'_'.join(sorted(preferences))}"
         if allergies:
-            cache_key += f"_allergies:{'|'.join(allergies)}"
+            cache_key += f"_allergy={'_'.join(sorted(allergies))}"
         if cuisine_style:
-            cache_key += f"_cuisine:{cuisine_style}"
+            cache_key += f"_cuisine={cuisine_style}"
+        if day_of_week:
+            cache_key += f"_day={day_of_week}"
+        if random_seed:
+            cache_key += f"_seed={random_seed}"
+        if user_data:
+            # Add user data to cache key
+            user_data_str = "_".join([f"{k}:{v}" for k, v in user_data.items() if k in ['gender', 'age', 'goal', 'activity_level']])
+            cache_key += f"_user:{user_data_str}"
         
         # Kiểm tra cache
         if cache_key in self.cache:

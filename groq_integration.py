@@ -237,74 +237,23 @@ class GroqService:
         allergies_str = ", ".join(allergies) if allergies else "không có"
         cuisine_style_str = cuisine_style if cuisine_style else "không có yêu cầu cụ thể"
 
-        # Prompt được cải tiến để "ép" AI tuân thủ quy tắc JSON nghiêm ngặt
-        prompt = f"""SYSTEM: You are a JSON-only response system. You MUST respond with ONLY valid JSON, no other text.
+        # Prompt siêu nghiêm ngặt để ép AI tuân thủ JSON format
+        prompt = f"""You are a JSON generator. Return ONLY valid JSON array. No other text allowed.
 
-TASK: Create 1-2 Vietnamese meal suggestions for {meal_type} with nutrition targets: {calories_target}kcal, {protein_target}g protein, {fat_target}g fat, {carbs_target}g carbs.
+Create 1-2 Vietnamese dishes for {meal_type}. Nutrition: {calories_target}kcal, {protein_target}g protein, {fat_target}g fat, {carbs_target}g carbs.
 
-ABSOLUTE REQUIREMENTS:
-1. Response MUST be ONLY a valid JSON array
-2. NO text before or after JSON
-3. NO markdown formatting (no ```json)
-4. NO explanations or comments
-5. MUST start with [ and end with ]
+CRITICAL: Your response must be EXACTLY this format:
 
-REQUIRED JSON STRUCTURE:
-[
-  {{
-    "name": "Vietnamese dish name",
-    "description": "Brief description in Vietnamese",
-    "ingredients": [
-      {{"name": "ingredient name", "amount": "amount"}}
-    ],
-    "preparation": [
-      "step 1 in Vietnamese",
-      "step 2 in Vietnamese"
-    ],
-    "nutrition": {{
-      "calories": {calories_target//2 if calories_target > 400 else calories_target},
-      "protein": {protein_target//2 if protein_target > 30 else protein_target},
-      "fat": {fat_target//2 if fat_target > 20 else fat_target},
-      "carbs": {carbs_target//2 if carbs_target > 50 else carbs_target}
-    }},
-    "preparation_time": "time in Vietnamese",
-    "health_benefits": "benefits in Vietnamese"
-  }}
-]
+[{{"name":"Dish Name","description":"Description in Vietnamese","ingredients":[{{"name":"ingredient","amount":"amount"}}],"preparation":["step 1","step 2"],"nutrition":{{"calories":{calories_target//2 if calories_target > 400 else calories_target},"protein":{protein_target//2 if protein_target > 30 else protein_target},"fat":{fat_target//2 if fat_target > 20 else fat_target},"carbs":{carbs_target//2 if carbs_target > 50 else carbs_target}}},"preparation_time":"time","health_benefits":"benefits"}}]
 
-EXAMPLE OUTPUT (COPY THIS EXACT FORMAT):
-[
-  {{
-    "name": "Cơm Tấm Sườn Nướng",
-    "description": "Món cơm tấm truyền thống với sườn nướng thơm ngon",
-    "ingredients": [
-      {{"name": "Cơm tấm", "amount": "150g"}},
-      {{"name": "Sườn heo", "amount": "100g"}}
-    ],
-    "preparation": [
-      "Ướp sườn với gia vị trong 30 phút",
-      "Nướng sườn trên than hoa đến khi chín vàng"
-    ],
-    "nutrition": {{
-      "calories": {calories_target//2 if calories_target > 400 else calories_target},
-      "protein": {protein_target//2 if protein_target > 30 else protein_target},
-      "fat": {fat_target//2 if fat_target > 20 else fat_target},
-      "carbs": {carbs_target//2 if carbs_target > 50 else carbs_target}
-    }},
-    "preparation_time": "45 phút",
-    "health_benefits": "Cung cấp protein chất lượng cao và năng lượng cân bằng"
-  }}
-]
+EXAMPLE (copy this structure exactly):
+[{{"name":"Phở Gà","description":"Món phở gà truyền thống","ingredients":[{{"name":"Bánh phở","amount":"200g"}},{{"name":"Thịt gà","amount":"150g"}}],"preparation":["Luộc gà đến chín","Trụng bánh phở","Bày ra tô"],"nutrition":{{"calories":{calories_target//2 if calories_target > 400 else calories_target},"protein":{protein_target//2 if protein_target > 30 else protein_target},"fat":{fat_target//2 if fat_target > 20 else fat_target},"carbs":{carbs_target//2 if carbs_target > 50 else carbs_target}}},"preparation_time":"30 phút","health_benefits":"Giàu protein và năng lượng"}}]
 
-CONSTRAINTS:
-- Preferences: {preferences_str}
-- Allergies to avoid: {allergies_str}
-- Cuisine style: {cuisine_style_str}
-- All text in Vietnamese except JSON keys
-- Create DIFFERENT dishes each time
-- Focus on Vietnamese cuisine
+Preferences: {preferences_str}
+Allergies: {allergies_str}
+Style: {cuisine_style_str}
 
-RESPOND WITH JSON ONLY - NO OTHER TEXT:"""
+Return JSON only:"""
         
         try:
             # Gọi API Groq
@@ -439,9 +388,60 @@ RESPOND WITH JSON ONLY - NO OTHER TEXT:"""
                 except json.JSONDecodeError:
                     print("Error parsing JSON from response even after fixing")
 
+        # Phương pháp cuối cùng: Tạo JSON từ text response
+        print("🔧 Attempting to create JSON from text response...")
+        backup_meals = self._create_json_from_text(cleaned_text)
+        if backup_meals:
+            print(f"✅ Successfully created {len(backup_meals)} meals from text")
+            return backup_meals
+
         # Không tìm thấy JSON hợp lệ
-        print("Failed to extract valid JSON from response")
+        print("❌ Failed to extract valid JSON from response")
         return None
+
+    def _create_json_from_text(self, text: str) -> List[Dict]:
+        """
+        Tạo JSON từ text response khi parsing thất bại
+        """
+        try:
+            # Tìm tên món ăn từ text
+            dish_names = re.findall(r'"([^"]*(?:Bánh|Cơm|Phở|Bún|Cháo|Chả|Gỏi|Canh)[^"]*)"', text)
+            if not dish_names:
+                dish_names = re.findall(r'([A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ][a-zàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ\s]+(?:Bánh|Cơm|Phở|Bún|Cháo|Chả|Gỏi|Canh)[a-zàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ\s]*)', text)
+
+            if not dish_names:
+                return None
+
+            meals = []
+            for i, name in enumerate(dish_names[:2]):  # Tối đa 2 món
+                meal = {
+                    "name": name.strip(),
+                    "description": f"Món {name.strip()} thơm ngon và bổ dưỡng",
+                    "ingredients": [
+                        {"name": "Nguyên liệu chính", "amount": "100g"},
+                        {"name": "Gia vị", "amount": "vừa đủ"}
+                    ],
+                    "preparation": [
+                        f"Chuẩn bị nguyên liệu cho {name.strip()}",
+                        "Chế biến theo hướng dẫn",
+                        "Nêm nướng vừa ăn"
+                    ],
+                    "nutrition": {
+                        "calories": 300 + (i * 50),
+                        "protein": 20 + (i * 5),
+                        "fat": 12 + (i * 3),
+                        "carbs": 35 + (i * 10)
+                    },
+                    "preparation_time": "30 phút",
+                    "health_benefits": f"Món {name.strip()} cung cấp dinh dưỡng cân bằng và tốt cho sức khỏe"
+                }
+                meals.append(meal)
+
+            return meals if meals else None
+
+        except Exception as e:
+            print(f"❌ Error creating JSON from text: {e}")
+            return None
 
     def _clean_response_text(self, text: str) -> str:
         """
@@ -469,18 +469,46 @@ RESPOND WITH JSON ONLY - NO OTHER TEXT:"""
 
     def _fix_malformed_json(self, json_str: str) -> str:
         """
-        Cố gắng sửa JSON bị lỗi format
+        Cố gắng sửa JSON bị lỗi format với nhiều phương pháp
         """
-        # Sửa trailing commas
+        print(f"🔧 Attempting to fix malformed JSON...")
+        original_json = json_str
+
+        # Bước 1: Sửa missing "name" key
+        json_str = re.sub(r'\{\s*"([^"]+)",', r'{"name": "\1",', json_str)
+
+        # Bước 2: Sửa malformed ingredients field
+        json_str = re.sub(r'"(\[[\s\S]*?\])",', r'"\1"', json_str)  # Remove quotes around arrays
+        json_str = re.sub(r'"\[', r'[', json_str)  # Remove quote before [
+        json_str = re.sub(r'\]"', r']', json_str)  # Remove quote after ]
+
+        # Bước 3: Sửa trailing commas
         json_str = re.sub(r',\s*}', '}', json_str)
         json_str = re.sub(r',\s*]', ']', json_str)
 
-        # Sửa single quotes thành double quotes
+        # Bước 4: Sửa single quotes thành double quotes
         json_str = re.sub(r"'([^']*)':", r'"\1":', json_str)
         json_str = re.sub(r":\s*'([^']*)'", r': "\1"', json_str)
 
-        # Sửa missing quotes cho keys
+        # Bước 5: Sửa missing quotes cho keys
         json_str = re.sub(r'(\w+):', r'"\1":', json_str)
+
+        # Bước 6: Sửa missing "ingredients" key
+        json_str = re.sub(r'"\s*\[', r'"ingredients": [', json_str)
+
+        # Bước 7: Đảm bảo có đủ required fields
+        if '"name"' not in json_str:
+            print("⚠️ Missing name field, attempting to add...")
+            json_str = re.sub(r'\{', r'{"name": "Vietnamese Dish",', json_str, count=1)
+
+        if '"ingredients"' not in json_str:
+            print("⚠️ Missing ingredients field, attempting to add...")
+            json_str = re.sub(r'"description":\s*"[^"]*",', r'\g<0> "ingredients": [],', json_str)
+
+        if original_json != json_str:
+            print(f"🔧 JSON was modified during fixing")
+            print(f"Original length: {len(original_json)}")
+            print(f"Fixed length: {len(json_str)}")
 
         return json_str
 

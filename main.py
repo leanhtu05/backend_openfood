@@ -395,7 +395,7 @@ async def debug_groq():
 
     # Test GroqService integration
     try:
-        from groq_integration import GroqService
+        from groq_integration_direct import GroqService  # Fixed version
         debug_info["groq_service_import"] = "success"
 
         service = GroqService()

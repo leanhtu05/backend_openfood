@@ -10,6 +10,17 @@ from models import NutritionInfo, Dish, Ingredient
 # Import fallback data
 from fallback_meals import FALLBACK_MEALS
 
+# Import enhanced JSON prompt templates
+from json_prompt_templates import (
+    get_strict_json_prompt,
+    get_one_shot_example_prompt,
+    get_validation_retry_prompt,
+    get_fallback_prompt,
+    get_temperature_settings,
+    get_system_message,
+    validate_json_response
+)
+
 # Thử import thư viện Groq hoặc fallback
 try:
     import groq
@@ -249,58 +260,45 @@ class GroqService:
         # ANTI-DUPLICATION: Exclude recent dishes
         recent_dishes_str = ", ".join(self.recent_dishes[-10:]) if self.recent_dishes else "không có"
 
-        # ULTRA-STRICT JSON SCHEMA ENFORCEMENT
-        required_keys = ["name", "description", "ingredients", "preparation", "nutrition", "preparation_time", "health_benefits"]
-        template_json = f'{{"name":"DISH_NAME","description":"DESCRIPTION","ingredients":[{{"name":"INGREDIENT","amount":"AMOUNT"}}],"preparation":["STEP1","STEP2"],"nutrition":{{"calories":{calories_target//2 if calories_target > 400 else calories_target},"protein":{protein_target//2 if protein_target > 30 else protein_target},"fat":{fat_target//2 if fat_target > 20 else fat_target},"carbs":{carbs_target//2 if carbs_target > 50 else carbs_target}}},"preparation_time":"TIME","health_benefits":"BENEFITS"}}'
+        # ENHANCED PROMPT GENERATION với multiple strategies
+        prompt_strategies = [
+            ("Strict JSON Prompt", get_strict_json_prompt(
+                meal_type, calories_target, protein_target, fat_target, carbs_target,
+                preferences_str, allergies_str, diverse_dishes, recent_dishes_str
+            )),
+            ("One-shot Example Prompt", get_one_shot_example_prompt(
+                meal_type, calories_target, protein_target, fat_target, carbs_target
+            )),
+            ("Fallback Simple Prompt", get_fallback_prompt(meal_type))
+        ]
 
-        prompt = f"""CRITICAL: Output must exactly follow this JSON schema. NO additional or missing keys allowed.
-
-REQUIRED KEYS: {', '.join(required_keys)}
-
-EXACT TEMPLATE:
-[{template_json}]
-
-DIVERSE VIETNAMESE DISHES TO CHOOSE FROM:
-{diverse_dishes}
-
-ANTI-DUPLICATION: DO NOT use these recent dishes:
-{recent_dishes_str}
-
-INSTRUCTIONS:
-- Choose 1-2 DIFFERENT dishes from the diverse list above
-- AVOID dishes from the recent list to ensure variety
-- Replace DISH_NAME with chosen Vietnamese {meal_type} dish name
-- Replace DESCRIPTION with brief description in Vietnamese
-- Replace INGREDIENT with ingredient name
-- Replace AMOUNT with amount like "100g"
-- Replace STEP1, STEP2 with preparation steps in Vietnamese
-- Replace TIME with time like "30 phút"
-- Replace BENEFITS with health benefits in Vietnamese
-
-NUTRITION TARGETS: {calories_target}kcal, {protein_target}g protein, {fat_target}g fat, {carbs_target}g carbs
-PREFERENCES: {preferences_str}
-ALLERGIES: {allergies_str}
-
-CRITICAL: Return ONLY valid JSON array. NO markdown, NO explanations, NO other text.
-If you cannot follow this exact format, return empty array []."""
+        # Prompt strategies sẽ được sử dụng trong retry loop
         
         try:
-            # Gọi API Groq
+            # Gọi API Groq với enhanced retry logic
             for attempt in range(self.max_retries):
                 try:
                     print(f"Making request to Groq API, attempt {attempt + 1}/{self.max_retries}")
-                    
+
+                    # Chọn prompt strategy dựa trên attempt
+                    current_prompt = prompt_strategies[min(attempt, len(prompt_strategies)-1)][1]
+                    strategy_name = prompt_strategies[min(attempt, len(prompt_strategies)-1)][0]
+                    print(f"Using strategy: {strategy_name}")
+
+                    # Lấy cài đặt temperature tối ưu
+                    temp_settings = get_temperature_settings()
+
                     response = self.client.chat.completions.create(
                         model=self.model,
                         messages=[
-                            {"role": "system", "content": "You are a JSON-only response system. Respond ONLY with valid JSON arrays, no other text."},
-                            {"role": "user", "content": prompt}
+                            {"role": "system", "content": get_system_message()},
+                            {"role": "user", "content": current_prompt}
                         ],
-                        temperature=0.0,  # ULTRA-STRICT: Maximum determinism for JSON compliance
-                        max_tokens=2000,  # Sufficient tokens for meal suggestions
-                        top_p=0.1,       # ULTRA-STRICT: Very low top_p for format adherence
-                        frequency_penalty=0.0,  # No penalties for strict JSON format
-                        presence_penalty=0.0    # No penalties for strict JSON format
+                        temperature=temp_settings["temperature"],
+                        max_tokens=2000,
+                        top_p=temp_settings["top_p"],
+                        frequency_penalty=temp_settings["frequency_penalty"],
+                        presence_penalty=temp_settings["presence_penalty"]
                     )
                     
                     # Trích xuất kết quả JSON từ phản hồi
@@ -309,6 +307,32 @@ If you cannot follow this exact format, return empty array []."""
                     print(f"Length: {len(result_text)} characters")
                     print(f"First 200 chars: {result_text[:200]}")
                     print(f"Last 200 chars: {result_text[-200:]}")
+
+                    # Validate JSON response trước khi extract
+                    is_valid, error_msg = validate_json_response(result_text)
+                    if is_valid:
+                        print(f"✅ Response passed initial JSON validation")
+                    else:
+                        print(f"⚠️ Response failed validation: {error_msg}")
+
+                        # Nếu không phải attempt cuối, thử retry với validation prompt
+                        if attempt < self.max_retries - 1:
+                            print(f"🔄 Retrying with validation-corrected prompt...")
+                            retry_prompt = get_validation_retry_prompt(result_text, error_msg)
+
+                            retry_response = self.client.chat.completions.create(
+                                model=self.model,
+                                messages=[
+                                    {"role": "system", "content": get_system_message()},
+                                    {"role": "user", "content": retry_prompt}
+                                ],
+                                temperature=0.0,  # Maximum strictness for correction
+                                max_tokens=2000,
+                                top_p=0.1
+                            )
+
+                            result_text = retry_response.choices[0].message.content.strip()
+                            print(f"🔧 Retry response: {result_text[:100]}...")
 
                     # Phân tích JSON từ response
                     print(f"🔧 Extracting JSON from response...")
@@ -546,7 +570,7 @@ If you cannot follow this exact format, return empty array []."""
 
     def _extract_json_from_response(self, response_text: str) -> List[Dict]:
         """
-        Trích xuất dữ liệu JSON từ phản hồi của AI với strict key validation
+        Enhanced JSON extraction with multiple fallback strategies
 
         Args:
             response_text: Văn bản phản hồi từ API
@@ -554,92 +578,152 @@ If you cannot follow this exact format, return empty array []."""
         Returns:
             List[Dict]: Dữ liệu món ăn dạng JSON hoặc None nếu không thể phân tích
         """
+        print(f"🔍 Starting enhanced JSON extraction...")
+
         # Bước 1: Làm sạch response text
         cleaned_text = self._clean_response_text(response_text)
+        print(f"📝 Cleaned text length: {len(cleaned_text)}")
 
-        try:
-            # Phương pháp 1: Thử phân tích toàn bộ phản hồi là JSON với strict validation
-            print("Trying to parse entire response as JSON...")
-            meal_data = json.loads(cleaned_text)
-            if isinstance(meal_data, list) and len(meal_data) > 0:
-                # Validate each item has required keys
-                valid_items = []
-                for item in meal_data:
-                    if isinstance(item, dict) and self._validate_required_keys(item):
-                        valid_items.append(item)
-                    else:
-                        print(f"⚠️ Skipping invalid item: {item}")
+        # Bước 2: Thử các phương pháp parsing theo thứ tự ưu tiên
+        extraction_methods = [
+            ("Direct JSON parsing", self._try_direct_json_parse),
+            ("Regex JSON extraction", self._try_regex_json_extract),
+            ("Bracket-based extraction", self._try_bracket_extraction),
+            ("Advanced JSON fixing", self._try_advanced_json_fix),
+            ("Text-to-JSON conversion", self._try_text_to_json)
+        ]
 
-                if valid_items:
-                    print(f"✅ Successfully parsed entire response as JSON array with {len(valid_items)} valid items")
-                    return valid_items
+        for method_name, method_func in extraction_methods:
+            print(f"🔧 Trying {method_name}...")
+            try:
+                result = method_func(cleaned_text)
+                if result and isinstance(result, list) and len(result) > 0:
+                    print(f"✅ {method_name} succeeded with {len(result)} items")
+                    return result
                 else:
-                    print("❌ No valid items found in parsed JSON")
+                    print(f"❌ {method_name} failed or returned empty result")
+            except Exception as e:
+                print(f"❌ {method_name} threw exception: {e}")
+                continue
 
-            elif isinstance(meal_data, dict):
-                if self._validate_required_keys(meal_data):
-                    print(f"✅ Successfully parsed entire response as single valid JSON item")
-                    return [meal_data]
-                else:
-                    print("❌ Single item missing required keys")
-        except json.JSONDecodeError as e:
-            print(f"Entire response is not valid JSON: {e}")
-            print("Trying to extract JSON portion...")
-
-            # Phương pháp 2: Trích xuất JSON sử dụng regex patterns
-            import re
-
-            # Pattern 1: Tìm array JSON hoàn chỉnh
-            json_patterns = [
-                r'\[\s*\{[^}]*\}(?:\s*,\s*\{[^}]*\})*\s*\]',  # Array of objects
-                r'\[\s*\{.*?\}\s*(?:,\s*\{.*?\}\s*)*\]',      # More flexible array
-                r'\[.*?\]',                                    # Any array
-            ]
-
-            for pattern in json_patterns:
-                matches = re.search(pattern, cleaned_text, re.DOTALL)
-                if matches:
-                    json_str = matches.group(0)
-                    print(f"Found JSON pattern: {json_str[:100]}...")
-                    try:
-                        meal_data = json.loads(json_str)
-                        if isinstance(meal_data, list) and len(meal_data) > 0:
-                            print(f"Successfully parsed extracted JSON with {len(meal_data)} items")
-                            return meal_data
-                    except json.JSONDecodeError:
-                        print(f"Pattern {pattern} failed to parse")
-                        continue
-
-            # Phương pháp 3: Tìm mảng JSON giữa dấu ngoặc vuông
-            json_start = cleaned_text.find("[")
-            json_end = cleaned_text.rfind("]") + 1
-
-            if json_start >= 0 and json_end > json_start:
-                json_str = cleaned_text[json_start:json_end]
-                print(f"Extracted JSON between brackets: {json_str[:100]}...")
-                try:
-                    # Thử sửa JSON bị lỗi
-                    fixed_json = self._fix_malformed_json(json_str)
-                    meal_data = json.loads(fixed_json)
-                    if isinstance(meal_data, list) and len(meal_data) > 0:
-                        print(f"Successfully parsed fixed JSON array with {len(meal_data)} items")
-                        return meal_data
-                except json.JSONDecodeError:
-                    print("Error parsing JSON from response even after fixing")
-
-        # Phương pháp cuối cùng: Tạo JSON từ text response
-        print("🔧 Attempting to create JSON from text response...")
-        backup_meals = self._create_json_from_text(cleaned_text)
-        if backup_meals:
-            print(f"✅ Successfully created {len(backup_meals)} meals from text")
-            return backup_meals
-
-        # Không tìm thấy JSON hợp lệ - sẽ fallback ở level cao hơn
         print("❌ All JSON extraction methods failed")
-
-        # Không tìm thấy JSON hợp lệ
-        print("❌ Failed to extract valid JSON from response")
         return None
+
+    def _try_direct_json_parse(self, text: str) -> List[Dict]:
+        """Thử parse JSON trực tiếp"""
+        meal_data = json.loads(text)
+        if isinstance(meal_data, list):
+            return self._validate_and_filter_meals(meal_data)
+        elif isinstance(meal_data, dict):
+            return self._validate_and_filter_meals([meal_data])
+        return None
+
+    def _try_regex_json_extract(self, text: str) -> List[Dict]:
+        """Sử dụng regex để trích xuất JSON"""
+        # Các pattern regex để tìm JSON
+        patterns = [
+            r'\[\s*\{.*?\}\s*(?:,\s*\{.*?\}\s*)*\]',  # Array of objects
+            r'\[.*?\]',                                # Any array
+            r'\{.*?\}',                               # Single object
+        ]
+
+        for pattern in patterns:
+            matches = re.findall(pattern, text, re.DOTALL)
+            for match in matches:
+                try:
+                    data = json.loads(match)
+                    if isinstance(data, list):
+                        result = self._validate_and_filter_meals(data)
+                        if result:
+                            return result
+                    elif isinstance(data, dict):
+                        result = self._validate_and_filter_meals([data])
+                        if result:
+                            return result
+                except json.JSONDecodeError:
+                    continue
+        return None
+
+    def _try_bracket_extraction(self, text: str) -> List[Dict]:
+        """Trích xuất JSON giữa dấu ngoặc vuông"""
+        start = text.find("[")
+        end = text.rfind("]") + 1
+
+        if start >= 0 and end > start:
+            json_str = text[start:end]
+            try:
+                data = json.loads(json_str)
+                return self._validate_and_filter_meals(data if isinstance(data, list) else [data])
+            except json.JSONDecodeError:
+                # Thử sửa JSON trước khi parse
+                fixed_json = self._fix_malformed_json(json_str)
+                try:
+                    data = json.loads(fixed_json)
+                    return self._validate_and_filter_meals(data if isinstance(data, list) else [data])
+                except json.JSONDecodeError:
+                    pass
+        return None
+
+    def _try_advanced_json_fix(self, text: str) -> List[Dict]:
+        """Sử dụng advanced JSON fixing"""
+        fixed_json = self._advanced_json_repair(text)
+        if fixed_json:
+            try:
+                data = json.loads(fixed_json)
+                return self._validate_and_filter_meals(data if isinstance(data, list) else [data])
+            except json.JSONDecodeError:
+                pass
+        return None
+
+    def _try_text_to_json(self, text: str) -> List[Dict]:
+        """Chuyển đổi text thành JSON"""
+        return self._create_json_from_text(text)
+
+    def _validate_and_filter_meals(self, meal_data: List[Dict]) -> List[Dict]:
+        """Validate và filter meals với required keys"""
+        if not meal_data:
+            return None
+
+        valid_meals = []
+        for item in meal_data:
+            if isinstance(item, dict) and self._validate_required_keys(item):
+                valid_meals.append(item)
+
+        return valid_meals if valid_meals else None
+
+    def _advanced_json_repair(self, text: str) -> str:
+        """
+        Advanced JSON repair với nhiều kỹ thuật sửa lỗi
+        """
+        print(f"🔧 Starting advanced JSON repair...")
+
+        # Bước 1: Tìm và sửa pattern thiếu "name" key phổ biến
+        # Pattern: { "Bánh Mì Chay", "description": -> { "name": "Bánh Mì Chay", "description":
+        text = re.sub(r'\{\s*"([^"]+)",\s*"description":', r'{"name": "\1", "description":', text)
+
+        # Bước 2: Sửa pattern object đầu tiên thiếu name
+        # Pattern: [{ "Dish Name", -> [{ "name": "Dish Name",
+        text = re.sub(r'\[\s*\{\s*"([^"]+)",', r'[{"name": "\1",', text)
+
+        # Bước 3: Sửa missing quotes cho keys
+        text = re.sub(r'(\w+):', r'"\1":', text)
+
+        # Bước 4: Sửa trailing commas
+        text = re.sub(r',\s*}', '}', text)
+        text = re.sub(r',\s*]', ']', text)
+
+        # Bước 5: Đảm bảo cân bằng brackets
+        open_brackets = text.count('[')
+        close_brackets = text.count(']')
+        if open_brackets > close_brackets:
+            text += ']' * (open_brackets - close_brackets)
+
+        open_braces = text.count('{')
+        close_braces = text.count('}')
+        if open_braces > close_braces:
+            text += '}' * (open_braces - close_braces)
+
+        return text
 
     def _create_intelligent_fallback(self, meal_type: str, calories_target: int, protein_target: int, fat_target: int, carbs_target: int) -> List[Dict]:
         """
@@ -817,22 +901,27 @@ If you cannot follow this exact format, return empty array []."""
 
     def _fix_malformed_json(self, json_str: str) -> str:
         """
-        Ultra-robust JSON fixing với nhiều pattern matching
+        Ultra-robust JSON fixing với nhiều pattern matching - Enhanced version
         """
         print(f"🔧 Attempting ultra-robust JSON fixing...")
         original_json = json_str
 
+        # Bước 0: Làm sạch cơ bản
+        json_str = json_str.strip()
+
         # Bước 1: Sửa pattern phổ biến nhất - missing "name" key
         # Pattern: { "Dish Name", "description": -> { "name": "Dish Name", "description":
-        json_str = re.sub(r'\{\s*"([^"]+)",\s*"([^"]+)":', r'{"name": "\1", "description": "\2",', json_str)
+        json_str = re.sub(r'\{\s*"([^"]+)",\s*"description":', r'{"name": "\1", "description":', json_str)
 
-        # Bước 2: Sửa pattern chỉ có tên món
-        # Pattern: { "Dish Name", -> { "name": "Dish Name",
+        # Pattern: { "Bánh Mì Chay", -> { "name": "Bánh Mì Chay",
         json_str = re.sub(r'\{\s*"([^"]+)",\s*([^"])', r'{"name": "\1", \2', json_str)
 
-        # Bước 3: Sửa missing "description" key
-        # Pattern: "name": "...", "text", -> "name": "...", "description": "text",
-        json_str = re.sub(r'"name":\s*"([^"]+)",\s*"([^"]+)",', r'"name": "\1", "description": "\2",', json_str)
+        # Pattern: [ { "Dish Name", -> [ { "name": "Dish Name",
+        json_str = re.sub(r'\[\s*\{\s*"([^"]+)",', r'[{"name": "\1",', json_str)
+
+        # Bước 2: Sửa missing field names
+        # Pattern: "name": "...", "text without field", -> "name": "...", "description": "text",
+        json_str = re.sub(r'"name":\s*"([^"]+)",\s*"([^"]+)",\s*"ingredients"', r'"name": "\1", "description": "\2", "ingredients"', json_str)
 
         # Bước 4: Sửa malformed arrays - loại bỏ quotes xung quanh arrays
         json_str = re.sub(r'"\s*\[\s*', r'[', json_str)
@@ -931,8 +1020,6 @@ If you cannot follow this exact format, return empty array []."""
             print(f"✅ Validating meal: {meal_name}")
 
             # Validate and fix each required field
-            is_valid = True
-
             # Description
             if 'description' not in meal or not isinstance(meal['description'], str):
                 meal['description'] = f"Món ăn {meal_name} ngon và bổ dưỡng"

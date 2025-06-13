@@ -1,0 +1,415 @@
+#!/usr/bin/env python3
+"""
+Comprehensive Test Suite for Backend API
+Kiểm tra toàn diện tất cả endpoints và tình huống trước khi deploy
+"""
+
+import asyncio
+import json
+import time
+import requests
+from typing import Dict, List, Any
+import os
+from datetime import datetime, timedelta
+
+# Test configuration
+TEST_CONFIG = {
+    "base_url": "http://localhost:8000",  # Change to your actual URL
+    "timeout": 30,
+    "max_retries": 3,
+    "test_user_id": "test_user_123",
+    "test_data_cleanup": True
+}
+
+class APITestSuite:
+    """Comprehensive API test suite"""
+    
+    def __init__(self, base_url: str = None):
+        self.base_url = base_url or TEST_CONFIG["base_url"]
+        self.session = requests.Session()
+        self.session.timeout = TEST_CONFIG["timeout"]
+        self.test_results = []
+        
+    def log_test_result(self, test_name: str, success: bool, details: str = "", response_time: float = 0):
+        """Log test result"""
+        result = {
+            "test_name": test_name,
+            "success": success,
+            "details": details,
+            "response_time": response_time,
+            "timestamp": datetime.now().isoformat()
+        }
+        self.test_results.append(result)
+        
+        status = "✅ PASS" if success else "❌ FAIL"
+        print(f"{status} {test_name} ({response_time:.2f}s)")
+        if details:
+            print(f"   Details: {details}")
+    
+    def test_health_check(self):
+        """Test basic health check endpoint"""
+        print("\n🏥 TESTING HEALTH CHECK")
+        print("=" * 40)
+        
+        try:
+            start_time = time.time()
+            response = self.session.get(f"{self.base_url}/health")
+            response_time = time.time() - start_time
+            
+            if response.status_code == 200:
+                self.log_test_result("Health Check", True, "Server is healthy", response_time)
+                return True
+            else:
+                self.log_test_result("Health Check", False, f"Status: {response.status_code}", response_time)
+                return False
+                
+        except Exception as e:
+            self.log_test_result("Health Check", False, f"Connection error: {str(e)}")
+            return False
+    
+    def test_meal_plan_generation(self):
+        """Test meal plan generation endpoint"""
+        print("\n🍽️ TESTING MEAL PLAN GENERATION")
+        print("=" * 45)
+        
+        test_cases = [
+            {
+                "name": "Standard meal plan",
+                "data": {
+                    "user_id": TEST_CONFIG["test_user_id"],
+                    "calories_target": 2000,
+                    "protein_target": 150,
+                    "fat_target": 65,
+                    "carbs_target": 250,
+                    "use_ai": True
+                }
+            },
+            {
+                "name": "Low calorie meal plan",
+                "data": {
+                    "user_id": TEST_CONFIG["test_user_id"],
+                    "calories_target": 1200,
+                    "protein_target": 80,
+                    "fat_target": 40,
+                    "carbs_target": 120,
+                    "use_ai": True
+                }
+            },
+            {
+                "name": "High protein meal plan",
+                "data": {
+                    "user_id": TEST_CONFIG["test_user_id"],
+                    "calories_target": 2500,
+                    "protein_target": 200,
+                    "fat_target": 80,
+                    "carbs_target": 200,
+                    "use_ai": True,
+                    "preferences": ["high-protein", "healthy"],
+                    "allergies": ["seafood"]
+                }
+            },
+            {
+                "name": "Vegetarian meal plan",
+                "data": {
+                    "user_id": TEST_CONFIG["test_user_id"],
+                    "calories_target": 1800,
+                    "protein_target": 100,
+                    "fat_target": 60,
+                    "carbs_target": 200,
+                    "use_ai": True,
+                    "diet_preference": "vegetarian",
+                    "cuisine_style": "Vietnamese"
+                }
+            }
+        ]
+        
+        success_count = 0
+        for test_case in test_cases:
+            try:
+                start_time = time.time()
+                response = self.session.post(
+                    f"{self.base_url}/api/meal-plan/generate",
+                    json=test_case["data"],
+                    headers={"Content-Type": "application/json"}
+                )
+                response_time = time.time() - start_time
+                
+                if response.status_code in [200, 201]:
+                    data = response.json()
+                    
+                    # Validate response structure
+                    if self._validate_meal_plan_response(data):
+                        self.log_test_result(
+                            f"Generate: {test_case['name']}", 
+                            True, 
+                            f"Generated {len(data.get('weekly_plan', {}))} days", 
+                            response_time
+                        )
+                        success_count += 1
+                    else:
+                        self.log_test_result(
+                            f"Generate: {test_case['name']}", 
+                            False, 
+                            "Invalid response structure", 
+                            response_time
+                        )
+                else:
+                    self.log_test_result(
+                        f"Generate: {test_case['name']}", 
+                        False, 
+                        f"HTTP {response.status_code}: {response.text[:100]}", 
+                        response_time
+                    )
+                    
+            except Exception as e:
+                self.log_test_result(f"Generate: {test_case['name']}", False, f"Error: {str(e)}")
+        
+        return success_count == len(test_cases)
+    
+    def test_meal_replacement(self):
+        """Test meal replacement endpoint"""
+        print("\n🔄 TESTING MEAL REPLACEMENT")
+        print("=" * 40)
+        
+        test_cases = [
+            {
+                "name": "Replace breakfast",
+                "data": {
+                    "user_id": TEST_CONFIG["test_user_id"],
+                    "day_of_week": "Monday",
+                    "meal_type": "Bữa sáng",
+                    "calories_target": 400,
+                    "protein_target": 25,
+                    "fat_target": 15,
+                    "carbs_target": 50,
+                    "use_ai": True
+                }
+            },
+            {
+                "name": "Replace lunch with preferences",
+                "data": {
+                    "user_id": TEST_CONFIG["test_user_id"],
+                    "day_of_week": "Tuesday",
+                    "meal_type": "Bữa trưa",
+                    "calories_target": 600,
+                    "protein_target": 35,
+                    "fat_target": 20,
+                    "carbs_target": 70,
+                    "use_ai": True,
+                    "preferences": ["healthy", "low-carb"],
+                    "allergies": ["dairy"]
+                }
+            }
+        ]
+        
+        success_count = 0
+        for test_case in test_cases:
+            try:
+                start_time = time.time()
+                response = self.session.post(
+                    f"{self.base_url}/api/meal-plan/replace-meal",
+                    json=test_case["data"],
+                    headers={"Content-Type": "application/json"}
+                )
+                response_time = time.time() - start_time
+                
+                if response.status_code in [200, 201]:
+                    data = response.json()
+                    
+                    if "message" in data and "success" in data:
+                        self.log_test_result(
+                            f"Replace: {test_case['name']}", 
+                            True, 
+                            data.get("message", ""), 
+                            response_time
+                        )
+                        success_count += 1
+                    else:
+                        self.log_test_result(
+                            f"Replace: {test_case['name']}", 
+                            False, 
+                            "Invalid response format", 
+                            response_time
+                        )
+                else:
+                    self.log_test_result(
+                        f"Replace: {test_case['name']}", 
+                        False, 
+                        f"HTTP {response.status_code}", 
+                        response_time
+                    )
+                    
+            except Exception as e:
+                self.log_test_result(f"Replace: {test_case['name']}", False, f"Error: {str(e)}")
+        
+        return success_count == len(test_cases)
+    
+    def test_groq_integration(self):
+        """Test Groq AI integration directly"""
+        print("\n🤖 TESTING GROQ INTEGRATION")
+        print("=" * 40)
+        
+        try:
+            from groq_integration import GroqService
+            
+            groq_service = GroqService()
+            
+            if not groq_service.available:
+                self.log_test_result("Groq Service Init", False, "Groq service not available")
+                return False
+            
+            # Test meal generation
+            start_time = time.time()
+            meals = groq_service.generate_meal_suggestions(
+                calories_target=400,
+                protein_target=25,
+                fat_target=15,
+                carbs_target=50,
+                meal_type="bữa sáng",
+                use_ai=True
+            )
+            response_time = time.time() - start_time
+            
+            if meals and len(meals) > 0:
+                self.log_test_result(
+                    "Groq Meal Generation", 
+                    True, 
+                    f"Generated {len(meals)} meals", 
+                    response_time
+                )
+                
+                # Validate meal structure
+                meal = meals[0]
+                required_fields = ["name", "description", "ingredients", "preparation", "nutrition"]
+                missing_fields = [field for field in required_fields if field not in meal]
+                
+                if not missing_fields:
+                    self.log_test_result("Groq Meal Validation", True, "All required fields present")
+                    return True
+                else:
+                    self.log_test_result("Groq Meal Validation", False, f"Missing: {missing_fields}")
+                    return False
+            else:
+                self.log_test_result("Groq Meal Generation", False, "No meals generated", response_time)
+                return False
+                
+        except Exception as e:
+            self.log_test_result("Groq Integration", False, f"Error: {str(e)}")
+            return False
+    
+    def _validate_meal_plan_response(self, data: Dict) -> bool:
+        """Validate meal plan response structure"""
+        required_fields = ["weekly_plan", "user_id", "created_at"]
+        
+        for field in required_fields:
+            if field not in data:
+                return False
+        
+        weekly_plan = data.get("weekly_plan", {})
+        if not isinstance(weekly_plan, dict):
+            return False
+        
+        # Check if at least one day exists
+        if len(weekly_plan) == 0:
+            return False
+        
+        # Validate day structure
+        for day, day_data in weekly_plan.items():
+            if not isinstance(day_data, dict):
+                return False
+            
+            if "meals" not in day_data:
+                return False
+            
+            meals = day_data["meals"]
+            if not isinstance(meals, dict):
+                return False
+        
+        return True
+
+    def test_error_handling(self):
+        """Test error handling scenarios"""
+        print("\n⚠️ TESTING ERROR HANDLING")
+        print("=" * 40)
+
+        error_test_cases = [
+            {
+                "name": "Invalid user ID",
+                "endpoint": "/api/meal-plan/generate",
+                "data": {
+                    "user_id": "",
+                    "calories_target": 2000,
+                    "protein_target": 150,
+                    "fat_target": 65,
+                    "carbs_target": 250
+                },
+                "expected_status": [400, 422]
+            },
+            {
+                "name": "Missing required fields",
+                "endpoint": "/api/meal-plan/generate",
+                "data": {
+                    "user_id": TEST_CONFIG["test_user_id"]
+                    # Missing nutrition targets
+                },
+                "expected_status": [400, 422]
+            },
+            {
+                "name": "Invalid nutrition values",
+                "endpoint": "/api/meal-plan/generate",
+                "data": {
+                    "user_id": TEST_CONFIG["test_user_id"],
+                    "calories_target": -100,  # Invalid negative value
+                    "protein_target": "invalid",  # Invalid type
+                    "fat_target": 65,
+                    "carbs_target": 250
+                },
+                "expected_status": [400, 422]
+            },
+            {
+                "name": "Invalid meal type",
+                "endpoint": "/api/meal-plan/replace-meal",
+                "data": {
+                    "user_id": TEST_CONFIG["test_user_id"],
+                    "day_of_week": "Monday",
+                    "meal_type": "Invalid Meal Type",
+                    "calories_target": 400,
+                    "protein_target": 25,
+                    "fat_target": 15,
+                    "carbs_target": 50
+                },
+                "expected_status": [400, 422]
+            }
+        ]
+
+        success_count = 0
+        for test_case in error_test_cases:
+            try:
+                start_time = time.time()
+                response = self.session.post(
+                    f"{self.base_url}{test_case['endpoint']}",
+                    json=test_case["data"],
+                    headers={"Content-Type": "application/json"}
+                )
+                response_time = time.time() - start_time
+
+                if response.status_code in test_case["expected_status"]:
+                    self.log_test_result(
+                        f"Error: {test_case['name']}",
+                        True,
+                        f"Correctly returned {response.status_code}",
+                        response_time
+                    )
+                    success_count += 1
+                else:
+                    self.log_test_result(
+                        f"Error: {test_case['name']}",
+                        False,
+                        f"Expected {test_case['expected_status']}, got {response.status_code}",
+                        response_time
+                    )
+
+            except Exception as e:
+                self.log_test_result(f"Error: {test_case['name']}", False, f"Exception: {str(e)}")
+
+        return success_count == len(error_test_cases)

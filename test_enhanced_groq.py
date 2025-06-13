@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+"""
+Test script for enhanced Groq JSON parsing
+Kiểm tra các cải tiến trong việc xử lý JSON từ Groq API
+"""
+
+import json
+import re
+from groq_integration import GroqService
+
+def test_json_parsing():
+    """Test các trường hợp JSON parsing khác nhau"""
+    
+    # Khởi tạo service
+    groq_service = GroqService()
+    
+    # Test cases với các lỗi JSON phổ biến
+    test_cases = [
+        {
+            "name": "Missing name key - Case 1",
+            "input": '''[{ "Bánh Mì Chay", "description": "Món bánh mì chay ngon", "ingredients": [{"name": "Bánh mì", "amount": "1 ổ"}], "nutrition": {"calories": 300, "protein": 15, "fat": 8, "carbs": 45} }]''',
+            "expected_dishes": ["Bánh Mì Chay"]
+        },
+        {
+            "name": "Missing name key - Case 2", 
+            "input": '''[{ "Cơm Tấm Sườn", "description": "Cơm tấm sườn nướng", "ingredients": [{"name": "Cơm tấm", "amount": "1 đĩa"}], "nutrition": {"calories": 500, "protein": 25, "fat": 15, "carbs": 60} }]''',
+            "expected_dishes": ["Cơm Tấm Sườn"]
+        },
+        {
+            "name": "Valid JSON",
+            "input": '''[{"name": "Phở Gà", "description": "Phở gà truyền thống", "ingredients": [{"name": "Bánh phở", "amount": "200g"}], "preparation": ["Luộc gà", "Nấu nước dùng"], "nutrition": {"calories": 400, "protein": 30, "fat": 10, "carbs": 50}, "preparation_time": "45 phút", "health_benefits": "Giàu protein"}]''',
+            "expected_dishes": ["Phở Gà"]
+        },
+        {
+            "name": "Malformed JSON with missing fields",
+            "input": '''[{"name": "Bún Bò Huế", "description": "Bún bò Huế cay nồng", "ingredients": [{"name": "Bún", "amount": "200g"}]}]''',
+            "expected_dishes": ["Bún Bò Huế"]
+        },
+        {
+            "name": "Text response (no JSON)",
+            "input": '''Tôi gợi ý món "Cháo Gà" với các nguyên liệu: gạo, thịt gà, hành lá. Món này có khoảng 250 calories và rất bổ dưỡng.''',
+            "expected_dishes": ["Cháo Gà"]
+        }
+    ]
+    
+    print("🧪 TESTING ENHANCED GROQ JSON PARSING")
+    print("=" * 50)
+    
+    success_count = 0
+    total_count = len(test_cases)
+    
+    for i, test_case in enumerate(test_cases, 1):
+        print(f"\n📋 Test {i}: {test_case['name']}")
+        print(f"Input: {test_case['input'][:100]}...")
+        
+        try:
+            # Test JSON extraction
+            result = groq_service._extract_json_from_response(test_case['input'])
+            
+            if result and len(result) > 0:
+                extracted_dishes = [meal.get('name', 'Unknown') for meal in result]
+                print(f"✅ Extracted dishes: {extracted_dishes}")
+                
+                # Check if expected dishes are found
+                found_expected = any(expected in extracted_dishes for expected in test_case['expected_dishes'])
+                if found_expected:
+                    print(f"✅ SUCCESS: Found expected dish(es)")
+                    success_count += 1
+                else:
+                    print(f"⚠️ PARTIAL: Extracted dishes but not expected ones")
+                    print(f"   Expected: {test_case['expected_dishes']}")
+                    print(f"   Got: {extracted_dishes}")
+            else:
+                print(f"❌ FAILED: No dishes extracted")
+                
+        except Exception as e:
+            print(f"❌ ERROR: {e}")
+    
+    print(f"\n📊 RESULTS: {success_count}/{total_count} tests passed")
+    print(f"Success rate: {(success_count/total_count)*100:.1f}%")
+
+def test_json_fixing():
+    """Test JSON fixing capabilities"""
+    
+    groq_service = GroqService()
+    
+    malformed_examples = [
+        '{ "Bánh Mì Chay", "description": "Món chay ngon" }',
+        '[{ "Cơm Tấm", "description": "Cơm tấm sườn", "ingredients": [{"name": "Cơm", "amount": "1 đĩa"}] }]',
+        '{"name": "Phở Gà", "description": "Phở gà ngon", "ingredients": [{"name": "Bánh phở", "amount": "200g"}',  # Missing closing bracket
+    ]
+    
+    print("\n🔧 TESTING JSON FIXING")
+    print("=" * 30)
+    
+    for i, malformed in enumerate(malformed_examples, 1):
+        print(f"\nTest {i}: {malformed}")
+        try:
+            fixed = groq_service._fix_malformed_json(malformed)
+            print(f"Fixed: {fixed}")
+            
+            # Try to parse fixed JSON
+            parsed = json.loads(fixed)
+            print(f"✅ Successfully parsed fixed JSON")
+        except Exception as e:
+            print(f"❌ Still invalid after fixing: {e}")
+
+def test_meal_generation():
+    """Test actual meal generation with enhanced parsing"""
+    
+    print("\n🍽️ TESTING MEAL GENERATION")
+    print("=" * 35)
+    
+    groq_service = GroqService()
+    
+    # Test with different meal types
+    test_params = [
+        {
+            "meal_type": "bữa sáng",
+            "calories": 400,
+            "protein": 20,
+            "fat": 15,
+            "carbs": 50
+        },
+        {
+            "meal_type": "bữa trưa", 
+            "calories": 600,
+            "protein": 30,
+            "fat": 20,
+            "carbs": 70
+        }
+    ]
+    
+    for params in test_params:
+        print(f"\n🔍 Testing {params['meal_type']} generation...")
+        
+        try:
+            meals = groq_service.generate_meal_suggestions(
+                calories_target=params['calories'],
+                protein_target=params['protein'],
+                fat_target=params['fat'],
+                carbs_target=params['carbs'],
+                meal_type=params['meal_type'],
+                use_ai=True  # Force AI usage for testing
+            )
+            
+            if meals and len(meals) > 0:
+                print(f"✅ Generated {len(meals)} meals:")
+                for meal in meals:
+                    print(f"   - {meal.get('name', 'Unknown')}")
+                    print(f"     Calories: {meal.get('nutrition', {}).get('calories', 'N/A')}")
+            else:
+                print(f"❌ No meals generated")
+                
+        except Exception as e:
+            print(f"❌ Error generating meals: {e}")
+
+if __name__ == "__main__":
+    print("🚀 ENHANCED GROQ INTEGRATION TESTING")
+    print("=" * 50)
+    
+    # Run all tests
+    test_json_parsing()
+    test_json_fixing() 
+    test_meal_generation()
+    
+    print("\n✅ Testing completed!")

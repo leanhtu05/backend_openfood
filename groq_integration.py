@@ -57,6 +57,14 @@ from json_prompt_templates import (
 # Import Vietnamese specialty dishes
 from vietnamese_specialty_dishes import get_specialty_dish_names, get_specialty_dish
 
+# Import official Vietnamese nutrition database
+from vietnamese_nutrition_database import (
+    get_ingredient_nutrition,
+    get_dish_nutrition,
+    calculate_dish_nutrition_from_ingredients,
+    get_nutrition_sources
+)
+
 # Thử import thư viện Groq hoặc fallback
 try:
     import groq
@@ -666,6 +674,53 @@ class GroqService:
         selected_dishes = filtered_dishes[:20]
         return ", ".join(selected_dishes)
 
+    def _get_official_nutrition(self, dish_name: str, ingredients: List[Dict]) -> Dict:
+        """
+        Lấy thông tin dinh dưỡng chính thức từ database Việt Nam
+
+        Args:
+            dish_name: Tên món ăn
+            ingredients: Danh sách nguyên liệu
+
+        Returns:
+            Dict chứa thông tin dinh dưỡng chính thức hoặc None
+        """
+        try:
+            # Thử tìm món ăn hoàn chỉnh trong database
+            dish_nutrition = get_dish_nutrition(dish_name)
+            if dish_nutrition:
+                return {
+                    "calories": dish_nutrition["calories"],
+                    "protein": dish_nutrition["protein"],
+                    "fat": dish_nutrition["fat"],
+                    "carbs": dish_nutrition["carbs"],
+                    "fiber": dish_nutrition.get("fiber", 0),
+                    "source": dish_nutrition["source"],
+                    "reference_code": dish_nutrition["reference_code"],
+                    "serving_size": dish_nutrition["serving_size"]
+                }
+
+            # Nếu không có món hoàn chỉnh, tính từ nguyên liệu
+            if ingredients and len(ingredients) > 0:
+                calculated_nutrition = calculate_dish_nutrition_from_ingredients(ingredients)
+                if calculated_nutrition and calculated_nutrition["calories"] > 0:
+                    return {
+                        "calories": round(calculated_nutrition["calories"], 1),
+                        "protein": round(calculated_nutrition["protein"], 1),
+                        "fat": round(calculated_nutrition["fat"], 1),
+                        "carbs": round(calculated_nutrition["carbs"], 1),
+                        "fiber": round(calculated_nutrition["fiber"], 1),
+                        "source": "Calculated from official Vietnamese ingredients",
+                        "sources": calculated_nutrition["sources"],
+                        "calculated_from_ingredients": True
+                    }
+
+            return None
+
+        except Exception as e:
+            print(f"⚠️ Error getting official nutrition for {dish_name}: {e}")
+            return None
+
     def _validate_required_keys(self, data: Dict) -> bool:
         """
         Validate that all required keys are present in the meal data
@@ -1223,29 +1278,37 @@ class GroqService:
                 meal['preparation'] = [f"Chuẩn bị {meal_name} theo hướng dẫn"]
                 print(f"🔧 Fixed invalid preparation format for {meal_name}")
 
-            # Nutrition - must be object with numeric values and NEVER zero
-            default_nutrition = {'calories': 400, 'protein': 20, 'fat': 15, 'carbs': 45}
-            if 'nutrition' not in meal or not isinstance(meal['nutrition'], dict):
-                meal['nutrition'] = default_nutrition.copy()
-                print(f"🔧 Added default nutrition for {meal_name}")
+            # Nutrition - use official Vietnamese database when possible
+            official_nutrition = self._get_official_nutrition(meal_name, meal.get('ingredients', []))
+
+            if official_nutrition:
+                meal['nutrition'] = official_nutrition
+                print(f"🏛️ Using official Vietnamese nutrition data for {meal_name}")
+                print(f"   Source: {official_nutrition.get('source', 'Official database')}")
             else:
-                # Ensure all nutrition values are numbers and NOT zero
-                nutrition = meal['nutrition']
-                for key in ['calories', 'protein', 'fat', 'carbs']:
-                    if key not in nutrition:
-                        nutrition[key] = default_nutrition[key]
-                    else:
-                        try:
-                            value = float(nutrition[key])
-                            # CRITICAL: Ensure value is never zero to prevent division by zero
-                            if value <= 0:
-                                nutrition[key] = default_nutrition[key]
-                                print(f"🔧 Fixed zero/negative {key} value for {meal_name}")
-                            else:
-                                nutrition[key] = value
-                        except (ValueError, TypeError):
+                # Fallback to default values if no official data
+                default_nutrition = {'calories': 400, 'protein': 20, 'fat': 15, 'carbs': 45}
+                if 'nutrition' not in meal or not isinstance(meal['nutrition'], dict):
+                    meal['nutrition'] = default_nutrition.copy()
+                    print(f"🔧 Added default nutrition for {meal_name}")
+                else:
+                    # Ensure all nutrition values are numbers and NOT zero
+                    nutrition = meal['nutrition']
+                    for key in ['calories', 'protein', 'fat', 'carbs']:
+                        if key not in nutrition:
                             nutrition[key] = default_nutrition[key]
-                            print(f"🔧 Fixed invalid {key} value for {meal_name}")
+                        else:
+                            try:
+                                value = float(nutrition[key])
+                                # CRITICAL: Ensure value is never zero to prevent division by zero
+                                if value <= 0:
+                                    nutrition[key] = default_nutrition[key]
+                                    print(f"🔧 Fixed zero/negative {key} value for {meal_name}")
+                                else:
+                                    nutrition[key] = value
+                            except (ValueError, TypeError):
+                                nutrition[key] = default_nutrition[key]
+                                print(f"🔧 Fixed invalid {key} value for {meal_name}")
 
             # Preparation time
             if 'preparation_time' not in meal or not isinstance(meal['preparation_time'], str):

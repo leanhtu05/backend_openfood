@@ -48,28 +48,63 @@ MANDATORY JSON STRUCTURE - Each object MUST have ALL these keys in EXACT order:
 PERFECT EXAMPLE OUTPUT (copy this structure exactly):
 [{template_example}]
 
-TASK: Create 1-2 Vietnamese {meal_type} dishes with these nutrition targets:
-- Calories: {calories_target}kcal
-- Protein: {protein_target}g
-- Fat: {fat_target}g
-- Carbs: {carbs_target}g
+TASK: CREATE AUTHENTIC Vietnamese {meal_type} dishes with creative variations, meeting these EXACT nutrition targets:
+- Calories: {calories_target}kcal (MUST be within ±20 calories)
+- Protein: {protein_target}g (MUST be within ±3g)
+- Fat: {fat_target}g (MUST be within ±3g)
+- Carbs: {carbs_target}g (MUST be within ±5g)
 
-AVAILABLE DISHES TO CHOOSE FROM:
+VIETNAMESE AUTHENTICITY RULES:
+1. USE traditional Vietnamese ingredients (gạo, thịt, cá, rau Việt Nam)
+2. APPLY authentic cooking methods (nấu, luộc, xào, nướng, hấp)
+3. MAINTAIN Vietnamese flavor profiles (nước mắm, mắm tôm, lá chanh, sả)
+4. KEEP regional characteristics (miền Bắc, Trung, Nam)
+
+CREATIVE VARIATION GUIDELINES:
+1. ADD regional twists to traditional dishes (Phở Gà Miền Tây, Cơm Tấm Huế)
+2. COMBINE ingredients from different regions (Bún Bò Huế với Tôm Miền Tây)
+3. ENHANCE traditional recipes (Cháo Gà với Nấm Hương, Bánh Mì với Chả Cá)
+4. VARY cooking techniques (Phở Áp Chảo, Cơm Niêu Đất)
+
+REFERENCE DISHES FOR INSPIRATION:
 {diverse_dishes}
 
 AVOID THESE RECENT DISHES:
 {recent_dishes}
 
-PREFERENCES: {preferences}
-ALLERGIES: {allergies}
+USER PREFERENCES: {preferences}
+ALLERGIES TO AVOID: {allergies}
 
-CRITICAL RULES (FAILURE TO FOLLOW = INVALID RESPONSE):
+AUTHENTIC INNOVATION EXAMPLES:
+- "Phở Gà Nấu Dừa Miền Tây" (Western-style Coconut Chicken Pho)
+- "Cháo Tôm Cua Đồng Cà Mau" (Ca Mau Field Crab and Shrimp Porridge)
+- "Bánh Mì Chả Cá Nha Trang" (Nha Trang Fish Cake Banh Mi)
+
+CRITICAL NUTRITION ACCURACY RULES (FAILURE TO FOLLOW = INVALID RESPONSE):
+1. NUTRITION VALUES must be EXACTLY calculated based on ingredients
+2. TOTAL CALORIES must equal sum of: (protein×4) + (carbs×4) + (fat×9)
+3. INGREDIENTS must have realistic amounts that add up to nutrition targets
+4. COOKING METHODS must be authentic Vietnamese techniques
+
+VIETNAMESE AUTHENTICITY RULES (FAILURE TO FOLLOW = INVALID RESPONSE):
+1. DISH NAMES must include Vietnamese regional/style indicators
+2. INGREDIENTS must be authentic Vietnamese (no Western fusion ingredients)
+3. COOKING METHODS must be traditional (nấu, luộc, xào, nướng, hấp, chiên)
+4. FLAVOR PROFILES must use Vietnamese seasonings (nước mắm, mắm tôm, sả, lá chanh)
+
+CREATIVE VARIATION EXAMPLES (FOLLOW THIS PATTERN):
+- "Phở Bò Đặc Biệt Sài Gòn" instead of "Phở Bò"
+- "Cơm Tấm Sườn Nướng Mật Ong" instead of "Cơm Tấm"
+- "Bánh Mì Chả Cá Nha Trang" instead of "Bánh Mì"
+- "Cháo Gà Hạt Sen Miền Bắc" instead of "Cháo Gà"
+
+TECHNICAL RULES (FAILURE TO FOLLOW = INVALID RESPONSE):
 1. Output MUST start with [ and end with ]
 2. Each object MUST start with "name" as the FIRST key
 3. NEVER write {{"Dish Name", "description": ...}} - ALWAYS write {{"name": "Dish Name", "description": ...}}
-4. All nutrition values MUST be numbers (not strings)
+4. All nutrition values MUST be numbers (not strings) and ACCURATE
 5. Ingredients MUST be array of objects with "name" and "amount"
-6. Preparation MUST be array of strings
+6. Preparation MUST be array of strings with detailed Vietnamese cooking steps
 7. NO markdown formatting (```json)
 8. NO explanatory text before or after JSON
 9. If you cannot create valid JSON, return: []
@@ -86,19 +121,23 @@ def get_one_shot_example_prompt(meal_type: str, calories_target: int, protein_ta
     
     example_output = [
         {
-            "name": "Bánh Mì Chay",
-            "description": "Bánh mì chay với đậu hũ và rau thơm, thơm ngon bổ dưỡng",
+            "name": "Bánh Mì Chả Cá Nha Trang Đặc Biệt",
+            "description": "Bánh mì truyền thống Nha Trang với chả cá tươi, rau thơm miền Trung và nước mắm Phú Quốc",
             "ingredients": [
-                {"name": "Bánh mì", "amount": "1 ổ"},
-                {"name": "Đậu hũ", "amount": "100g"},
-                {"name": "Rau thơm", "amount": "50g"},
-                {"name": "Dưa leo", "amount": "30g"}
+                {"name": "Bánh mì Việt Nam", "amount": "1 ổ (80g)"},
+                {"name": "Chả cá Nha Trang", "amount": "120g"},
+                {"name": "Rau thơm miền Trung", "amount": "40g"},
+                {"name": "Dưa leo", "amount": "30g"},
+                {"name": "Cà rốt ngâm chua", "amount": "25g"},
+                {"name": "Nước mắm Phú Quốc", "amount": "10ml"},
+                {"name": "Ớt tươi", "amount": "5g"}
             ],
             "preparation": [
-                "Cắt bánh mì dọc, nướng giòn",
-                "Chiên đậu hũ vàng đều",
-                "Rửa sạch rau thơm và dưa leo",
-                "Kẹp đậu hũ và rau vào bánh mì"
+                "Bước 1: Nướng bánh mì trên than hoa đến giòn vàng",
+                "Bước 2: Chả cá nướng lại trên chảo gang đến thơm",
+                "Bước 3: Rau thơm rửa sạch, để ráo nước",
+                "Bước 4: Cắt bánh mì dọc, kẹp chả cá và rau thơm",
+                "Bước 5: Chấm nước mắm pha ớt theo kiểu Nha Trang"
             ],
             "nutrition": {
                 "calories": 320,
@@ -106,29 +145,32 @@ def get_one_shot_example_prompt(meal_type: str, calories_target: int, protein_ta
                 "fat": 12,
                 "carbs": 42
             },
-            "preparation_time": "15 phút",
-            "health_benefits": "Giàu protein thực vật, ít cholesterol, cung cấp chất xơ tốt cho tiêu hóa"
+            "preparation_time": "20 phút",
+            "health_benefits": "Giàu protein từ cá biển, omega-3 tốt cho tim mạch, vitamin từ rau thơm tươi"
         }
     ]
     
-    prompt = f"""You are a JSON-only response system. Study this example and create similar output.
+    prompt = f"""You are an authentic Vietnamese chef AI. Study this example and create REGIONAL VARIATIONS of traditional dishes.
 
-EXAMPLE INPUT: Create Vietnamese breakfast dish, 350 calories, 20g protein, 15g fat, 45g carbs
+EXAMPLE INPUT: Create authentic Vietnamese breakfast dish with regional twist, 350 calories, 20g protein, 15g fat, 45g carbs
 
-EXAMPLE OUTPUT:
+AUTHENTIC VIETNAMESE EXAMPLE OUTPUT:
 {example_output}
 
-NOW CREATE: Vietnamese {meal_type} dish, {calories_target} calories, {protein_target}g protein, {fat_target}g fat, {carbs_target}g carbs
+NOW CREATE: AUTHENTIC Vietnamese {meal_type} dish with regional variation, {calories_target} calories, {protein_target}g protein, {fat_target}g fat, {carbs_target}g carbs
 
-RULES:
+VIETNAMESE AUTHENTICITY RULES:
+- CREATE regional variations of traditional dishes (Miền Bắc, Trung, Nam style)
+- USE only authentic Vietnamese ingredients and cooking methods
+- MAINTAIN traditional flavor profiles with Vietnamese seasonings
+- ADD regional specialties and local ingredients
+- ENSURE accurate nutrition calculation based on ingredients
 - Return ONLY JSON array like the example
-- Use Vietnamese dish names and descriptions  
-- Include realistic ingredients with amounts
-- Add 3-4 preparation steps
-- Set nutrition close to targets
+- Include 4-5 detailed Vietnamese cooking steps
+- Set nutrition EXACTLY to targets
 - NO other text, NO markdown
 
-JSON OUTPUT:"""
+AUTHENTIC VIETNAMESE JSON OUTPUT:"""
 
     return prompt
 

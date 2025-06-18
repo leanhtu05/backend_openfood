@@ -2289,7 +2289,11 @@ async def replace_meal(
                                 )
                                 dishes.append(dish)
 
-                            new_meal = Meal(dishes=dishes)
+                            # Tính toán nutrition cho meal
+                            from utils import calculate_meal_nutrition
+                            meal_nutrition = calculate_meal_nutrition(dishes)
+
+                            new_meal = Meal(dishes=dishes, nutrition=meal_nutrition)
 
                             # Cập nhật bữa ăn
                             if meal_type.lower() == "breakfast" or meal_type.lower() == "bữa sáng":
@@ -2298,6 +2302,14 @@ async def replace_meal(
                                 meal_plan.days[i].lunch = new_meal
                             elif meal_type.lower() == "dinner" or meal_type.lower() == "bữa tối":
                                 meal_plan.days[i].dinner = new_meal
+
+                            # Cập nhật tổng dinh dưỡng của ngày
+                            from utils import calculate_day_nutrition
+                            meal_plan.days[i].nutrition = calculate_day_nutrition(
+                                meal_plan.days[i].breakfast,
+                                meal_plan.days[i].lunch,
+                                meal_plan.days[i].dinner
+                            )
 
                             print(f"✅ Đã cập nhật {meal_type} cho {day_of_week}")
                         break

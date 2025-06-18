@@ -913,13 +913,23 @@ class GroqService:
         # Tạo ingredients phù hợp
         base_ingredients = self._get_ingredients_for_dish(selected_dish, calories)
 
+        # Tạo tên món không trùng với recent dishes
+        base_name = selected_dish
+        counter = 1
+        final_name = base_name
+
+        # Tránh trùng lặp với recent dishes
+        while final_name in self.recent_dishes:
+            final_name = f"{base_name} Phiên Bản {counter}"
+            counter += 1
+
         # Tạo meal object
         additional_meal = {
-            "name": f"{selected_dish} Bổ Sung",
-            "description": f"Món {selected_dish} bổ sung để đạt đủ mục tiêu dinh dưỡng",
+            "name": final_name,
+            "description": f"Món {base_name} bổ sung để đạt đủ mục tiêu dinh dưỡng",
             "ingredients": base_ingredients,
             "preparation": [
-                f"Chuẩn bị nguyên liệu cho {selected_dish}",
+                f"Chuẩn bị nguyên liệu cho {base_name}",
                 "Chế biến theo phương pháp truyền thống",
                 "Nêm nướng vừa ăn",
                 "Trình bày đẹp mắt"
@@ -931,10 +941,15 @@ class GroqService:
                 "carbs": carbs
             },
             "preparation_time": "15 phút",
-            "health_benefits": self._generate_detailed_health_benefits(selected_dish, base_ingredients, {
+            "health_benefits": self._generate_detailed_health_benefits(base_name, base_ingredients, {
                 "calories": calories, "protein": protein, "fat": fat, "carbs": carbs
             })
         }
+
+        # Thêm vào recent dishes để tránh trùng lặp trong tương lai
+        self.recent_dishes.append(final_name)
+        if len(self.recent_dishes) > self.max_recent_dishes:
+            self.recent_dishes.pop(0)
 
         return additional_meal
 
@@ -1634,9 +1649,11 @@ class GroqService:
         return self._get_fallback_meals(meal_type)
     
     def clear_cache(self):
-        """Xóa cache để buộc tạo mới dữ liệu"""
+        """Xóa cache và recent dishes để buộc tạo mới dữ liệu hoàn toàn"""
         print("Clearing Groq service cache")
         self.cache = {}
+        print("Clearing recent dishes to allow dish repetition")
+        self.recent_dishes = []
     
     def get_cache_info(self):
         """

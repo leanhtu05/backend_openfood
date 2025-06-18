@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends, Query, Body, Path, Header, Security, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.staticfiles import StaticFiles
 from typing import Dict, Optional, List, Any
 import time
 import os
@@ -271,6 +272,9 @@ app.include_router(openfood_router.router, tags=["OpenFood Management"])
 
 # Mount Admin router
 app.include_router(admin_router.router, tags=["Admin Management"])
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Đã chuyển hàm get_current_user sang file auth_utils.py
 

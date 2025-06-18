@@ -2255,6 +2255,79 @@ async def replace_meal(
 
         print(f"✅ Generated {len(new_meals) if new_meals else 0} new meals")
 
+        # 🔥 QUAN TRỌNG: Lưu meal plan vào Firestore để Flutter có thể lấy được
+        try:
+            from services.firestore_service import firestore_service
+
+            print(f"🔄 Đang lưu meal plan vào Firestore cho user {user_id}...")
+
+            # Lấy meal plan hiện tại từ Firestore
+            from storage_manager import storage_manager
+            meal_plan = storage_manager.load_meal_plan(user_id)
+
+            if meal_plan:
+                print(f"✅ Tìm thấy meal plan, đang cập nhật {meal_type} cho {day_of_week}")
+
+                # Tìm ngày cần thay đổi và cập nhật
+                for i, day in enumerate(meal_plan.days):
+                    if day.day_of_week == day_of_week:
+                        # Tạo meal object từ new_meals
+                        if new_meals and len(new_meals) > 0:
+                            from models import Meal, Dish
+
+                            # Convert new_meals thành Meal object
+                            dishes = []
+                            for meal_data in new_meals:
+                                dish = Dish(
+                                    name=meal_data.get('name', ''),
+                                    description=meal_data.get('description', ''),
+                                    ingredients=meal_data.get('ingredients', []),
+                                    preparation=meal_data.get('preparation', []),
+                                    nutrition=meal_data.get('nutrition', {}),
+                                    preparation_time=meal_data.get('preparation_time', ''),
+                                    health_benefits=meal_data.get('health_benefits', '')
+                                )
+                                dishes.append(dish)
+
+                            new_meal = Meal(dishes=dishes)
+
+                            # Cập nhật bữa ăn
+                            if meal_type.lower() == "breakfast" or meal_type.lower() == "bữa sáng":
+                                meal_plan.days[i].breakfast = new_meal
+                            elif meal_type.lower() == "lunch" or meal_type.lower() == "bữa trưa":
+                                meal_plan.days[i].lunch = new_meal
+                            elif meal_type.lower() == "dinner" or meal_type.lower() == "bữa tối":
+                                meal_plan.days[i].dinner = new_meal
+
+                            print(f"✅ Đã cập nhật {meal_type} cho {day_of_week}")
+                        break
+
+                # Lưu vào local storage
+                storage_manager.save_meal_plan(meal_plan, user_id)
+                print(f"✅ Đã lưu meal plan vào local storage")
+
+                # Convert meal_plan thành dict để lưu vào Firestore
+                if hasattr(meal_plan, 'to_dict'):
+                    meal_plan_dict = meal_plan.to_dict()
+                elif hasattr(meal_plan, '__dict__'):
+                    meal_plan_dict = meal_plan.__dict__
+                else:
+                    meal_plan_dict = meal_plan
+
+                # Lưu vào Firestore
+                success = firestore_service.save_meal_plan(user_id, meal_plan_dict)
+                if success:
+                    print(f"✅ Đã lưu meal plan vào Firestore cho user {user_id}")
+                else:
+                    print(f"❌ Lỗi lưu meal plan vào Firestore cho user {user_id}")
+            else:
+                print(f"⚠️ Không tìm thấy meal plan cho user {user_id}")
+
+        except Exception as e:
+            print(f"❌ Exception khi lưu meal plan: {e}")
+            import traceback
+            traceback.print_exc()
+
         # Return the generated meals
         return {
             "message": f"Successfully replaced {meal_type} on {day_of_week}",

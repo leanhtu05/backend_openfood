@@ -201,7 +201,10 @@ async def replace_meal_endpoint(
         request["clear_cache"] = clear_cache
         
         # Gọi service để thay thế bữa ăn
+        print(f"🔄 Router: Đang gọi services.replace_meal cho user {user_id}")
+        print(f"🔍 Router: Request data = {request}")
         result = services.replace_meal(request)
+        print(f"✅ Router: services.replace_meal hoàn thành")
         
         return {
             "status": "success",

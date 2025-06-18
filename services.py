@@ -831,9 +831,25 @@ def replace_meal(request: Dict) -> Dict:
                 )
                 break
         
-        # Lưu kế hoạch đã cập nhật
+        # Lưu kế hoạch đã cập nhật vào local storage
         storage_manager.save_meal_plan(meal_plan, user_id)
-    
+
+        # 🔥 QUAN TRỌNG: Lưu vào Firestore để Flutter có thể lấy được
+        try:
+            from services.firestore_service import firestore_service
+
+            # Convert meal_plan object thành dict để lưu vào Firestore
+            meal_plan_dict = meal_plan.to_dict() if hasattr(meal_plan, 'to_dict') else meal_plan.__dict__
+
+            # Lưu vào Firestore
+            success = firestore_service.save_meal_plan(user_id, meal_plan_dict)
+            if success:
+                print(f"✅ Đã lưu meal plan vào Firestore cho user {user_id}")
+            else:
+                print(f"❌ Lỗi lưu meal plan vào Firestore cho user {user_id}")
+        except Exception as e:
+            print(f"❌ Exception khi lưu vào Firestore: {e}")
+
     return {
         "day_of_week": day_of_week,
         "meal_type": meal_type,
@@ -1027,7 +1043,18 @@ def generate_meal_plan(
                     if meal_type in day and 'dishes' in day[meal_type]:
                         for i, dish in enumerate(day[meal_type]['dishes']):
                             day[meal_type]['dishes'][i] = _process_meal_data(dish)
-        
+
+        # 🔥 QUAN TRỌNG: Lưu meal plan vào Firestore để Flutter có thể lấy được
+        try:
+            from services.firestore_service import firestore_service
+            success = firestore_service.save_meal_plan(user_id, meal_plan)
+            if success:
+                print(f"✅ Đã lưu meal plan vào Firestore cho user {user_id}")
+            else:
+                print(f"❌ Lỗi lưu meal plan vào Firestore cho user {user_id}")
+        except Exception as e:
+            print(f"❌ Exception khi lưu meal plan vào Firestore: {e}")
+
         return meal_plan
     except Exception as e:
         print(f"Error generating meal plan: {e}")

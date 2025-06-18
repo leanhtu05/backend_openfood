@@ -2319,12 +2319,30 @@ async def replace_meal(
                 print(f"✅ Đã lưu meal plan vào local storage")
 
                 # Convert meal_plan thành dict để lưu vào Firestore
-                if hasattr(meal_plan, 'to_dict'):
-                    meal_plan_dict = meal_plan.to_dict()
-                elif hasattr(meal_plan, '__dict__'):
-                    meal_plan_dict = meal_plan.__dict__
-                else:
-                    meal_plan_dict = meal_plan
+                def convert_to_dict(obj):
+                    """Recursively convert Pydantic models to dict"""
+                    if hasattr(obj, 'model_dump'):
+                        # Pydantic v2
+                        return obj.model_dump()
+                    elif hasattr(obj, 'dict'):
+                        # Pydantic v1
+                        return obj.dict()
+                    elif hasattr(obj, '__dict__'):
+                        # Regular object
+                        result = {}
+                        for key, value in obj.__dict__.items():
+                            if isinstance(value, list):
+                                result[key] = [convert_to_dict(item) for item in value]
+                            elif hasattr(value, '__dict__') or hasattr(value, 'model_dump') or hasattr(value, 'dict'):
+                                result[key] = convert_to_dict(value)
+                            else:
+                                result[key] = value
+                        return result
+                    else:
+                        return obj
+
+                meal_plan_dict = convert_to_dict(meal_plan)
+                print(f"✅ Đã convert meal plan thành dict")
 
                 # Lưu vào Firestore
                 success = firestore_service.save_meal_plan(user_id, meal_plan_dict)

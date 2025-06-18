@@ -809,9 +809,12 @@ def replace_meal(request: Dict) -> Dict:
     
     # Lấy kế hoạch ăn hiện tại
     from storage_manager import storage_manager
+    print(f"📋 Đang load meal plan cho user {user_id}")
     meal_plan = storage_manager.load_meal_plan(user_id)
-    
+    print(f"📋 Meal plan loaded: {meal_plan is not None}")
+
     if meal_plan:
+        print(f"✅ Meal plan tồn tại, đang thay thế {meal_type} cho {day_of_week}")
         # Tìm ngày cần thay đổi
         for i, day in enumerate(meal_plan.days):
             if day.day_of_week == day_of_week:
@@ -832,7 +835,9 @@ def replace_meal(request: Dict) -> Dict:
                 break
         
         # Lưu kế hoạch đã cập nhật vào local storage
+        print(f"💾 Lưu meal plan vào local storage cho user {user_id}")
         storage_manager.save_meal_plan(meal_plan, user_id)
+        print(f"✅ Đã lưu meal plan vào local storage")
 
         # 🔥 QUAN TRỌNG: Lưu vào Firestore để Flutter có thể lấy được
         try:
@@ -865,6 +870,23 @@ def replace_meal(request: Dict) -> Dict:
             print(f"❌ Exception khi lưu vào Firestore: {e}")
             import traceback
             traceback.print_exc()
+    else:
+        print(f"❌ Không tìm thấy meal plan cho user {user_id}")
+        print(f"🔧 Tạo meal plan mới...")
+
+        # Nếu không có meal plan, tạo mới
+        try:
+            new_meal_plan = generate_meal_plan(
+                user_id=user_id,
+                calories_target=request.get("calories_target", 2468),
+                protein_target=request.get("protein_target", 185),
+                fat_target=request.get("fat_target", 82),
+                carbs_target=request.get("carbs_target", 247),
+                use_ai=True
+            )
+            print(f"✅ Đã tạo meal plan mới cho user {user_id}")
+        except Exception as e:
+            print(f"❌ Lỗi tạo meal plan mới: {e}")
 
     return {
         "day_of_week": day_of_week,

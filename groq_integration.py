@@ -235,7 +235,8 @@ class GroqService:
         use_ai: bool = True,  # Thêm tham số để có thể tắt AI
         day_of_week: str = None,  # Thêm ngày để tăng tính đa dạng
         random_seed: int = None,  # Thêm random seed để tăng tính đa dạng
-        user_data: Dict = None  # Add parameter for user data
+        user_data: Dict = None,  # Add parameter for user data
+        force_new: bool = False  # Force bypass cache for meal replacement
     ) -> List[Dict]:
         """
         Tạo gợi ý món ăn sử dụng LLaMA 3 qua Groq
@@ -300,10 +301,12 @@ class GroqService:
             user_data_str = "_".join([f"{k}:{v}" for k, v in user_data.items() if k in ['gender', 'age', 'goal', 'activity_level']])
             cache_key += f"_user:{user_data_str}"
         
-        # Kiểm tra cache
-        if cache_key in self.cache:
+        # Kiểm tra cache (bypass nếu force_new=True)
+        if not force_new and cache_key in self.cache:
             print(f"Using cached meal suggestions for: {cache_key}")
             return self.cache[cache_key]
+        elif force_new:
+            print(f"🔄 Force generating new meal (bypassing cache) for: {cache_key}")
         
         # Kiểm tra rate limit
         can_request, wait_time = self.rate_limiter.can_make_request()

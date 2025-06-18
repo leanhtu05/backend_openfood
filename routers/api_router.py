@@ -682,7 +682,8 @@ async def replace_meal(
             cuisine_style=cuisine_style,
             use_ai=use_ai_value,
             day_of_week=day_of_week,  # Thêm day_of_week để tăng tính đa dạng
-            user_data=user_data  # Add user profile data for personalization
+            user_data=user_data,  # Add user profile data for personalization
+            force_new=True  # 🔥 FORCE AI to generate new meal, bypass cache
         )
         
         # Cập nhật bữa ăn trong kế hoạch

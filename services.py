@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional, Set
+from typing import List, Dict, Optional, Set, Any
 import random
 from models import (
     NutritionTarget, ReplaceDayRequest, DayMealPlan, WeeklyMealPlan,
@@ -143,16 +143,18 @@ def generate_dish(recipe_dict: Dict) -> Dish:
     )
 
 def generate_meal(
-    meal_type: str, 
-    target_calories: float, 
-    target_protein: float, 
-    target_fat: float, 
+    meal_type: str,
+    target_calories: float,
+    target_protein: float,
+    target_fat: float,
     target_carbs: float,
     preferences: List[str] = None,
     allergies: List[str] = None,
     cuisine_style: str = None,
     use_ai: bool = True,
-    day_of_week: str = None
+    day_of_week: str = None,
+    user_data: Dict = None,
+    force_new: bool = False  # Add force_new parameter for meal replacement
 ) -> Meal:
     """
     Generate a meal with dishes that meet nutritional targets.
@@ -209,7 +211,9 @@ def generate_meal(
                 cuisine_style=cuisine_style,
                 use_ai=use_ai,
                 day_of_week=day_of_week,  # Thêm ngày vào để đa dạng hóa kết quả
-                random_seed=random_seed   # Thêm seed ngẫu nhiên
+                random_seed=random_seed,   # Thêm seed ngẫu nhiên
+                user_data=user_data,      # Pass user data for personalization
+                force_new=force_new       # Force bypass cache for meal replacement
             )
             
             print(f"AI returned {len(ai_dish_dicts) if ai_dish_dicts else 0} dishes")

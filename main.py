@@ -346,6 +346,31 @@ async def root():
     """Root endpoint to check if API is running"""
     return {"message": "Welcome to DietAI API. Visit /docs for API documentation."}
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for monitoring"""
+    try:
+        # Check Groq service
+        from groq_integration import groq_service
+        ai_available = groq_service.available
+
+        return {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "ai_available": ai_available,
+            "services": {
+                "groq": ai_available,
+                "firebase": True  # Assume Firebase is available if app starts
+            }
+        }
+    except Exception as e:
+        return {
+            "status": "degraded",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e),
+            "ai_available": False
+        }
+
 @app.get("/debug/groq")
 async def debug_groq():
     """Debug endpoint to check Groq integration on Render"""

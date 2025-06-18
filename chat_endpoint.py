@@ -201,13 +201,14 @@ Lưu ý: Hãy đưa ra lời khuyên cụ thể dựa trên dữ liệu thực t
             model="llama3-8b-8192",
             messages=[
                 {
-                    "role": "system", 
+                    "role": "system",
                     "content": "Bạn là trợ lý dinh dưỡng ảo tên là DietAI. Trả lời dựa trên dữ liệu người dùng."
                 },
                 {"role": "user", "content": augmented_prompt}
             ],
             max_tokens=1000,
-            temperature=0.7
+            temperature=0.7,
+            timeout=60  # Tăng timeout lên 60 giây
         )
         
         ai_reply = completion.choices[0].message.content

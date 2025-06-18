@@ -838,8 +838,22 @@ def replace_meal(request: Dict) -> Dict:
         try:
             from services.firestore_service import firestore_service
 
+            print(f"🔄 Đang lưu meal plan vào Firestore cho user {user_id}...")
+            print(f"🔍 Meal plan type: {type(meal_plan)}")
+
             # Convert meal_plan object thành dict để lưu vào Firestore
-            meal_plan_dict = meal_plan.to_dict() if hasattr(meal_plan, 'to_dict') else meal_plan.__dict__
+            if hasattr(meal_plan, 'to_dict'):
+                meal_plan_dict = meal_plan.to_dict()
+                print("✅ Sử dụng method to_dict()")
+            elif hasattr(meal_plan, '__dict__'):
+                meal_plan_dict = meal_plan.__dict__
+                print("✅ Sử dụng __dict__")
+            else:
+                # Nếu meal_plan đã là dict
+                meal_plan_dict = meal_plan
+                print("✅ Meal plan đã là dict")
+
+            print(f"🔍 Meal plan dict keys: {list(meal_plan_dict.keys()) if isinstance(meal_plan_dict, dict) else 'Not a dict'}")
 
             # Lưu vào Firestore
             success = firestore_service.save_meal_plan(user_id, meal_plan_dict)
@@ -849,6 +863,8 @@ def replace_meal(request: Dict) -> Dict:
                 print(f"❌ Lỗi lưu meal plan vào Firestore cho user {user_id}")
         except Exception as e:
             print(f"❌ Exception khi lưu vào Firestore: {e}")
+            import traceback
+            traceback.print_exc()
 
     return {
         "day_of_week": day_of_week,

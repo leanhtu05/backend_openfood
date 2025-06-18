@@ -1,16 +1,14 @@
 from fastapi import FastAPI, HTTPException, Depends, Query, Body, Path, Header, Security, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.staticfiles import StaticFiles
 from typing import Dict, Optional, List, Any
 import time
 import os
 import json
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 import logging
 from fastapi.responses import JSONResponse
 from datetime import timedelta as Duration
-import re
 import auth_utils as auth_service
 
 # Import config từ module config
@@ -22,9 +20,6 @@ from auth_utils import get_current_user, security, ensure_user_in_firestore, get
 # Import DAYS_OF_WEEK từ utils
 from utils import DAYS_OF_WEEK
 
-# Thiết lập timezone Việt Nam (UTC+7)
-VIETNAM_TZ = timezone(timedelta(hours=7))
-
 # Thiết lập logger
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -32,229 +27,6 @@ if not logger.handlers:
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
     logger.addHandler(handler)
-
-# Helper functions for chat RAG
-def parse_date_context(user_message):
-    """
-    Phân tích tin nhắn người dùng để xác định ngày được hỏi
-    """
-    vietnam_now = datetime.now(VIETNAM_TZ)
-    today_str = vietnam_now.strftime("%Y-%m-%d")
-    yesterday_str = (vietnam_now - timedelta(days=1)).strftime("%Y-%m-%d")
-
-    message_lower = user_message.lower().strip()
-
-    # Các từ khóa chỉ thời gian
-    yesterday_keywords = ['hôm qua', 'ngày hôm qua', 'qua', 'yesterday']
-    today_keywords = ['hôm nay', 'ngày hôm nay', 'today', 'hiện tại']
-
-    # Kiểm tra từ khóa "hôm qua"
-    for keyword in yesterday_keywords:
-        if keyword in message_lower:
-            return yesterday_str, 'yesterday'
-
-    # Kiểm tra từ khóa "hôm nay"
-    for keyword in today_keywords:
-        if keyword in message_lower:
-            return today_str, 'today'
-
-    # Kiểm tra các ngày tương đối khác
-    relative_patterns = [
-        (r'(\d+)\s*ngày\s*trước', lambda x: (vietnam_now - timedelta(days=int(x))).strftime("%Y-%m-%d")),
-        (r'(\d+)\s*ngày\s*qua', lambda x: (vietnam_now - timedelta(days=int(x))).strftime("%Y-%m-%d")),
-        (r'tuần\s*trước', lambda _: (vietnam_now - timedelta(days=7)).strftime("%Y-%m-%d")),
-        (r'tuần\s*qua', lambda _: (vietnam_now - timedelta(days=7)).strftime("%Y-%m-%d"))
-    ]
-
-    for pattern, date_func in relative_patterns:
-        match = re.search(pattern, message_lower)
-        if match:
-            try:
-                if pattern.startswith(r'(\d+)'):
-                    days = match.group(1)
-                    return date_func(days), 'relative'
-                else:
-                    return date_func(None), 'relative'
-            except:
-                continue
-
-    # Kiểm tra định dạng ngày cụ thể
-    date_patterns = [
-        r'(\d{1,2})[/-](\d{1,2})[/-](\d{4})',  # DD/MM/YYYY hoặc DD-MM-YYYY
-        r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})'   # YYYY/MM/DD hoặc YYYY-MM-DD
-    ]
-
-    for pattern in date_patterns:
-        match = re.search(pattern, message_lower)
-        if match:
-            try:
-                if pattern.startswith(r'(\d{1,2})'):  # DD/MM/YYYY
-                    day, month, year = match.groups()
-                    target_date = datetime(int(year), int(month), int(day))
-                else:  # YYYY/MM/DD
-                    year, month, day = match.groups()
-                    target_date = datetime(int(year), int(month), int(day))
-
-                return target_date.strftime("%Y-%m-%d"), 'specific_date'
-            except:
-                continue
-
-    # Mặc định trả về hôm nay
-    return today_str, 'today'
-
-def format_user_context(user_profile, meal_plan, food_logs, exercise_history=None, water_intake=None, exercise_date=None, water_date=None, target_date=None, context_type='today'):
-    """
-    Định dạng dữ liệu người dùng thành một đoạn văn bản context cho chatbot
-    """
-    context_parts = []
-    today_str = datetime.now(VIETNAM_TZ).strftime("%Y-%m-%d")
-
-    # Xác định nhãn thời gian dựa trên context_type
-    if context_type == 'yesterday':
-        time_label = "hôm qua"
-        target_date_display = target_date if target_date else (datetime.now(VIETNAM_TZ) - timedelta(days=1)).strftime("%Y-%m-%d")
-    elif context_type == 'today':
-        time_label = "hôm nay"
-        target_date_display = target_date if target_date else today_str
-    elif context_type == 'specific_date':
-        time_label = f"ngày {target_date}"
-        target_date_display = target_date
-    elif context_type == 'relative':
-        time_label = f"ngày {target_date}"
-        target_date_display = target_date
-    else:
-        time_label = "hôm nay"
-        target_date_display = today_str
-
-    # Thông tin hồ sơ
-    if user_profile:
-        goal = user_profile.get('goal', 'Không rõ')
-        calories_target = user_profile.get('tdee_calories', user_profile.get('targetCalories', 'Không rõ'))
-        allergies = ", ".join(user_profile.get('allergies', [])) or "không có"
-        height = user_profile.get('height_cm', user_profile.get('height', 'Không rõ'))
-        weight = user_profile.get('weight_kg', user_profile.get('weight', 'Không rõ'))
-        diet_restrictions = ", ".join(user_profile.get('diet_restrictions', user_profile.get('dietRestrictions', []))) or "không có"
-
-        context_parts.append(f"- Hồ sơ: Mục tiêu là '{goal}', mục tiêu calo hàng ngày là {calories_target} kcal. "
-                           f"Chiều cao: {height}cm, cân nặng: {weight}kg. "
-                           f"Dị ứng với: {allergies}. Hạn chế ăn uống: {diet_restrictions}.")
-
-    # Thông tin kế hoạch bữa ăn hôm nay
-    if meal_plan:
-        today_day = datetime.now(VIETNAM_TZ).strftime("%A").lower()
-        # Chuyển đổi tên ngày tiếng Anh sang tiếng Việt nếu cần
-        days_translation = {
-            "monday": "Thứ 2", "tuesday": "Thứ 3", "wednesday": "Thứ 4",
-            "thursday": "Thứ 5", "friday": "Thứ 6", "saturday": "Thứ 7", "sunday": "Chủ nhật"
-        }
-        today_day_vn = days_translation.get(today_day, today_day)
-
-        # Tìm dữ liệu ngày hiện tại trong kế hoạch
-        today_plan = None
-        if hasattr(meal_plan, 'days'):
-            for day in meal_plan.days:
-                if hasattr(day, 'day_of_week') and day.day_of_week == today_day_vn:
-                    today_plan = day
-                    break
-        elif isinstance(meal_plan, dict) and "days" in meal_plan:
-            for day in meal_plan.get("days", []):
-                if day.get("day_of_week", "") == today_day_vn:
-                    today_plan = day
-                    break
-
-        if today_plan:
-            # Extract meal names
-            breakfast_names = []
-            lunch_names = []
-            dinner_names = []
-
-            if hasattr(today_plan, 'breakfast') and today_plan.breakfast:
-                if hasattr(today_plan.breakfast, 'dishes'):
-                    breakfast_names = [dish.name for dish in today_plan.breakfast.dishes if hasattr(dish, 'name')]
-            elif isinstance(today_plan, dict):
-                breakfast = today_plan.get("breakfast", {})
-                if isinstance(breakfast, dict) and "dishes" in breakfast:
-                    breakfast_names = [dish.get("name", "") for dish in breakfast.get("dishes", [])]
-                elif isinstance(breakfast, list):
-                    breakfast_names = [dish.get("name", "") for dish in breakfast]
-
-            if hasattr(today_plan, 'lunch') and today_plan.lunch:
-                if hasattr(today_plan.lunch, 'dishes'):
-                    lunch_names = [dish.name for dish in today_plan.lunch.dishes if hasattr(dish, 'name')]
-            elif isinstance(today_plan, dict):
-                lunch = today_plan.get("lunch", {})
-                if isinstance(lunch, dict) and "dishes" in lunch:
-                    lunch_names = [dish.get("name", "") for dish in lunch.get("dishes", [])]
-                elif isinstance(lunch, list):
-                    lunch_names = [dish.get("name", "") for dish in lunch]
-
-            if hasattr(today_plan, 'dinner') and today_plan.dinner:
-                if hasattr(today_plan.dinner, 'dishes'):
-                    dinner_names = [dish.name for dish in today_plan.dinner.dishes if hasattr(dish, 'name')]
-            elif isinstance(today_plan, dict):
-                dinner = today_plan.get("dinner", {})
-                if isinstance(dinner, dict) and "dishes" in dinner:
-                    dinner_names = [dish.get("name", "") for dish in dinner.get("dishes", [])]
-                elif isinstance(dinner, list):
-                    dinner_names = [dish.get("name", "") for dish in dinner]
-
-            breakfast_str = ", ".join(breakfast_names) or "chưa có"
-            lunch_str = ", ".join(lunch_names) or "chưa có"
-            dinner_str = ", ".join(dinner_names) or "chưa có"
-
-            context_parts.append(f"- Kế hoạch hôm nay: "
-                              f"Bữa sáng gồm {breakfast_str}. "
-                              f"Bữa trưa gồm {lunch_str}. "
-                              f"Bữa tối gồm {dinner_str}.")
-
-    # Thông tin nhật ký đã ăn
-    if food_logs:
-        # Tính tổng calo từ nhiều nguồn khác nhau
-        eaten_calories = 0
-        eaten_dishes = []
-
-        for log in food_logs:
-            # Tính calories
-            if isinstance(log, dict):
-                if log.get('total_nutrition', {}).get('calories'):
-                    eaten_calories += log.get('total_nutrition', {}).get('calories', 0)
-                elif log.get('calories'):
-                    eaten_calories += log.get('calories', 0)
-                elif log.get('items'):
-                    for item in log.get('items', []):
-                        eaten_calories += item.get('calories', 0)
-
-                # Thu thập tên món ăn
-                if log.get('recognized_foods'):
-                    for food in log.get('recognized_foods', []):
-                        if food.get('food_name'):
-                            eaten_dishes.append(food.get('food_name'))
-                elif log.get('items'):
-                    for item in log.get('items', []):
-                        if item.get('name'):
-                            eaten_dishes.append(item.get('name'))
-                elif log.get('description'):
-                    eaten_dishes.append(log.get('description'))
-
-        if eaten_dishes:
-            context_parts.append(f"- Nhật ký đã ăn {time_label}: Đã ăn {len(food_logs)} bữa với các món: {', '.join(eaten_dishes)}. "
-                              f"Tổng calo đã nạp: {eaten_calories} kcal.")
-        else:
-            context_parts.append(f"- Nhật ký đã ăn {time_label}: Đã ghi nhận {len(food_logs)} bữa ăn nhưng không có thông tin chi tiết.")
-    else:
-        context_parts.append(f"- Nhật ký đã ăn {time_label}: Chưa ghi nhận bữa nào.")
-
-    return "\n".join(context_parts)
-
-# Chat models
-class ChatRequest(BaseModel):
-    message: str = Field(..., description="Tin nhắn của người dùng")
-    user_id: Optional[str] = Field(None, description="ID của người dùng (tùy chọn)")
-
-class ChatResponse(BaseModel):
-    reply: str = Field(..., description="Phản hồi của AI")
-    chat_id: Optional[str] = Field(None, description="ID của cuộc hội thoại")
-    augmented: bool = Field(False, description="Có sử dụng RAG không")
 
 # Thêm các import còn thiếu
 try:
@@ -298,11 +70,10 @@ from usda_integration import usda_api
 
 # Import routers
 from routers import firestore_router, api_router, compat_router, meal_plan_router, openfood_router, admin_router
-# from routers import ai_price_router  # Commented out temporarily
-import chat_endpoint
 
-# Pydantic imports for other models
+# Thêm import cho chat API
 from pydantic import BaseModel, Field, validator
+from openai import OpenAI
 
 # Firebase Admin SDK
 import firebase_admin
@@ -468,224 +239,26 @@ async def log_requests(request, call_next):
     
     return response
 
-# Enhanced Chat endpoint with improved RAG
-@app.post("/chat", response_model=ChatResponse)
-async def chat_with_rag(
-    chat_request: ChatRequest,
-    user: Optional[TokenPayload] = Depends(get_optional_current_user)
-):
-    """
-    Chat endpoint với RAG (Retrieval-Augmented Generation) cải thiện
-    """
-    try:
-        user_message = chat_request.message
-        user_id = chat_request.user_id
+# Khởi tạo Groq client cho chat API
+groq_api_key = os.environ.get("GROQ_API_KEY", "")
+try:
+    chat_client = OpenAI(
+        api_key=groq_api_key,
+        base_url="https://api.groq.com/openai/v1"
+    )
+    chat_available = bool(groq_api_key)
+except:
+    chat_client = None
+    chat_available = False
 
-        # Sử dụng user_id từ token nếu có
-        if user and not user_id:
-            user_id = user.uid
-        elif not user_id:
-            user_id = 'anonymous'
+# Chat API models
+class ChatMessage(BaseModel):
+    message: str
+    user_id: str = "anonymous"
 
-        print(f"🔄 Chat request received for user: {user_id}")
-        print(f"📝 User message: {user_message}")
-
-        # Áp dụng RAG: Truy xuất dữ liệu người dùng từ Firestore
-        use_rag = True
-        augmented_prompt = user_message
-
-        try:
-            if use_rag and user_id != 'anonymous':
-                print(f"🔍 Applying RAG for user: {user_id}")
-
-                # Import firestore service
-                from services.firestore_service import firestore_service
-
-                # 0. Phân tích ngữ cảnh thời gian từ tin nhắn người dùng
-                target_date, context_type = parse_date_context(user_message)
-                print(f"[DEBUG] 🕐 Phân tích ngữ cảnh: target_date={target_date}, context_type={context_type}")
-
-                # 1. Lấy hồ sơ người dùng
-                print(f"[DEBUG] Getting user profile for: {user_id}")
-                user_profile = firestore_service.get_user(user_id) or {}
-                print(f"User profile retrieved: {bool(user_profile)}")
-
-                # 2. Lấy kế hoạch ăn mới nhất
-                print(f"[DEBUG] Getting latest meal plan for user: {user_id}")
-                meal_plan_data = firestore_service.get_latest_meal_plan(user_id)
-                if meal_plan_data:
-                    meal_plan_dict = meal_plan_data.dict() if hasattr(meal_plan_data, 'dict') else meal_plan_data
-                    print(f"Meal plan retrieved: {bool(meal_plan_dict)}")
-                else:
-                    meal_plan_dict = {}
-                    print(f"Meal plan retrieved: False")
-
-                # 3. Lấy nhật ký ăn uống theo ngày được yêu cầu
-                vietnam_now = datetime.now(VIETNAM_TZ)
-                today_str = vietnam_now.strftime("%Y-%m-%d")
-                print(f"[DEBUG] ⏰ Thời gian hiện tại (VN): {vietnam_now.isoformat()}")
-                print(f"[DEBUG] 📅 Đang truy vấn dữ liệu cho ngày: {target_date} (context: {context_type})")
-
-                food_logs_target = []
-                try:
-                    food_logs_target = firestore_service.get_food_logs_by_date(user_id, target_date) or []
-                    print(f"[DEBUG] Found {len(food_logs_target)} food logs for {target_date}")
-                except Exception as e:
-                    print(f"[DEBUG] Error getting food logs: {str(e)}")
-
-                # 4. Lấy thông tin bài tập theo ngày được yêu cầu - với fallback logic
-                print(f"[DEBUG] Đang truy vấn dữ liệu bài tập cho user {user_id} với ngày {target_date}...")
-                exercise_history = []
-                exercise_date = target_date
-                try:
-                    exercise_history = firestore_service.get_exercise_history(user_id, start_date=target_date, end_date=target_date) or []
-                    print(f"[DEBUG] Tìm thấy {len(exercise_history)} bài tập cho ngày {target_date}")
-
-                    # Nếu không có dữ liệu cho ngày được yêu cầu, thử tìm dữ liệu gần nhất (trong 7 ngày qua)
-                    if not exercise_history and context_type in ['today', 'yesterday']:
-                        for days_back in range(1, 8):  # Tìm trong 7 ngày qua
-                            past_date = (datetime.now(VIETNAM_TZ) - timedelta(days=days_back)).strftime("%Y-%m-%d")
-                            exercise_history = firestore_service.get_exercise_history(user_id, start_date=past_date, end_date=past_date) or []
-                            if exercise_history:
-                                exercise_date = past_date
-                                print(f"[DEBUG] Tìm thấy dữ liệu bài tập gần nhất vào ngày: {past_date}")
-                                break
-                except Exception as e:
-                    print(f"[DEBUG] Error getting exercise history: {str(e)}")
-
-                # 5. Lấy thông tin nước uống theo ngày được yêu cầu - với fallback logic
-                print(f"[DEBUG] Đang truy vấn dữ liệu nước uống cho user {user_id} với ngày {target_date}...")
-                water_intake = []
-                water_date = target_date
-                try:
-                    water_intake = firestore_service.get_water_intake_by_date(user_id, target_date) or []
-                    print(f"[DEBUG] Tìm thấy {len(water_intake)} lượt uống nước cho ngày {target_date}")
-
-                    # Nếu không có dữ liệu cho ngày được yêu cầu, thử tìm dữ liệu gần nhất (trong 7 ngày qua)
-                    if not water_intake and context_type in ['today', 'yesterday']:
-                        for days_back in range(1, 8):  # Tìm trong 7 ngày qua
-                            past_date = (datetime.now(VIETNAM_TZ) - timedelta(days=days_back)).strftime("%Y-%m-%d")
-                            water_intake = firestore_service.get_water_intake_by_date(user_id, past_date) or []
-                            if water_intake:
-                                water_date = past_date
-                                print(f"[DEBUG] Tìm thấy dữ liệu nước uống gần nhất vào ngày: {past_date}")
-                                break
-                except Exception as e:
-                    print(f"[DEBUG] Error getting water intake: {str(e)}")
-
-                # Tạo context từ dữ liệu đã truy xuất
-                context_data = format_user_context(
-                    user_profile,
-                    meal_plan_dict,
-                    food_logs_target,
-                    exercise_history,
-                    water_intake,
-                    exercise_date,
-                    water_date,
-                    target_date,
-                    context_type
-                )
-
-                # Xây dựng prompt thông minh với ngữ cảnh thời gian
-                time_context_note = ""
-                if context_type == 'yesterday':
-                    time_context_note = f"\n⚠️ LƯU Ý QUAN TRỌNG: Người dùng đang hỏi về HÔM QUA ({target_date}), KHÔNG PHẢI hôm nay. Hãy trả lời chính xác về dữ liệu hôm qua."
-                elif context_type == 'specific_date':
-                    time_context_note = f"\n⚠️ LƯU Ý QUAN TRỌNG: Người dùng đang hỏi về ngày {target_date}, KHÔNG PHẢI hôm nay. Hãy trả lời chính xác về dữ liệu ngày đó."
-                elif context_type == 'relative':
-                    time_context_note = f"\n⚠️ LƯU Ý QUAN TRỌNG: Người dùng đang hỏi về ngày {target_date}, KHÔNG PHẢI hôm nay. Hãy trả lời chính xác về dữ liệu ngày đó."
-
-                augmented_prompt = f"""Bạn là một trợ lý dinh dưỡng ảo tên là DietAI. Nhiệm vụ của bạn là trả lời câu hỏi của người dùng dựa trên thông tin cá nhân và hoạt động hàng ngày của họ.{time_context_note}
-
---- DỮ LIỆU CÁ NHÂN CỦA NGƯỜI DÙNG ---
-{context_data}
---- KẾT THÚC DỮ LIỆU ---
-
-HƯỚNG DẪN TRẢI LỜI:
-1. Đọc kỹ dữ liệu trên và chú ý đến ngày cụ thể được đề cập
-2. Trả lời chính xác theo ngày mà người dùng hỏi (hôm nay, hôm qua, hay ngày cụ thể)
-3. Nếu không có dữ liệu cho ngày được hỏi, hãy nói rõ "không có dữ liệu" thay vì dùng dữ liệu từ ngày khác
-4. Sử dụng ngôn ngữ thân thiện và chính xác bằng tiếng Việt
-
-Câu hỏi: "{user_message}"
-"""
-                print(f"✅ RAG applied successfully")
-        except Exception as e:
-            print(f"❌ Lỗi khi áp dụng RAG: {str(e)}")
-            print(f"Tiếp tục với prompt thông thường")
-            use_rag = False
-            import traceback
-            traceback.print_exc()
-
-        # Chờ thêm một chút trước khi gọi API để đảm bảo tất cả dữ liệu đã được xử lý
-        time.sleep(0.5)
-
-        # Gọi Groq API với system prompt và user message
-        try:
-            completion = groq_service.client.chat.completions.create(
-                model="llama3-8b-8192",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "Bạn là trợ lý dinh dưỡng ảo tên là DietAI. Trả lời dựa trên dữ liệu người dùng."
-                        if use_rag else
-                        "Bạn là trợ lý ẩm thực thông minh, chuyên tư vấn món ăn theo nhu cầu người dùng"
-                    },
-                    {
-                        "role": "user",
-                        "content": augmented_prompt
-                    }
-                ],
-                temperature=0.7,
-            )
-
-            # Trích xuất phản hồi từ AI
-            ai_reply = completion.choices[0].message.content
-            print(f"AI reply generated: {len(ai_reply)} characters")
-
-        except Exception as e:
-            print(f"❌ Error calling Groq API: {str(e)}")
-            ai_reply = "Xin lỗi, hiện tại tôi không thể trả lời câu hỏi của bạn. Vui lòng thử lại sau."
-            use_rag = False
-
-        # Lưu lịch sử chat vào Firebase (tùy chọn)
-        chat_id = None
-        try:
-            if user_id != 'anonymous':
-                # Import và sử dụng chat history manager nếu cần
-                import uuid
-                chat_id = str(uuid.uuid4())
-
-                # Lưu vào Firestore
-                from services.firestore_service import firestore_service
-                chat_data = {
-                    "user_id": user_id,
-                    "user_message": user_message,
-                    "ai_reply": ai_reply,
-                    "timestamp": datetime.now(VIETNAM_TZ).isoformat(),
-                    "model": "llama3-8b-8192",
-                    "augmented": use_rag
-                }
-
-                firestore_service.db.collection('chat_history').document(chat_id).set(chat_data)
-                print(f"Đã lưu chat với ID: {chat_id}")
-        except Exception as e:
-            print(f"⚠️ Không thể lưu lịch sử chat: {str(e)}")
-
-        # Trả về kết quả
-        return ChatResponse(
-            reply=ai_reply,
-            chat_id=chat_id,
-            augmented=use_rag
-        )
-
-    except Exception as e:
-        print(f"❌ Lỗi khi xử lý chat: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Đã xảy ra lỗi: {str(e)}")
-
-# Chat functionality moved to chat_endpoint.py
+class ChatResponse(BaseModel):
+    reply: str
+    chat_id: str = ""
 
 # Thêm các router vào ứng dụng
 app.include_router(firestore_router, prefix="/firestore", tags=["Firestore"])
@@ -698,15 +271,6 @@ app.include_router(openfood_router.router, tags=["OpenFood Management"])
 
 # Mount Admin router
 app.include_router(admin_router.router, tags=["Admin Management"])
-
-# Mount AI Price Analysis router (commented out temporarily)
-# app.include_router(ai_price_router.router, tags=["AI Price Analysis"])
-
-# Mount Chat router
-app.include_router(chat_endpoint.router, tags=["Chat API"])
-
-# Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Đã chuyển hàm get_current_user sang file auth_utils.py
 
@@ -789,31 +353,6 @@ app.include_router(auth_router)
 async def root():
     """Root endpoint to check if API is running"""
     return {"message": "Welcome to DietAI API. Visit /docs for API documentation."}
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint for monitoring"""
-    try:
-        # Check Groq service
-        from groq_integration import groq_service
-        ai_available = groq_service.available
-
-        return {
-            "status": "healthy",
-            "timestamp": datetime.now().isoformat(),
-            "ai_available": ai_available,
-            "services": {
-                "groq": ai_available,
-                "firebase": True  # Assume Firebase is available if app starts
-            }
-        }
-    except Exception as e:
-        return {
-            "status": "degraded",
-            "timestamp": datetime.now().isoformat(),
-            "error": str(e),
-            "ai_available": False
-        }
 
 @app.get("/debug/groq")
 async def debug_groq():
@@ -1272,7 +811,7 @@ async def translate_food_name(
 async def clear_usda_cache():
     """
     Xóa cache của USDA API.
-    
+
     Returns:
     - Thông báo kết quả
     """
@@ -1282,7 +821,855 @@ async def clear_usda_cache():
     except Exception as e:
         return {"success": False, "error": f"Lỗi khi xóa cache USDA API: {str(e)}"}
 
-# Chat functionality moved to chat_endpoint.py
+# Thêm hàm format_user_context trước định nghĩa endpoint /chat
+def format_user_context(user_profile: dict, meal_plan: dict, food_logs: list, exercise_history: list = None, water_intake: list = None, user_id: str = None) -> str:
+    """
+    Định dạng dữ liệu người dùng thành một đoạn văn bản context cho chatbot
+
+    Args:
+        user_profile: Dữ liệu hồ sơ người dùng
+        meal_plan: Dữ liệu kế hoạch ăn uống
+        food_logs: Danh sách các bản ghi thực phẩm đã ăn
+        exercise_history: Lịch sử bài tập của người dùng
+        water_intake: Lượng nước uống trong ngày
+        user_id: ID của người dùng
+
+    Returns:
+        Đoạn văn bản context đã định dạng
+    """
+    context_parts = []
+
+    # Thông tin hồ sơ
+    if user_profile:
+        # Hỗ trợ các cấu trúc dữ liệu khác nhau
+        goal = user_profile.get('goal', user_profile.get('dietGoal', 'Không rõ'))
+
+        # Lấy mục tiêu calo từ tdee_calories hoặc nutrition_goals.calories
+        calories_target = (
+            user_profile.get('tdee_calories') or
+            user_profile.get('nutrition_goals', {}).get('calories') or
+            user_profile.get('targetCalories', 'Không rõ')
+        )
+
+        # Dị ứng có thể lưu ở trường allergies hoặc diet_restrictions
+        allergies = ", ".join(user_profile.get('allergies', [])) or "không có"
+
+        # Chế độ ăn đặc biệt từ diet_restrictions
+        diet_restrictions = ", ".join(user_profile.get('diet_restrictions', [])) or "không có"
+
+        # Chiều cao từ height_cm
+        height = user_profile.get('height_cm', user_profile.get('height', 'Không rõ'))
+
+        # Cân nặng từ weight_kg
+        weight = user_profile.get('weight_kg', user_profile.get('weight', 'Không rõ'))
+
+        # Độ tuổi từ age
+        age = user_profile.get('age', 'Không rõ')
+
+        # Giới tính từ gender
+        gender = user_profile.get('gender', 'Không rõ')
+
+        # Mức độ hoạt động
+        activity = user_profile.get('activity_level', 'Không rõ')
+
+        # In dữ liệu hồ sơ để debug
+        print(f"[DEBUG] User profile data: {user_profile}")
+
+        context_parts.append(f"- Hồ sơ: Người dùng {age} tuổi, giới tính {gender}. Mục tiêu là '{goal}', mức hoạt động '{activity}'. "
+                          f"Mục tiêu calo hàng ngày là {calories_target} kcal. "
+                          f"Chiều cao: {height}cm, cân nặng: {weight}kg. "
+                          f"Dị ứng với: {allergies}. Chế độ ăn: {diet_restrictions}.")
+
+    # Thông tin kế hoạch bữa ăn hôm nay
+    if meal_plan:
+        today_day = datetime.now().strftime("%A").lower()
+        # Chuyển đổi tên ngày tiếng Anh sang tiếng Việt nếu cần
+        days_translation = {
+            "monday": "monday", "tuesday": "tuesday", "wednesday": "wednesday",
+            "thursday": "thursday", "friday": "friday", "saturday": "saturday", "sunday": "sunday"
+        }
+        today_day_key = days_translation.get(today_day, today_day)
+
+        # Tìm dữ liệu ngày hiện tại trong kế hoạch
+        today_plan = None
+        if "days" in meal_plan:
+            for day in meal_plan.get("days", []):
+                if day.get("day_of_week", "").lower() == today_day_key:
+                    today_plan = day
+                    break
+
+        if today_plan:
+            breakfast = ", ".join([dish.get("name", "") for dish in today_plan.get("breakfast", [])])
+            lunch = ", ".join([dish.get("name", "") for dish in today_plan.get("lunch", [])])
+            dinner = ", ".join([dish.get("name", "") for dish in today_plan.get("dinner", [])])
+
+            context_parts.append(f"- Kế hoạch hôm nay: "
+                              f"Bữa sáng gồm {breakfast}. "
+                              f"Bữa trưa gồm {lunch}. "
+                              f"Bữa tối gồm {dinner}.")
+
+    # Thông tin nhật ký đã ăn
+    if food_logs:
+        # Tính tổng calo từ nhiều nguồn khác nhau
+        eaten_calories = 0
+        for log in food_logs:
+            # Cách 1: Từ total_nutrition (cấu trúc cũ)
+            if log.get('total_nutrition', {}).get('calories'):
+                eaten_calories += log.get('total_nutrition', {}).get('calories', 0)
+            # Cách 2: Từ trường calories (cấu trúc mới)
+            elif log.get('calories'):
+                eaten_calories += log.get('calories', 0)
+            # Cách 3: Từ items[].calories (cấu trúc mới)
+            elif log.get('items'):
+                for item in log.get('items', []):
+                    eaten_calories += item.get('calories', 0)
+
+        # Thu thập tên các món ăn
+        eaten_dishes = []
+        for log in food_logs:
+            # Cách 1: Từ recognized_foods (cấu trúc cũ)
+            if log.get('recognized_foods'):
+                for food in log.get('recognized_foods', []):
+                    if food.get('food_name'):
+                        eaten_dishes.append(food.get('food_name'))
+
+            # Cách 2: Từ items (cấu trúc mới)
+            elif log.get('items'):
+                for item in log.get('items', []):
+                    if item.get('name'):
+                        eaten_dishes.append(item.get('name'))
+
+            # Cách 3: Từ description (cấu trúc mới)
+            elif log.get('description'):
+                eaten_dishes.append(log.get('description'))
+
+        if eaten_dishes:
+            context_parts.append(f"- Nhật ký đã ăn hôm nay: Đã ăn {len(food_logs)} bữa với các món: {', '.join(eaten_dishes)}. "
+                             f"Tổng calo đã nạp: {eaten_calories} kcal.")
+        else:
+            context_parts.append(f"- Nhật ký đã ăn hôm nay: Đã ghi nhận {len(food_logs)} bữa ăn nhưng không có thông tin chi tiết.")
+    else:
+        context_parts.append("- Nhật ký đã ăn hôm nay: Chưa ghi nhận bữa nào.")
+
+    # Thông tin bài tập
+    if exercise_history:
+        # Tính tổng calo đã đốt
+        burned_calories = 0
+        for exercise in exercise_history:
+            # Cách 1: Từ calories_burned (cấu trúc cũ)
+            if 'calories_burned' in exercise:
+                burned_calories += exercise.get('calories_burned', 0)
+            # Cách 2: Từ calories (cấu trúc mới)
+            elif 'calories' in exercise:
+                burned_calories += exercise.get('calories', 0)
+
+        # Liệt kê các bài tập đã thực hiện
+        exercise_list = []
+        for exercise in exercise_history:
+            # Cách 1: Từ cấu trúc cũ
+            if exercise.get('exercise_name') and exercise.get('duration_minutes'):
+                exercise_name = exercise.get('exercise_name')
+                duration = exercise.get('duration_minutes')
+                exercise_list.append(f"{exercise_name} ({duration} phút)")
+            # Cách 2: Từ cấu trúc mới
+            elif exercise.get('name') and exercise.get('minutes'):
+                exercise_name = exercise.get('name')
+                duration = exercise.get('minutes')
+                exercise_list.append(f"{exercise_name} ({duration} phút)")
+
+        if exercise_list:
+            context_parts.append(f"- Bài tập hôm nay: Đã tập {len(exercise_history)} bài tập: {', '.join(exercise_list)}. "
+                               f"Tổng calo đã đốt: {burned_calories} kcal.")
+        else:
+            context_parts.append(f"- Bài tập hôm nay: Đã ghi nhận {len(exercise_history)} hoạt động nhưng không có thông tin chi tiết.")
+    else:
+        if user_id:
+            print(f"[DEBUG] Không tìm thấy dữ liệu bài tập cho user_id={user_id}. Kiểm tra collection và index")
+        context_parts.append("- Bài tập hôm nay: Chưa ghi nhận bài tập nào.")
+
+    # Thông tin nước uống
+    if water_intake:
+        # Tính tổng lượng nước đã uống
+        total_water_ml = 0
+        for intake in water_intake:
+            # Cách 1: Từ amount_ml (cấu trúc cũ)
+            if 'amount_ml' in intake:
+                total_water_ml += intake.get('amount_ml', 0)
+            # Cách 2: Từ amount (cấu trúc mới)
+            elif 'amount' in intake:
+                total_water_ml += intake.get('amount', 0)
+
+        # Chuyển đổi sang lít
+        total_water_liter = total_water_ml / 1000
+
+        # Kiểm tra có đạt mục tiêu không
+        water_target = 2000  # Mặc định 2 lít (2000ml)
+
+        # Cố gắng lấy mục tiêu từ user_profile
+        if user_profile:
+            if user_profile.get('waterTarget', {}).get('amount_ml'):
+                water_target = user_profile.get('waterTarget', {}).get('amount_ml')
+            elif user_profile.get('water_target'):
+                water_target = user_profile.get('water_target')
+            elif user_profile.get('nutrition_goals', {}).get('water'):
+                water_target = user_profile.get('nutrition_goals', {}).get('water')
+
+        water_target_liter = water_target / 1000
+        percentage = (total_water_liter / water_target_liter) * 100 if water_target_liter > 0 else 0
+
+        context_parts.append(f"- Nước uống hôm nay: Đã uống {total_water_liter:.1f} lít nước "
+                          f"({percentage:.0f}% mục tiêu {water_target_liter:.1f} lít).")
+    else:
+        if user_id:
+            print(f"[DEBUG] Không tìm thấy dữ liệu nước uống cho user_id={user_id}. Kiểm tra collection và index")
+        context_parts.append("- Nước uống hôm nay: Chưa ghi nhận lượng nước uống nào.")
+
+    return "\n".join(context_parts)
+
+# Cập nhật endpoint /chat để sử dụng xác thực và RAG
+@app.post("/chat", response_model=ChatResponse, tags=["Chat API"])
+async def chat(
+    message: ChatMessage,
+    user: TokenPayload = Depends(get_current_user)  # Thêm xác thực người dùng
+):
+    """
+    Endpoint nhận tin nhắn từ người dùng, xử lý qua Groq API và trả về phản hồi
+    Sử dụng kỹ thuật RAG (Retrieval-Augmented Generation) để cá nhân hóa phản hồi
+
+    Parameters:
+    - message: Nội dung tin nhắn từ người dùng
+    - user: Thông tin người dùng đã xác thực
+
+    Returns:
+    - Phản hồi từ AI
+    """
+    try:
+        if not chat_client or not chat_available:
+            raise HTTPException(
+                status_code=503,
+                detail="Groq API không khả dụng. Vui lòng cấu hình GROQ_API_KEY trong biến môi trường."
+            )
+
+        # Lấy user_id từ token xác thực
+        user_id = user.uid
+        print(f"Chat request for user: {user_id}")
+
+        # Truy xuất dữ liệu người dùng từ Firestore
+        try:
+            from services.firestore_service import firestore_service
+
+            # 1. Lấy hồ sơ người dùng
+            user_profile = firestore_service.get_user(user_id) or {}
+            print(f"[DEBUG] User profile retrieved from Firestore: {user_profile}")
+
+            # Nếu không tìm thấy dữ liệu từ get_user, thử phương thức get_user_profile
+            if not user_profile or len(user_profile) == 0:
+                print(f"[DEBUG] No user data found with get_user, trying get_user_profile")
+                profile_obj = firestore_service.get_user_profile(user_id)
+                if profile_obj:
+                    # Chuyển đổi từ UserProfile thành dict nếu cần
+                    if hasattr(profile_obj, 'to_dict'):
+                        user_profile = profile_obj.to_dict()
+                    elif hasattr(profile_obj, '__dict__'):
+                        user_profile = profile_obj.__dict__
+                print(f"[DEBUG] User profile from get_user_profile: {user_profile}")
+
+            # 2. Lấy kế hoạch ăn mới nhất
+            try:
+                meal_plan_data = firestore_service.get_latest_meal_plan(user_id) or {}
+                if hasattr(meal_plan_data, 'dict'):
+                    meal_plan_dict = meal_plan_data.dict()
+                else:
+                    meal_plan_dict = meal_plan_data
+            except Exception as e:
+                print(f"[DEBUG] Error getting meal plan: {str(e)}")
+                meal_plan_dict = {}
+
+            # 3. Lấy nhật ký ăn uống hôm nay
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            try:
+                food_logs_today = firestore_service.get_food_logs_by_date(user_id, today_str) or []
+            except Exception as e:
+                print(f"[DEBUG] Error getting food logs: {str(e)}")
+                food_logs_today = []
+
+            # 4. Lấy thông tin bài tập hôm nay
+            exercise_history = []
+            try:
+                print(f"[DEBUG] Đang tìm bài tập với userId={user_id} trong collection exercises")
+                exercise_history = firestore_service.get_exercise_history(user_id, start_date=today_str, end_date=today_str) or []
+            except Exception as e:
+                print(f"Error getting exercise history: {str(e)}")
+
+                # Hướng dẫn tạo index nếu cần
+                if "requires an index" in str(e):
+                    index_url = str(e).split("create it here: ")[1] if "create it here: " in str(e) else ""
+                    if index_url:
+                        print(f"[INDEX NEEDED] Please create the required Firestore index at: {index_url}")
+
+            # 5. Lấy thông tin nước uống hôm nay
+            water_intake = []
+            try:
+                print(f"[DEBUG] Đang tìm nước uống với userId={user_id} trong collection water_entries")
+                water_intake = firestore_service.get_water_intake_by_date(user_id, today_str) or []
+            except Exception as e:
+                print(f"Error getting water intake by date: {str(e)}")
+
+                # Hướng dẫn tạo index nếu cần
+                if "requires an index" in str(e):
+                    index_url = str(e).split("create it here: ")[1] if "create it here: " in str(e) else ""
+                    if index_url:
+                        print(f"[INDEX NEEDED] Please create the required Firestore index at: {index_url}")
+
+            # Tạo context từ dữ liệu đã truy xuất
+            context_data = format_user_context(
+                user_profile,
+                meal_plan_dict,
+                food_logs_today,
+                exercise_history,
+                water_intake,
+                user_id
+            )
+
+            # Xây dựng prompt thông minh
+            augmented_prompt = f"""Bạn là một trợ lý dinh dưỡng ảo tên là DietAI. Nhiệm vụ của bạn là trả lời câu hỏi của người dùng dựa trên thông tin cá nhân và hoạt động hàng ngày của họ.
+
+--- DỮ LIỆU CÁ NHÂN CỦA NGƯỜI DÙNG ---
+{context_data}
+--- KẾT THÚC DỮ LIỆU ---
+
+Dựa vào các thông tin trên, hãy trả lời câu hỏi sau của người dùng một cách thân thiện và chính xác bằng tiếng Việt:
+
+Câu hỏi: "{message.message}"
+"""
+            print(f"DEBUG: Augmented Prompt:\n{augmented_prompt[:500]}...")  # In ra 500 ký tự đầu để kiểm tra
+
+        except Exception as e:
+            print(f"Lỗi khi truy xuất dữ liệu người dùng: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            print(f"Tiếp tục với prompt thông thường")
+            # Fallback to regular prompt if retrieval fails
+            augmented_prompt = message.message
+
+        # Gọi Groq API với prompt đã được bổ sung dữ liệu
+        completion = chat_client.chat.completions.create(
+            model="llama3-8b-8192",  # Có thể nâng cấp lên model lớn hơn nếu cần
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Bạn là trợ lý dinh dưỡng ảo tên là DietAI. Trả lời dựa trên dữ liệu người dùng."
+                },
+                {
+                    "role": "user",
+                    "content": augmented_prompt
+                }
+            ],
+            temperature=0.7,
+        )
+
+        # Trích xuất phản hồi từ AI
+        ai_reply = completion.choices[0].message.content
+
+        # Lưu tin nhắn vào Firebase
+        try:
+            from firebase_admin import firestore
+            db = firestore.client()
+
+            # Tạo dữ liệu chat
+            chat_data = {
+                "user_id": user_id,
+                "user_message": message.message,
+                "ai_reply": ai_reply,
+                "timestamp": datetime.now().isoformat(),
+                "model": "llama3-8b-8192",
+                "augmented": True  # Đánh dấu đây là câu trả lời đã được tăng cường
+            }
+
+            # Tạo ID cho chat
+            import uuid
+            chat_id = str(uuid.uuid4())
+
+            # Lưu vào Firestore
+            db.collection("chat_history").document(chat_id).set(chat_data)
+            print(f"Đã lưu chat với ID: {chat_id}")
+
+            # Trả về kết quả dạng JSON với chat_id
+            return {"reply": ai_reply, "chat_id": chat_id}
+
+        except Exception as firebase_error:
+            print(f"Lỗi khi lưu chat vào Firebase: {str(firebase_error)}")
+            # Vẫn trả về phản hồi ngay cả khi lưu vào Firebase thất bại
+            return ChatResponse(reply=ai_reply)
+
+    except Exception as e:
+        print(f"Lỗi khi xử lý chat: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Đã xảy ra lỗi: {str(e)}")
+
+# Thêm endpoint lấy lịch sử chat
+@app.get("/chat/history", tags=["Chat API"])
+async def get_chat_history(
+    user_id: str = Query(..., description="ID của người dùng"),
+    limit: int = Query(10, description="Số lượng tin nhắn tối đa trả về")
+):
+    """
+    Lấy lịch sử chat của một người dùng
+
+    Parameters:
+    - user_id: ID của người dùng
+    - limit: Số lượng tin nhắn tối đa trả về
+
+    Returns:
+    - Danh sách các cuộc hội thoại
+    """
+    try:
+        from firebase_admin import firestore
+        db = firestore.client()
+
+        # Truy vấn Firestore
+        chats = (db.collection("chat_history")
+                .where("user_id", "==", user_id)
+                .limit(limit)
+                .get())
+
+        # Chuyển đổi kết quả thành danh sách
+        chat_list = []
+        for chat in chats:
+            chat_data = chat.to_dict()
+            chat_data["id"] = chat.id
+            chat_list.append(chat_data)
+
+        return {"history": chat_list, "count": len(chat_list)}
+
+    except Exception as e:
+        print(f"Lỗi khi lấy lịch sử chat: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Đã xảy ra lỗi khi lấy lịch sử chat: {str(e)}")
+
+# Thêm hàm format_user_context trước định nghĩa endpoint /chat
+def format_user_context(user_profile: dict, meal_plan: dict, food_logs: list, exercise_history: list = None, water_intake: list = None, user_id: str = None) -> str:
+    """
+    Định dạng dữ liệu người dùng thành một đoạn văn bản context cho chatbot
+    
+    Args:
+        user_profile: Dữ liệu hồ sơ người dùng
+        meal_plan: Dữ liệu kế hoạch ăn uống
+        food_logs: Danh sách các bản ghi thực phẩm đã ăn
+        exercise_history: Lịch sử bài tập của người dùng
+        water_intake: Lượng nước uống trong ngày
+        user_id: ID của người dùng
+        
+    Returns:
+        Đoạn văn bản context đã định dạng
+    """
+    context_parts = []
+    
+    # Thông tin hồ sơ
+    if user_profile:
+        # Hỗ trợ các cấu trúc dữ liệu khác nhau
+        goal = user_profile.get('goal', user_profile.get('dietGoal', 'Không rõ'))
+        
+        # Lấy mục tiêu calo từ tdee_calories hoặc nutrition_goals.calories
+        calories_target = (
+            user_profile.get('tdee_calories') or 
+            user_profile.get('nutrition_goals', {}).get('calories') or
+            user_profile.get('targetCalories', 'Không rõ')
+        )
+        
+        # Dị ứng có thể lưu ở trường allergies hoặc diet_restrictions
+        allergies = ", ".join(user_profile.get('allergies', [])) or "không có"
+        
+        # Chế độ ăn đặc biệt từ diet_restrictions
+        diet_restrictions = ", ".join(user_profile.get('diet_restrictions', [])) or "không có"
+        
+        # Chiều cao từ height_cm
+        height = user_profile.get('height_cm', user_profile.get('height', 'Không rõ'))
+        
+        # Cân nặng từ weight_kg
+        weight = user_profile.get('weight_kg', user_profile.get('weight', 'Không rõ'))
+        
+        # Độ tuổi từ age
+        age = user_profile.get('age', 'Không rõ')
+        
+        # Giới tính từ gender
+        gender = user_profile.get('gender', 'Không rõ')
+        
+        # Mức độ hoạt động
+        activity = user_profile.get('activity_level', 'Không rõ')
+        
+        # In dữ liệu hồ sơ để debug
+        print(f"[DEBUG] User profile data: {user_profile}")
+        
+        context_parts.append(f"- Hồ sơ: Người dùng {age} tuổi, giới tính {gender}. Mục tiêu là '{goal}', mức hoạt động '{activity}'. "
+                          f"Mục tiêu calo hàng ngày là {calories_target} kcal. "
+                          f"Chiều cao: {height}cm, cân nặng: {weight}kg. "
+                          f"Dị ứng với: {allergies}. Chế độ ăn: {diet_restrictions}.")
+
+    # Thông tin kế hoạch bữa ăn hôm nay
+    if meal_plan:
+        today_day = datetime.now().strftime("%A").lower()
+        # Chuyển đổi tên ngày tiếng Anh sang tiếng Việt nếu cần
+        days_translation = {
+            "monday": "monday", "tuesday": "tuesday", "wednesday": "wednesday", 
+            "thursday": "thursday", "friday": "friday", "saturday": "saturday", "sunday": "sunday"
+        }
+        today_day_key = days_translation.get(today_day, today_day)
+        
+        # Tìm dữ liệu ngày hiện tại trong kế hoạch
+        today_plan = None
+        if "days" in meal_plan:
+            for day in meal_plan.get("days", []):
+                if day.get("day_of_week", "").lower() == today_day_key:
+                    today_plan = day
+                    break
+        
+        if today_plan:
+            breakfast = ", ".join([dish.get("name", "") for dish in today_plan.get("breakfast", [])])
+            lunch = ", ".join([dish.get("name", "") for dish in today_plan.get("lunch", [])])
+            dinner = ", ".join([dish.get("name", "") for dish in today_plan.get("dinner", [])])
+            
+            context_parts.append(f"- Kế hoạch hôm nay: "
+                              f"Bữa sáng gồm {breakfast}. "
+                              f"Bữa trưa gồm {lunch}. "
+                              f"Bữa tối gồm {dinner}.")
+
+    # Thông tin nhật ký đã ăn
+    if food_logs:
+        # Tính tổng calo từ nhiều nguồn khác nhau
+        eaten_calories = 0
+        for log in food_logs:
+            # Cách 1: Từ total_nutrition (cấu trúc cũ)
+            if log.get('total_nutrition', {}).get('calories'):
+                eaten_calories += log.get('total_nutrition', {}).get('calories', 0)
+            # Cách 2: Từ trường calories (cấu trúc mới)
+            elif log.get('calories'):
+                eaten_calories += log.get('calories', 0)
+            # Cách 3: Từ items[].calories (cấu trúc mới)
+            elif log.get('items'):
+                for item in log.get('items', []):
+                    eaten_calories += item.get('calories', 0)
+        
+        # Thu thập tên các món ăn
+        eaten_dishes = []
+        for log in food_logs:
+            # Cách 1: Từ recognized_foods (cấu trúc cũ)
+            if log.get('recognized_foods'):
+                for food in log.get('recognized_foods', []):
+                    if food.get('food_name'):
+                        eaten_dishes.append(food.get('food_name'))
+            
+            # Cách 2: Từ items (cấu trúc mới)
+            elif log.get('items'):
+                for item in log.get('items', []):
+                    if item.get('name'):
+                        eaten_dishes.append(item.get('name'))
+            
+            # Cách 3: Từ description (cấu trúc mới)
+            elif log.get('description'):
+                eaten_dishes.append(log.get('description'))
+        
+        if eaten_dishes:
+            context_parts.append(f"- Nhật ký đã ăn hôm nay: Đã ăn {len(food_logs)} bữa với các món: {', '.join(eaten_dishes)}. "
+                             f"Tổng calo đã nạp: {eaten_calories} kcal.")
+        else:
+            context_parts.append(f"- Nhật ký đã ăn hôm nay: Đã ghi nhận {len(food_logs)} bữa ăn nhưng không có thông tin chi tiết.")
+    else:
+        context_parts.append("- Nhật ký đã ăn hôm nay: Chưa ghi nhận bữa nào.")
+    
+    # Thông tin bài tập
+    if exercise_history:
+        # Tính tổng calo đã đốt
+        burned_calories = 0
+        for exercise in exercise_history:
+            # Cách 1: Từ calories_burned (cấu trúc cũ)
+            if 'calories_burned' in exercise:
+                burned_calories += exercise.get('calories_burned', 0)
+            # Cách 2: Từ calories (cấu trúc mới)
+            elif 'calories' in exercise:
+                burned_calories += exercise.get('calories', 0)
+        
+        # Liệt kê các bài tập đã thực hiện
+        exercise_list = []
+        for exercise in exercise_history:
+            # Cách 1: Từ cấu trúc cũ
+            if exercise.get('exercise_name') and exercise.get('duration_minutes'):
+                exercise_name = exercise.get('exercise_name')
+                duration = exercise.get('duration_minutes')
+                exercise_list.append(f"{exercise_name} ({duration} phút)")
+            # Cách 2: Từ cấu trúc mới
+            elif exercise.get('name') and exercise.get('minutes'):
+                exercise_name = exercise.get('name')
+                duration = exercise.get('minutes')
+                exercise_list.append(f"{exercise_name} ({duration} phút)")
+        
+        if exercise_list:
+            context_parts.append(f"- Bài tập hôm nay: Đã tập {len(exercise_history)} bài tập: {', '.join(exercise_list)}. "
+                               f"Tổng calo đã đốt: {burned_calories} kcal.")
+        else:
+            context_parts.append(f"- Bài tập hôm nay: Đã ghi nhận {len(exercise_history)} hoạt động nhưng không có thông tin chi tiết.")
+    else:
+        if user_id:
+            print(f"[DEBUG] Không tìm thấy dữ liệu bài tập cho user_id={user_id}. Kiểm tra collection và index")
+        context_parts.append("- Bài tập hôm nay: Chưa ghi nhận bài tập nào.")
+    
+    # Thông tin nước uống
+    if water_intake:
+        # Tính tổng lượng nước đã uống
+        total_water_ml = 0
+        for intake in water_intake:
+            # Cách 1: Từ amount_ml (cấu trúc cũ)
+            if 'amount_ml' in intake:
+                total_water_ml += intake.get('amount_ml', 0)
+            # Cách 2: Từ amount (cấu trúc mới)
+            elif 'amount' in intake:
+                total_water_ml += intake.get('amount', 0)
+        
+        # Chuyển đổi sang lít
+        total_water_liter = total_water_ml / 1000
+        
+        # Kiểm tra có đạt mục tiêu không
+        water_target = 2000  # Mặc định 2 lít (2000ml)
+        
+        # Cố gắng lấy mục tiêu từ user_profile
+        if user_profile:
+            if user_profile.get('waterTarget', {}).get('amount_ml'):
+                water_target = user_profile.get('waterTarget', {}).get('amount_ml')
+            elif user_profile.get('water_target'):
+                water_target = user_profile.get('water_target')
+            elif user_profile.get('nutrition_goals', {}).get('water'):
+                water_target = user_profile.get('nutrition_goals', {}).get('water')
+        
+        water_target_liter = water_target / 1000
+        percentage = (total_water_liter / water_target_liter) * 100 if water_target_liter > 0 else 0
+        
+        context_parts.append(f"- Nước uống hôm nay: Đã uống {total_water_liter:.1f} lít nước "
+                          f"({percentage:.0f}% mục tiêu {water_target_liter:.1f} lít).")
+    else:
+        if user_id:
+            print(f"[DEBUG] Không tìm thấy dữ liệu nước uống cho user_id={user_id}. Kiểm tra collection và index")
+        context_parts.append("- Nước uống hôm nay: Chưa ghi nhận lượng nước uống nào.")
+    
+    return "\n".join(context_parts)
+
+# Cập nhật endpoint /chat để sử dụng xác thực và RAG
+@app.post("/chat", response_model=ChatResponse, tags=["Chat API"])
+async def chat(
+    message: ChatMessage,
+    user: TokenPayload = Depends(get_current_user)  # Thêm xác thực người dùng
+):
+    """
+    Endpoint nhận tin nhắn từ người dùng, xử lý qua Groq API và trả về phản hồi
+    Sử dụng kỹ thuật RAG (Retrieval-Augmented Generation) để cá nhân hóa phản hồi
+    
+    Parameters:
+    - message: Nội dung tin nhắn từ người dùng
+    - user: Thông tin người dùng đã xác thực
+    
+    Returns:
+    - Phản hồi từ AI
+    """
+    try:
+        if not chat_client or not chat_available:
+            raise HTTPException(
+                status_code=503,
+                detail="Groq API không khả dụng. Vui lòng cấu hình GROQ_API_KEY trong biến môi trường."
+            )
+        
+        # Lấy user_id từ token xác thực
+        user_id = user.uid
+        print(f"Chat request for user: {user_id}")
+        
+        # Truy xuất dữ liệu người dùng từ Firestore
+        try:
+            from services.firestore_service import firestore_service
+            
+            # 1. Lấy hồ sơ người dùng
+            user_profile = firestore_service.get_user(user_id) or {}
+            print(f"[DEBUG] User profile retrieved from Firestore: {user_profile}")
+            
+            # Nếu không tìm thấy dữ liệu từ get_user, thử phương thức get_user_profile
+            if not user_profile or len(user_profile) == 0:
+                print(f"[DEBUG] No user data found with get_user, trying get_user_profile")
+                profile_obj = firestore_service.get_user_profile(user_id)
+                if profile_obj:
+                    # Chuyển đổi từ UserProfile thành dict nếu cần
+                    if hasattr(profile_obj, 'to_dict'):
+                        user_profile = profile_obj.to_dict()
+                    elif hasattr(profile_obj, '__dict__'):
+                        user_profile = profile_obj.__dict__
+                print(f"[DEBUG] User profile from get_user_profile: {user_profile}")
+            
+            # 2. Lấy kế hoạch ăn mới nhất
+            try:
+                meal_plan_data = firestore_service.get_latest_meal_plan(user_id) or {}
+                if hasattr(meal_plan_data, 'dict'):
+                    meal_plan_dict = meal_plan_data.dict()
+                else:
+                    meal_plan_dict = meal_plan_data
+            except Exception as e:
+                print(f"[DEBUG] Error getting meal plan: {str(e)}")
+                meal_plan_dict = {}
+            
+            # 3. Lấy nhật ký ăn uống hôm nay
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            try:
+                food_logs_today = firestore_service.get_food_logs_by_date(user_id, today_str) or []
+            except Exception as e:
+                print(f"[DEBUG] Error getting food logs: {str(e)}")
+                food_logs_today = []
+            
+            # 4. Lấy thông tin bài tập hôm nay
+            exercise_history = []
+            try:
+                print(f"[DEBUG] Đang tìm bài tập với userId={user_id} trong collection exercises")
+                exercise_history = firestore_service.get_exercise_history(user_id, start_date=today_str, end_date=today_str) or []
+            except Exception as e:
+                print(f"Error getting exercise history: {str(e)}")
+                
+                # Hướng dẫn tạo index nếu cần
+                if "requires an index" in str(e):
+                    index_url = str(e).split("create it here: ")[1] if "create it here: " in str(e) else ""
+                    if index_url:
+                        print(f"[INDEX NEEDED] Please create the required Firestore index at: {index_url}")
+            
+            # 5. Lấy thông tin nước uống hôm nay
+            water_intake = []
+            try:
+                print(f"[DEBUG] Đang tìm nước uống với userId={user_id} trong collection water_entries")
+                water_intake = firestore_service.get_water_intake_by_date(user_id, today_str) or []
+            except Exception as e:
+                print(f"Error getting water intake by date: {str(e)}")
+                
+                # Hướng dẫn tạo index nếu cần
+                if "requires an index" in str(e):
+                    index_url = str(e).split("create it here: ")[1] if "create it here: " in str(e) else ""
+                    if index_url:
+                        print(f"[INDEX NEEDED] Please create the required Firestore index at: {index_url}")
+            
+            # Tạo context từ dữ liệu đã truy xuất
+            context_data = format_user_context(
+                user_profile, 
+                meal_plan_dict, 
+                food_logs_today,
+                exercise_history,
+                water_intake,
+                user_id
+            )
+            
+            # Xây dựng prompt thông minh
+            augmented_prompt = f"""Bạn là một trợ lý dinh dưỡng ảo tên là DietAI. Nhiệm vụ của bạn là trả lời câu hỏi của người dùng dựa trên thông tin cá nhân và hoạt động hàng ngày của họ.
+
+--- DỮ LIỆU CÁ NHÂN CỦA NGƯỜI DÙNG ---
+{context_data}
+--- KẾT THÚC DỮ LIỆU ---
+
+Dựa vào các thông tin trên, hãy trả lời câu hỏi sau của người dùng một cách thân thiện và chính xác bằng tiếng Việt:
+
+Câu hỏi: "{message.message}"
+"""
+            print(f"DEBUG: Augmented Prompt:\n{augmented_prompt[:500]}...")  # In ra 500 ký tự đầu để kiểm tra
+            
+        except Exception as e:
+            print(f"Lỗi khi truy xuất dữ liệu người dùng: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            print(f"Tiếp tục với prompt thông thường")
+            # Fallback to regular prompt if retrieval fails
+            augmented_prompt = message.message
+            
+        # Gọi Groq API với prompt đã được bổ sung dữ liệu
+        completion = chat_client.chat.completions.create(
+            model="llama3-8b-8192",  # Có thể nâng cấp lên model lớn hơn nếu cần
+            messages=[
+                {
+                    "role": "system", 
+                    "content": "Bạn là trợ lý dinh dưỡng ảo tên là DietAI. Trả lời dựa trên dữ liệu người dùng."
+                },
+                {
+                    "role": "user", 
+                    "content": augmented_prompt
+                }
+            ],
+            temperature=0.7,
+        )
+        
+        # Trích xuất phản hồi từ AI
+        ai_reply = completion.choices[0].message.content
+        
+        # Lưu tin nhắn vào Firebase
+        try:
+            from firebase_admin import firestore
+            db = firestore.client()
+            
+            # Tạo dữ liệu chat
+            chat_data = {
+                "user_id": user_id,
+                "user_message": message.message,
+                "ai_reply": ai_reply,
+                "timestamp": datetime.now().isoformat(),
+                "model": "llama3-8b-8192",
+                "augmented": True  # Đánh dấu đây là câu trả lời đã được tăng cường
+            }
+            
+            # Tạo ID cho chat
+            import uuid
+            chat_id = str(uuid.uuid4())
+            
+            # Lưu vào Firestore
+            db.collection("chat_history").document(chat_id).set(chat_data)
+            print(f"Đã lưu chat với ID: {chat_id}")
+            
+            # Trả về kết quả dạng JSON với chat_id
+            return {"reply": ai_reply, "chat_id": chat_id}
+            
+        except Exception as firebase_error:
+            print(f"Lỗi khi lưu chat vào Firebase: {str(firebase_error)}")
+            # Vẫn trả về phản hồi ngay cả khi lưu vào Firebase thất bại
+            return ChatResponse(reply=ai_reply)
+        
+    except Exception as e:
+        print(f"Lỗi khi xử lý chat: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Đã xảy ra lỗi: {str(e)}")
+
+# Thêm endpoint lấy lịch sử chat
+@app.get("/chat/history", tags=["Chat API"])
+async def get_chat_history(
+    user_id: str = Query(..., description="ID của người dùng"),
+    limit: int = Query(10, description="Số lượng tin nhắn tối đa trả về")
+):
+    """
+    Lấy lịch sử chat của một người dùng
+    
+    Parameters:
+    - user_id: ID của người dùng
+    - limit: Số lượng tin nhắn tối đa trả về
+    
+    Returns:
+    - Danh sách các cuộc hội thoại
+    """
+    try:
+        from firebase_admin import firestore
+        db = firestore.client()
+        
+        # Truy vấn Firestore
+        chats = (db.collection("chat_history")
+                .where("user_id", "==", user_id)
+                .limit(limit)
+                .get())
+        
+        # Chuyển đổi kết quả thành danh sách
+        chat_list = []
+        for chat in chats:
+            chat_data = chat.to_dict()
+            chat_data["id"] = chat.id
+            chat_list.append(chat_data)
+        
+        return {"history": chat_list, "count": len(chat_list)}
+        
+    except Exception as e:
+        print(f"Lỗi khi lấy lịch sử chat: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Đã xảy ra lỗi khi lấy lịch sử chat: {str(e)}")
+
+# Endpoint /meal-plan/{user_id} đã được xử lý trong api_router
 
 # Thêm route chuyển hướng cho /api/firestore/users/sync
 @app.post("/api/firestore/users/sync")
@@ -1611,74 +1998,44 @@ async def generate_meal_plan(
                 protein_target=int(protein_target * 0.25),
                 fat_target=int(fat_target * 0.25),
                 carbs_target=int(carbs_target * 0.25),
-                meal_type="bữa sáng",  # Use Vietnamese
+                meal_type="breakfast",
                 preferences=preferences,
                 allergies=allergies,
                 cuisine_style=cuisine_style,
                 use_ai=use_ai,
                 user_data=user_data  # Pass all health-related data
             )
-
+            
             lunch_meals = groq_service.generate_meal_suggestions(
                 calories_target=int(calories_target * 0.35),  # 35% of calories for lunch
                 protein_target=int(protein_target * 0.35),
                 fat_target=int(fat_target * 0.35),
                 carbs_target=int(carbs_target * 0.35),
-                meal_type="bữa trưa",  # Use Vietnamese
+                meal_type="lunch",
                 preferences=preferences,
                 allergies=allergies,
                 cuisine_style=cuisine_style,
                 use_ai=use_ai,
                 user_data=user_data  # Pass all health-related data
             )
-
+            
             dinner_meals = groq_service.generate_meal_suggestions(
                 calories_target=int(calories_target * 0.40),  # 40% of calories for dinner
                 protein_target=int(protein_target * 0.40),
                 fat_target=int(fat_target * 0.40),
                 carbs_target=int(carbs_target * 0.40),
-                meal_type="bữa tối",  # Use Vietnamese
+                meal_type="dinner",
                 preferences=preferences,
                 allergies=allergies,
                 cuisine_style=cuisine_style,
                 use_ai=use_ai,
                 user_data=user_data  # Pass all health-related data
             )
-
-            weekly_plan[day] = {
-                "breakfast": breakfast_meals,
-                "lunch": lunch_meals,
-                "dinner": dinner_meals
-            }
-
-        # Create comprehensive meal plan response with all required fields
-        meal_plan_response = {
-            "user_id": user_id,
-            "created_at": datetime.now().isoformat(),
-            "nutrition_targets": {
-                "calories": calories_target,
-                "protein": protein_target,
-                "fat": fat_target,
-                "carbs": carbs_target,
-                "fiber": fiber_target,
-                "sodium": sodium_target
-            },
-            "preferences": preferences,
-            "allergies": allergies,
-            "cuisine_style": cuisine_style,
-            "weekly_plan": weekly_plan,
-            "generation_method": "ai" if use_ai else "template",
-            "version": "2.0"
-        }
-
-        # Save to storage
-        try:
-            storage_manager.save_meal_plan_dict(meal_plan_response, user_id)
-            logger.info(f"Meal plan saved for user {user_id}")
-        except Exception as e:
-            logger.error(f"Failed to save meal plan: {e}")
-
-        return meal_plan_response
+            
+            # Continue with the rest of your code...
+        
+        # Return a placeholder response for now
+        return {"message": "Meal plan generation is in progress"}
         
     except Exception as e:
         # Handle exceptions

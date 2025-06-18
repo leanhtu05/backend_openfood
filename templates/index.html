@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Trang chủ - OpenFood Management{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12 text-center">
+        <h1 class="display-4">Quản Lý OpenFood</h1>
+        <p class="lead">Hệ thống quản lý dữ liệu thực phẩm thông minh với AI</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-body text-center">
+                <h5 class="card-title">Món ăn</h5>
+                <p class="card-text">Quản lý danh sách món ăn với thông tin chi tiết về nguyên liệu, cách chế biến, và giá trị dinh dưỡng.</p>
+                <a href="/food" class="btn btn-primary">Xem danh sách</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-body text-center">
+                <h5 class="card-title">Tạo món ăn mới</h5>
+                <p class="card-text">Thêm món ăn mới với đầy đủ thông tin về thành phần dinh dưỡng, nguyên liệu và công thức.</p>
+                <a href="/food/create" class="btn btn-success">Tạo món ăn</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-body text-center">
+                <h5 class="card-title">Tạo món ăn với AI</h5>
+                <p class="card-text">Sử dụng AI để tự động tạo món ăn dựa trên mục tiêu dinh dưỡng và sở thích của bạn.</p>
+                <a href="/food/generate" class="btn btn-info">Tạo với AI</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-light">
+                <h5>Món ăn gợi ý hôm nay</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for i in range(3) %}
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">{{ suggested_foods[i].name if suggested_foods and i < suggested_foods|length else "Món ăn gợi ý " ~ (i+1) }}</h5>
+                                <p class="card-text">{{ suggested_foods[i].description if suggested_foods and i < suggested_foods|length else "Mô tả món ăn sẽ xuất hiện ở đây khi có dữ liệu." }}</p>
+                                <div class="nutrition-info">
+                                    <small class="text-muted">
+                                        {% if suggested_foods and i < suggested_foods|length and suggested_foods[i].nutrition %}
+                                            <strong>Dinh dưỡng:</strong> 
+                                            {{ suggested_foods[i].nutrition.calories }} kcal | 
+                                            Protein: {{ suggested_foods[i].nutrition.protein }}g | 
+                                            Chất béo: {{ suggested_foods[i].nutrition.fat }}g | 
+                                            Carbs: {{ suggested_foods[i].nutrition.carbs }}g
+                                        {% else %}
+                                            <strong>Dinh dưỡng:</strong> Chưa có thông tin
+                                        {% endif %}
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="card-footer">
+                                <a href="/food/{{ suggested_foods[i].id if suggested_foods and i < suggested_foods|length else '#' }}" class="btn btn-sm btn-outline-primary {% if not suggested_foods or i >= suggested_foods|length %}disabled{% endif %}">Xem chi tiết</a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

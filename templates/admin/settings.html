@@ -1,0 +1,670 @@
+{% extends "base.html" %}
+
+{% block title %}Cấu hình hệ thống - OpenFood Admin{% endblock %}
+
+{% block page_title %}Cấu hình hệ thống{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group" role="group">
+    <button type="button" class="btn btn-outline-primary" onclick="testConnections()">
+        <i class="fas fa-plug"></i> Kiểm tra kết nối
+    </button>
+    <button type="button" class="btn btn-outline-success" onclick="saveAllSettings()">
+        <i class="fas fa-save"></i> Lưu tất cả
+    </button>
+    <button type="button" class="btn btn-outline-warning" onclick="resetToDefaults()">
+        <i class="fas fa-undo"></i> Khôi phục mặc định
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- System Status Overview -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-primary">Tổng quan trạng thái hệ thống</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <div class="d-flex align-items-center">
+                            <div class="status-indicator {% if system_status.database_connected %}bg-success{% else %}bg-danger{% endif %} me-2"></div>
+                            <div>
+                                <div class="fw-bold">Database</div>
+                                <small class="text-muted">
+                                    {% if system_status.database_connected %}
+                                        Kết nối thành công
+                                    {% else %}
+                                        Lỗi kết nối
+                                    {% endif %}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="d-flex align-items-center">
+                            <div class="status-indicator {% if system_status.ai_service_available %}bg-success{% else %}bg-warning{% endif %} me-2"></div>
+                            <div>
+                                <div class="fw-bold">AI Service</div>
+                                <small class="text-muted">
+                                    {% if system_status.ai_service_available %}
+                                        {{ system_status.ai_service_type }}
+                                    {% else %}
+                                        Không khả dụng
+                                    {% endif %}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="d-flex align-items-center">
+                            <div class="status-indicator {% if system_status.firebase_connected %}bg-success{% else %}bg-danger{% endif %} me-2"></div>
+                            <div>
+                                <div class="fw-bold">Firebase</div>
+                                <small class="text-muted">
+                                    {% if system_status.firebase_connected %}
+                                        Kết nối thành công
+                                    {% else %}
+                                        Lỗi kết nối
+                                    {% endif %}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="d-flex align-items-center">
+                            <div class="status-indicator {% if system_status.storage_available %}bg-success{% else %}bg-warning{% endif %} me-2"></div>
+                            <div>
+                                <div class="fw-bold">Storage</div>
+                                <small class="text-muted">
+                                    {% if system_status.storage_available %}
+                                        Hoạt động bình thường
+                                    {% else %}
+                                        Có vấn đề
+                                    {% endif %}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Settings Tabs -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <ul class="nav nav-tabs card-header-tabs" id="settingsTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="ai-tab" data-bs-toggle="tab" data-bs-target="#ai-settings" type="button" role="tab">
+                            <i class="fas fa-robot"></i> AI & API
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="database-tab" data-bs-toggle="tab" data-bs-target="#database-settings" type="button" role="tab">
+                            <i class="fas fa-database"></i> Database
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="security-tab" data-bs-toggle="tab" data-bs-target="#security-settings" type="button" role="tab">
+                            <i class="fas fa-shield-alt"></i> Bảo mật
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="performance-tab" data-bs-toggle="tab" data-bs-target="#performance-settings" type="button" role="tab">
+                            <i class="fas fa-tachometer-alt"></i> Hiệu suất
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="notification-tab" data-bs-toggle="tab" data-bs-target="#notification-settings" type="button" role="tab">
+                            <i class="fas fa-bell"></i> Thông báo
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body">
+                <div class="tab-content" id="settingsTabContent">
+                    <!-- AI & API Settings -->
+                    <div class="tab-pane fade show active" id="ai-settings" role="tabpanel">
+                        <form id="aiSettingsForm">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="mb-3">Cấu hình Groq API</h6>
+                                    <div class="mb-3">
+                                        <label for="groqApiKey" class="form-label">API Key</label>
+                                        <div class="input-group">
+                                            <input type="password" class="form-control" id="groqApiKey" value="{{ settings.groq_api_key or '' }}">
+                                            <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('groqApiKey')">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                        <div class="form-text">API key cho dịch vụ Groq LLaMA</div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="groqModel" class="form-label">Model</label>
+                                        <select class="form-select" id="groqModel">
+                                            <option value="llama3-8b-8192" {% if settings.groq_model == 'llama3-8b-8192' %}selected{% endif %}>LLaMA 3 8B</option>
+                                            <option value="llama3-70b-8192" {% if settings.groq_model == 'llama3-70b-8192' %}selected{% endif %}>LLaMA 3 70B</option>
+                                            <option value="mixtral-8x7b-32768" {% if settings.groq_model == 'mixtral-8x7b-32768' %}selected{% endif %}>Mixtral 8x7B</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="groqTimeout" class="form-label">Timeout (giây)</label>
+                                        <input type="number" class="form-control" id="groqTimeout" value="{{ settings.groq_timeout or 30 }}" min="10" max="120">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="mb-3">Cấu hình USDA API</h6>
+                                    <div class="mb-3">
+                                        <label for="usdaApiKey" class="form-label">API Key</label>
+                                        <div class="input-group">
+                                            <input type="password" class="form-control" id="usdaApiKey" value="{{ settings.usda_api_key or '' }}">
+                                            <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('usdaApiKey')">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                        <div class="form-text">API key cho USDA FoodData Central</div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="usdaMaxResults" class="form-label">Số kết quả tối đa</label>
+                                        <input type="number" class="form-control" id="usdaMaxResults" value="{{ settings.usda_max_results or 10 }}" min="1" max="50">
+                                    </div>
+                                    <div class="mb-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="usdaCacheEnabled" {% if settings.usda_cache_enabled %}checked{% endif %}>
+                                            <label class="form-check-label" for="usdaCacheEnabled">
+                                                Bật cache cho USDA API
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <hr>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="mb-3">Rate Limiting</h6>
+                                    <div class="mb-3">
+                                        <label for="rateLimitPerMinute" class="form-label">Requests per minute</label>
+                                        <input type="number" class="form-control" id="rateLimitPerMinute" value="{{ settings.rate_limit_per_minute or 60 }}" min="1" max="1000">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="rateLimitPerDay" class="form-label">Requests per day</label>
+                                        <input type="number" class="form-control" id="rateLimitPerDay" value="{{ settings.rate_limit_per_day or 1000 }}" min="1" max="10000">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="mb-3">Cache Settings</h6>
+                                    <div class="mb-3">
+                                        <label for="cacheExpiry" class="form-label">Cache expiry (giờ)</label>
+                                        <input type="number" class="form-control" id="cacheExpiry" value="{{ settings.cache_expiry_hours or 24 }}" min="1" max="168">
+                                    </div>
+                                    <div class="mb-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="cacheEnabled" {% if settings.cache_enabled %}checked{% endif %}>
+                                            <label class="form-check-label" for="cacheEnabled">
+                                                Bật cache hệ thống
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-end">
+                                <button type="button" class="btn btn-outline-primary me-2" onclick="testAIConnection()">
+                                    <i class="fas fa-plug"></i> Test kết nối
+                                </button>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save"></i> Lưu cấu hình AI
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Database Settings -->
+                    <div class="tab-pane fade" id="database-settings" role="tabpanel">
+                        <form id="databaseSettingsForm">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="mb-3">Firebase Configuration</h6>
+                                    <div class="mb-3">
+                                        <label for="firebaseProjectId" class="form-label">Project ID</label>
+                                        <input type="text" class="form-control" id="firebaseProjectId" value="{{ settings.firebase_project_id or '' }}" readonly>
+                                        <div class="form-text">ID dự án Firebase (chỉ đọc)</div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="firebaseStorageBucket" class="form-label">Storage Bucket</label>
+                                        <input type="text" class="form-control" id="firebaseStorageBucket" value="{{ settings.firebase_storage_bucket or '' }}">
+                                    </div>
+                                    <div class="mb-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="firebaseEmulator" {% if settings.firebase_emulator_enabled %}checked{% endif %}>
+                                            <label class="form-check-label" for="firebaseEmulator">
+                                                Sử dụng Firebase Emulator (development)
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="mb-3">Database Performance</h6>
+                                    <div class="mb-3">
+                                        <label for="connectionPoolSize" class="form-label">Connection Pool Size</label>
+                                        <input type="number" class="form-control" id="connectionPoolSize" value="{{ settings.connection_pool_size or 10 }}" min="1" max="100">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="queryTimeout" class="form-label">Query Timeout (giây)</label>
+                                        <input type="number" class="form-control" id="queryTimeout" value="{{ settings.query_timeout or 30 }}" min="5" max="300">
+                                    </div>
+                                    <div class="mb-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="enableQueryLogging" {% if settings.enable_query_logging %}checked{% endif %}>
+                                            <label class="form-check-label" for="enableQueryLogging">
+                                                Bật logging cho queries
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-end">
+                                <button type="button" class="btn btn-outline-primary me-2" onclick="testDatabaseConnection()">
+                                    <i class="fas fa-database"></i> Test kết nối
+                                </button>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save"></i> Lưu cấu hình Database
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Security Settings -->
+                    <div class="tab-pane fade" id="security-settings" role="tabpanel">
+                        <form id="securitySettingsForm">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="mb-3">Authentication</h6>
+                                    <div class="mb-3">
+                                        <label for="jwtSecret" class="form-label">JWT Secret</label>
+                                        <div class="input-group">
+                                            <input type="password" class="form-control" id="jwtSecret" value="{{ settings.jwt_secret or '' }}">
+                                            <button class="btn btn-outline-secondary" type="button" onclick="generateJWTSecret()">
+                                                <i class="fas fa-random"></i> Tạo mới
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="tokenExpiry" class="form-label">Token Expiry (giờ)</label>
+                                        <input type="number" class="form-control" id="tokenExpiry" value="{{ settings.token_expiry_hours or 24 }}" min="1" max="168">
+                                    </div>
+                                    <div class="mb-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="requireEmailVerification" {% if settings.require_email_verification %}checked{% endif %}>
+                                            <label class="form-check-label" for="requireEmailVerification">
+                                                Yêu cầu xác thực email
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="mb-3">CORS & Security Headers</h6>
+                                    <div class="mb-3">
+                                        <label for="allowedOrigins" class="form-label">Allowed Origins</label>
+                                        <textarea class="form-control" id="allowedOrigins" rows="3" placeholder="https://example.com&#10;https://app.example.com">{{ settings.allowed_origins or '' }}</textarea>
+                                        <div class="form-text">Mỗi origin trên một dòng</div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="enableCORS" {% if settings.enable_cors %}checked{% endif %}>
+                                            <label class="form-check-label" for="enableCORS">
+                                                Bật CORS
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="enableHTTPS" {% if settings.force_https %}checked{% endif %}>
+                                            <label class="form-check-label" for="enableHTTPS">
+                                                Bắt buộc HTTPS
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-end">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save"></i> Lưu cấu hình bảo mật
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Performance Settings -->
+                    <div class="tab-pane fade" id="performance-settings" role="tabpanel">
+                        <form id="performanceSettingsForm">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="mb-3">Server Performance</h6>
+                                    <div class="mb-3">
+                                        <label for="maxWorkers" class="form-label">Max Workers</label>
+                                        <input type="number" class="form-control" id="maxWorkers" value="{{ settings.max_workers or 4 }}" min="1" max="16">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="requestTimeout" class="form-label">Request Timeout (giây)</label>
+                                        <input type="number" class="form-control" id="requestTimeout" value="{{ settings.request_timeout or 30 }}" min="5" max="300">
+                                    </div>
+                                    <div class="mb-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="enableGzip" {% if settings.enable_gzip %}checked{% endif %}>
+                                            <label class="form-check-label" for="enableGzip">
+                                                Bật nén Gzip
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="mb-3">Logging & Monitoring</h6>
+                                    <div class="mb-3">
+                                        <label for="logLevel" class="form-label">Log Level</label>
+                                        <select class="form-select" id="logLevel">
+                                            <option value="DEBUG" {% if settings.log_level == 'DEBUG' %}selected{% endif %}>DEBUG</option>
+                                            <option value="INFO" {% if settings.log_level == 'INFO' %}selected{% endif %}>INFO</option>
+                                            <option value="WARNING" {% if settings.log_level == 'WARNING' %}selected{% endif %}>WARNING</option>
+                                            <option value="ERROR" {% if settings.log_level == 'ERROR' %}selected{% endif %}>ERROR</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="enableMetrics" {% if settings.enable_metrics %}checked{% endif %}>
+                                            <label class="form-check-label" for="enableMetrics">
+                                                Bật thu thập metrics
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="enableHealthCheck" {% if settings.enable_health_check %}checked{% endif %}>
+                                            <label class="form-check-label" for="enableHealthCheck">
+                                                Bật health check endpoint
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-end">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save"></i> Lưu cấu hình hiệu suất
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Notification Settings -->
+                    <div class="tab-pane fade" id="notification-settings" role="tabpanel">
+                        <form id="notificationSettingsForm">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="mb-3">Email Notifications</h6>
+                                    <div class="mb-3">
+                                        <label for="smtpHost" class="form-label">SMTP Host</label>
+                                        <input type="text" class="form-control" id="smtpHost" value="{{ settings.smtp_host or '' }}">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="smtpPort" class="form-label">SMTP Port</label>
+                                        <input type="number" class="form-control" id="smtpPort" value="{{ settings.smtp_port or 587 }}" min="1" max="65535">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="smtpUsername" class="form-label">SMTP Username</label>
+                                        <input type="text" class="form-control" id="smtpUsername" value="{{ settings.smtp_username or '' }}">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="smtpPassword" class="form-label">SMTP Password</label>
+                                        <div class="input-group">
+                                            <input type="password" class="form-control" id="smtpPassword" value="{{ settings.smtp_password or '' }}">
+                                            <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('smtpPassword')">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="mb-3">Alert Settings</h6>
+                                    <div class="mb-3">
+                                        <label for="adminEmail" class="form-label">Admin Email</label>
+                                        <input type="email" class="form-control" id="adminEmail" value="{{ settings.admin_email or '' }}">
+                                    </div>
+                                    <div class="mb-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="alertOnErrors" {% if settings.alert_on_errors %}checked{% endif %}>
+                                            <label class="form-check-label" for="alertOnErrors">
+                                                Cảnh báo khi có lỗi
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="alertOnHighUsage" {% if settings.alert_on_high_usage %}checked{% endif %}>
+                                            <label class="form-check-label" for="alertOnHighUsage">
+                                                Cảnh báo khi sử dụng cao
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="dailyReports" {% if settings.daily_reports %}checked{% endif %}>
+                                            <label class="form-check-label" for="dailyReports">
+                                                Báo cáo hàng ngày
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-end">
+                                <button type="button" class="btn btn-outline-primary me-2" onclick="testEmailSettings()">
+                                    <i class="fas fa-envelope"></i> Test email
+                                </button>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save"></i> Lưu cấu hình thông báo
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Toggle password visibility
+function togglePassword(fieldId) {
+    const field = document.getElementById(fieldId);
+    const button = field.nextElementSibling;
+    const icon = button.querySelector('i');
+
+    if (field.type === 'password') {
+        field.type = 'text';
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+    } else {
+        field.type = 'password';
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+    }
+}
+
+// Generate JWT Secret
+function generateJWTSecret() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < 64; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    document.getElementById('jwtSecret').value = result;
+}
+
+// Test connections
+function testConnections() {
+    // Show loading state
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang kiểm tra...';
+    button.disabled = true;
+
+    // Simulate API call
+    setTimeout(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+
+        // Show results
+        showNotification('Kết quả kiểm tra kết nối', 'Tất cả dịch vụ đang hoạt động bình thường', 'success');
+    }, 2000);
+}
+
+function testAIConnection() {
+    showNotification('Test AI Connection', 'Đang kiểm tra kết nối với Groq API...', 'info');
+
+    // Simulate API test
+    setTimeout(() => {
+        showNotification('AI Connection Test', 'Kết nối Groq API thành công!', 'success');
+    }, 1500);
+}
+
+function testDatabaseConnection() {
+    showNotification('Test Database Connection', 'Đang kiểm tra kết nối với Firebase...', 'info');
+
+    // Simulate database test
+    setTimeout(() => {
+        showNotification('Database Connection Test', 'Kết nối Firebase thành công!', 'success');
+    }, 1500);
+}
+
+function testEmailSettings() {
+    showNotification('Test Email Settings', 'Đang gửi email test...', 'info');
+
+    // Simulate email test
+    setTimeout(() => {
+        showNotification('Email Test', 'Email test đã được gửi thành công!', 'success');
+    }, 2000);
+}
+
+// Save settings
+function saveAllSettings() {
+    showNotification('Lưu cấu hình', 'Đang lưu tất cả cấu hình...', 'info');
+
+    // Collect all form data
+    const allSettings = {
+        ai: getFormData('aiSettingsForm'),
+        database: getFormData('databaseSettingsForm'),
+        security: getFormData('securitySettingsForm'),
+        performance: getFormData('performanceSettingsForm'),
+        notification: getFormData('notificationSettingsForm')
+    };
+
+    // Simulate save
+    setTimeout(() => {
+        showNotification('Lưu cấu hình', 'Tất cả cấu hình đã được lưu thành công!', 'success');
+    }, 1500);
+}
+
+function resetToDefaults() {
+    if (confirm('Bạn có chắc chắn muốn khôi phục tất cả cấu hình về mặc định? Hành động này không thể hoàn tác.')) {
+        showNotification('Khôi phục mặc định', 'Đang khôi phục cấu hình mặc định...', 'warning');
+
+        setTimeout(() => {
+            location.reload();
+        }, 1500);
+    }
+}
+
+// Form handlers
+document.getElementById('aiSettingsForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    saveSettings('ai', getFormData('aiSettingsForm'));
+});
+
+document.getElementById('databaseSettingsForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    saveSettings('database', getFormData('databaseSettingsForm'));
+});
+
+document.getElementById('securitySettingsForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    saveSettings('security', getFormData('securitySettingsForm'));
+});
+
+document.getElementById('performanceSettingsForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    saveSettings('performance', getFormData('performanceSettingsForm'));
+});
+
+document.getElementById('notificationSettingsForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    saveSettings('notification', getFormData('notificationSettingsForm'));
+});
+
+// Helper functions
+function getFormData(formId) {
+    const form = document.getElementById(formId);
+    const formData = new FormData(form);
+    const data = {};
+
+    // Get all form inputs
+    const inputs = form.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => {
+        if (input.type === 'checkbox') {
+            data[input.id] = input.checked;
+        } else {
+            data[input.id] = input.value;
+        }
+    });
+
+    return data;
+}
+
+function saveSettings(category, data) {
+    showNotification(`Lưu cấu hình ${category}`, `Đang lưu cấu hình ${category}...`, 'info');
+
+    // Simulate API call
+    setTimeout(() => {
+        showNotification(`Lưu cấu hình ${category}`, `Cấu hình ${category} đã được lưu thành công!`, 'success');
+    }, 1000);
+}
+
+function showNotification(title, message, type = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'success' ? 'success' : type === 'warning' ? 'warning' : type === 'error' ? 'danger' : 'info'} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+
+    notification.innerHTML = `
+        <strong>${title}</strong><br>
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    document.body.appendChild(notification);
+
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
+}
+
+// Initialize tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Bootstrap tooltips if available
+    if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,617 @@
+{% extends "base.html" %}
+
+{% block title %}Quản lý Món ăn - Admin{% endblock %}
+
+{% block page_title %}Quản lý Món ăn{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group">
+    <button type="button" class="btn btn-outline-info" onclick="refreshData()">
+        <i class="fas fa-sync-alt mr-1"></i>
+        Làm mới
+    </button>
+    <button type="button" class="btn btn-outline-secondary" disabled title="Food records được tạo từ ứng dụng mobile">
+        <i class="fas fa-info-circle mr-1"></i>
+        Chỉ xem
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h3 class="card-title">
+                        <i class="fas fa-utensils mr-2"></i>
+                        Quản lý Món ăn
+                    </h3>
+                    <div class="card-tools">
+                        <span class="badge bg-info text-white">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Dữ liệu từ Firebase
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    <!-- Search Form -->
+                    <form method="GET" class="mb-3">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="input-group">
+                                    <input type="text" class="form-control" name="search" 
+                                           placeholder="Tìm kiếm món ăn..." value="{{ search }}">
+                                    <div class="input-group-append">
+                                        <button class="btn btn-outline-secondary" type="submit">
+                                            <i class="fas fa-search"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="text-right">
+                                    <span class="text-muted">
+                                        Tổng cộng: <strong>{{ total_foods }}</strong> món ăn
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+
+                    {% if error %}
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        {{ error }}
+                    </div>
+                    {% endif %}
+
+                    <!-- Foods Table -->
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Mô tả món ăn</th>
+                                    <th>Loại bữa ăn</th>
+                                    <th>Calories</th>
+                                    <th>Protein (g)</th>
+                                    <th>Fat (g)</th>
+                                    <th>Carbs (g)</th>
+                                    <th>Người dùng</th>
+                                    <th>Ngày tạo</th>
+                                    <th>Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if foods %}
+                                    {% for food in foods %}
+                                    <tr>
+                                        <td>
+                                            <small class="text-monospace">{{ food.get('id', 'N/A')[:8] }}...</small>
+                                        </td>
+                                        <td>
+                                            <strong>{{ food.get('description', 'Không có mô tả')[:60] }}</strong>
+                                            {% if food.get('description', '')|length > 60 %}...{% endif %}
+                                            {% if food.get('items') and food.get('items')|length > 0 %}
+                                                <br><small class="text-muted">{{ food.get('items')|length }} món ăn</small>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-secondary text-white">
+                                                {{ food.get('mealType', 'Không rõ') }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-info text-white">
+                                                {{ food.get('nutrition', {}).get('calories', 0) }}
+                                            </span>
+                                        </td>
+                                        <td>{{ food.get('nutrition', {}).get('protein', 0)|round(1) }}</td>
+                                        <td>{{ food.get('nutrition', {}).get('fat', 0)|round(1) }}</td>
+                                        <td>{{ food.get('nutrition', {}).get('carbs', 0)|round(1) }}</td>
+                                        <td>
+                                            <small class="text-muted">
+                                                {{ food.get('user_id', 'N/A')[:8] }}...
+                                            </small>
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">
+                                                {{ food.get('date', food.get('created_at', 'Không rõ'))[:10] }}
+                                            </small>
+                                        </td>
+                                        <td>
+                                            <div class="btn-group" role="group">
+                                                <button type="button" class="btn btn-sm btn-info"
+                                                        onclick="viewFood('{{ food.get('id', '') }}')"
+                                                        title="Xem chi tiết">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-warning"
+                                                        onclick="editFood('{{ food.get('id', '') }}')"
+                                                        title="Chỉnh sửa">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-danger"
+                                                        onclick="deleteFood('{{ food.get('id', '') }}')"
+                                                        title="Xóa">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="10" class="text-center text-muted">
+                                            <i class="fas fa-utensils fa-3x mb-3"></i>
+                                            <br>
+                                            {% if search %}
+                                                Không tìm thấy food record nào với từ khóa "{{ search }}"
+                                            {% else %}
+                                                Chưa có food record nào
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    {% if total_pages > 1 %}
+                    <nav aria-label="Foods pagination">
+                        <ul class="pagination justify-content-center">
+                            {% if has_prev %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ current_page - 1 }}{% if search %}&search={{ search }}{% endif %}">
+                                        <i class="fas fa-chevron-left"></i>
+                                    </a>
+                                </li>
+                            {% endif %}
+                            
+                            {% for page_num in range(1, total_pages + 1) %}
+                                {% if page_num == current_page %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ page_num }}</span>
+                                    </li>
+                                {% elif page_num <= 3 or page_num > total_pages - 3 or (page_num >= current_page - 1 and page_num <= current_page + 1) %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_num }}{% if search %}&search={{ search }}{% endif %}">
+                                            {{ page_num }}
+                                        </a>
+                                    </li>
+                                {% elif page_num == 4 and current_page > 6 %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link">...</span>
+                                    </li>
+                                {% elif page_num == total_pages - 3 and current_page < total_pages - 5 %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link">...</span>
+                                    </li>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ current_page + 1 }}{% if search %}&search={{ search }}{% endif %}">
+                                        <i class="fas fa-chevron-right"></i>
+                                    </a>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Food Modal -->
+<div class="modal fade" id="addFoodModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-plus mr-2"></i>
+                    Thêm món ăn mới
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="addFoodForm">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="foodName">Tên món ăn *</label>
+                                <input type="text" class="form-control" id="foodName" name="name" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="foodCategory">Danh mục</label>
+                                <select class="form-control" id="foodCategory" name="category">
+                                    <option value="">Chọn danh mục</option>
+                                    <option value="breakfast">Bữa sáng</option>
+                                    <option value="lunch">Bữa trưa</option>
+                                    <option value="dinner">Bữa tối</option>
+                                    <option value="snack">Đồ ăn vặt</option>
+                                    <option value="drink">Đồ uống</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="foodDescription">Mô tả</label>
+                        <textarea class="form-control" id="foodDescription" name="description" rows="3"></textarea>
+                    </div>
+                    
+                    <h6 class="mt-4 mb-3">
+                        <i class="fas fa-chart-bar mr-2"></i>
+                        Thông tin dinh dưỡng
+                    </h6>
+                    
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="foodCalories">Calories *</label>
+                                <input type="number" class="form-control" id="foodCalories" name="calories" min="0" required>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="foodProtein">Protein (g) *</label>
+                                <input type="number" class="form-control" id="foodProtein" name="protein" min="0" step="0.1" required>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="foodFat">Fat (g) *</label>
+                                <input type="number" class="form-control" id="foodFat" name="fat" min="0" step="0.1" required>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="foodCarbs">Carbs (g) *</label>
+                                <input type="number" class="form-control" id="foodCarbs" name="carbs" min="0" step="0.1" required>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save mr-1"></i>
+                        Lưu món ăn
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- View Food Modal -->
+<div class="modal fade" id="viewFoodModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-eye mr-2"></i>
+                    Chi tiết món ăn
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="viewFoodContent">
+                <!-- Content will be loaded here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Food Modal -->
+<div class="modal fade" id="editFoodModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit mr-2"></i>
+                    Chỉnh sửa món ăn
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="editFoodForm">
+                <div class="modal-body" id="editFoodContent">
+                    <!-- Content will be loaded here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-save mr-1"></i>
+                        Cập nhật
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Refresh data function
+function refreshData() {
+    location.reload();
+}
+
+// Food management functions
+function viewFood(foodId) {
+    console.log('Loading food details for ID:', foodId);
+
+    // Load food details
+    fetch(`/admin/api/foods/${foodId}`)
+        .then(response => {
+            console.log('Response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('API response:', data);
+
+            if (data.success) {
+                const food = data.food;
+                console.log('Food data:', food);
+
+                // Tạo danh sách món ăn từ items
+                let itemsList = '';
+                if (food.items && food.items.length > 0) {
+                    itemsList = '<h6>Danh sách món ăn:</h6><ul>';
+                    food.items.forEach(item => {
+                        itemsList += `<li><strong>${item.name || 'Không rõ'}</strong> - ${item.calories || 0} kcal`;
+                        if (item.portionSize) itemsList += ` (${item.portionSize})`;
+                        itemsList += '</li>';
+                    });
+                    itemsList += '</ul>';
+                }
+
+                document.getElementById('viewFoodContent').innerHTML = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Thông tin cơ bản</h6>
+                            <p><strong>Mô tả:</strong> ${food.description || 'Không có mô tả'}</p>
+                            <p><strong>Loại bữa ăn:</strong> ${food.mealType || 'N/A'}</p>
+                            <p><strong>Người dùng:</strong> ${food.user_id || 'N/A'}</p>
+                            <p><strong>Ngày:</strong> ${food.date || 'N/A'}</p>
+                            ${food.imageUrl ? `<p><strong>Hình ảnh:</strong> <a href="${food.imageUrl}" target="_blank">Xem ảnh</a></p>` : ''}
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Thông tin dinh dưỡng tổng</h6>
+                            <p><strong>Calories:</strong> ${food.nutrition && food.nutrition.calories ? food.nutrition.calories : 0}</p>
+                            <p><strong>Protein:</strong> ${food.nutrition && food.nutrition.protein ? food.nutrition.protein.toFixed(1) : 0}g</p>
+                            <p><strong>Fat:</strong> ${food.nutrition && food.nutrition.fat ? food.nutrition.fat.toFixed(1) : 0}g</p>
+                            <p><strong>Carbs:</strong> ${food.nutrition && food.nutrition.carbs ? food.nutrition.carbs.toFixed(1) : 0}g</p>
+                            <p><strong>Fiber:</strong> ${food.nutrition && food.nutrition.fiber ? food.nutrition.fiber.toFixed(1) : 0}g</p>
+                            <p><strong>Sodium:</strong> ${food.nutrition && food.nutrition.sodium ? food.nutrition.sodium.toFixed(1) : 0}mg</p>
+                        </div>
+                    </div>
+                    ${itemsList}
+                    <hr>
+                    <p><strong>Ngày tạo:</strong> ${food.created_at || 'N/A'}</p>
+                `;
+                // Show modal using Bootstrap 5
+                const modal = new bootstrap.Modal(document.getElementById('viewFoodModal'));
+                modal.show();
+            } else {
+                console.error('API returned error:', data.message);
+                alert('Không thể tải thông tin món ăn: ' + (data.message || 'Lỗi không xác định'));
+            }
+        })
+        .catch(error => {
+            console.error('Fetch error:', error);
+            alert('Có lỗi xảy ra khi tải thông tin món ăn: ' + error.message);
+        });
+}
+
+function editFood(foodId) {
+    console.log('Loading food for editing, ID:', foodId);
+
+    // Load food for editing
+    fetch(`/admin/api/foods/${foodId}`)
+        .then(response => {
+            console.log('Edit response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Edit API response:', data);
+
+            if (data.success) {
+                const food = data.food;
+                console.log('Food data for editing:', food);
+
+                document.getElementById('editFoodContent').innerHTML = `
+                    <input type="hidden" name="food_id" value="${food.id}">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Mô tả món ăn *</label>
+                                <input type="text" class="form-control" name="name" value="${food.description || food.name || ''}" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Loại bữa ăn</label>
+                                <select class="form-control" name="category">
+                                    <option value="">Chọn loại bữa ăn</option>
+                                    <option value="Bữa sáng" ${food.mealType === 'Bữa sáng' ? 'selected' : ''}>Bữa sáng</option>
+                                    <option value="Bữa trưa" ${food.mealType === 'Bữa trưa' ? 'selected' : ''}>Bữa trưa</option>
+                                    <option value="Bữa tối" ${food.mealType === 'Bữa tối' ? 'selected' : ''}>Bữa tối</option>
+                                    <option value="Đồ ăn vặt" ${food.mealType === 'Đồ ăn vặt' ? 'selected' : ''}>Đồ ăn vặt</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Mô tả chi tiết</label>
+                        <textarea class="form-control" name="description" rows="3">${food.description || ''}</textarea>
+                    </div>
+
+                    <h6 class="mt-4 mb-3">Thông tin dinh dưỡng</h6>
+
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label>Calories *</label>
+                                <input type="number" class="form-control" name="calories" value="${food.nutrition && food.nutrition.calories ? food.nutrition.calories : 0}" min="0" required>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label>Protein (g) *</label>
+                                <input type="number" class="form-control" name="protein" value="${food.nutrition && food.nutrition.protein ? food.nutrition.protein : 0}" min="0" step="0.1" required>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label>Fat (g) *</label>
+                                <input type="number" class="form-control" name="fat" value="${food.nutrition && food.nutrition.fat ? food.nutrition.fat : 0}" min="0" step="0.1" required>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label>Carbs (g) *</label>
+                                <input type="number" class="form-control" name="carbs" value="${food.nutrition && food.nutrition.carbs ? food.nutrition.carbs : 0}" min="0" step="0.1" required>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                // Show modal using Bootstrap 5
+                const modal = new bootstrap.Modal(document.getElementById('editFoodModal'));
+                modal.show();
+            } else {
+                console.error('Edit API returned error:', data.message);
+                alert('Không thể tải thông tin món ăn: ' + (data.message || 'Lỗi không xác định'));
+            }
+        })
+        .catch(error => {
+            console.error('Edit fetch error:', error);
+            alert('Có lỗi xảy ra khi tải thông tin món ăn: ' + error.message);
+        });
+}
+
+function deleteFood(foodId) {
+    if (confirm(`Bạn có chắc chắn muốn xóa món ăn này?`)) {
+        fetch(`/admin/api/foods/${foodId}`, {
+            method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Xóa món ăn thành công');
+                location.reload();
+            } else {
+                alert('Không thể xóa món ăn: ' + (data.message || 'Lỗi không xác định'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Có lỗi xảy ra khi xóa món ăn');
+        });
+    }
+}
+
+// Form submissions
+document.getElementById('addFoodForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const foodData = {
+        name: formData.get('name'),
+        category: formData.get('category'),
+        description: formData.get('description'),
+        nutrition: {
+            calories: parseFloat(formData.get('calories')),
+            protein: parseFloat(formData.get('protein')),
+            fat: parseFloat(formData.get('fat')),
+            carbs: parseFloat(formData.get('carbs'))
+        }
+    };
+    
+    fetch('/admin/api/foods', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(foodData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Thêm món ăn thành công');
+            // Hide modal using Bootstrap 5
+            const modal = bootstrap.Modal.getInstance(document.getElementById('addFoodModal'));
+            if (modal) modal.hide();
+            location.reload();
+        } else {
+            alert('Không thể thêm món ăn: ' + (data.message || 'Lỗi không xác định'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Có lỗi xảy ra khi thêm món ăn');
+    });
+});
+
+document.getElementById('editFoodForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const foodId = formData.get('food_id');
+    const foodData = {
+        name: formData.get('name'),
+        category: formData.get('category'),
+        description: formData.get('description'),
+        nutrition: {
+            calories: parseFloat(formData.get('calories')),
+            protein: parseFloat(formData.get('protein')),
+            fat: parseFloat(formData.get('fat')),
+            carbs: parseFloat(formData.get('carbs'))
+        }
+    };
+    
+    fetch(`/admin/api/foods/${foodId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(foodData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Cập nhật món ăn thành công');
+            // Hide modal using Bootstrap 5
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editFoodModal'));
+            if (modal) modal.hide();
+            location.reload();
+        } else {
+            alert('Không thể cập nhật món ăn: ' + (data.message || 'Lỗi không xác định'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Có lỗi xảy ra khi cập nhật món ăn');
+    });
+});
+</script>
+{% endblock %}

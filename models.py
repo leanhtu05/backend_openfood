@@ -197,3 +197,92 @@ class FoodLogEntry(BaseModel):
     timestamp: str = Field(..., description="Thời gian nhận diện")
     date: str = Field(..., description="Ngày ghi nhận (YYYY-MM-DD)")
     total_nutrition: NutritionInfo = Field(..., description="Tổng dinh dưỡng của bữa ăn")
+
+# AI Price Analysis Models
+class PriceTrendAnalysisRequest(BaseModel):
+    """Request model cho phân tích xu hướng giá"""
+    category: Optional[str] = Field(None, description="Danh mục thực phẩm cần phân tích")
+    days_back: int = Field(30, description="Số ngày quay lại để phân tích", ge=1, le=365)
+
+class PricePredictionRequest(BaseModel):
+    """Request model cho dự đoán giá"""
+    food_name: str = Field(..., description="Tên thực phẩm cần dự đoán")
+    days_ahead: int = Field(7, description="Số ngày dự đoán trước", ge=1, le=30)
+
+class GroceryOptimizationRequest(BaseModel):
+    """Request model cho tối ưu hóa grocery list"""
+    grocery_items: List[Dict[str, Any]] = Field(..., description="Danh sách grocery items")
+    budget_limit: Optional[float] = Field(None, description="Giới hạn ngân sách")
+
+class SeasonalAnalysisRequest(BaseModel):
+    """Request model cho phân tích mùa vụ"""
+    category: Optional[str] = Field(None, description="Danh mục thực phẩm")
+    current_month: Optional[int] = Field(None, description="Tháng hiện tại (1-12)")
+
+class MarketInsightsRequest(BaseModel):
+    """Request model cho market insights"""
+    region: Optional[str] = Field(None, description="Khu vực địa lý")
+    include_trends: bool = Field(True, description="Bao gồm phân tích xu hướng")
+
+# AI Response Models
+class AIInsight(BaseModel):
+    """Model cho một insight từ AI"""
+    title: str = Field(..., description="Tiêu đề insight")
+    description: str = Field(..., description="Mô tả chi tiết")
+    confidence: float = Field(..., description="Độ tin cậy (0-1)", ge=0, le=1)
+    category: str = Field(..., description="Danh mục insight")
+
+class PriceTrendAnalysisResponse(BaseModel):
+    """Response model cho phân tích xu hướng giá"""
+    analysis_date: str = Field(..., description="Ngày phân tích")
+    category: str = Field(..., description="Danh mục được phân tích")
+    period_days: int = Field(..., description="Số ngày phân tích")
+    trend: str = Field(..., description="Xu hướng chung (increasing/decreasing/stable)")
+    insights: List[AIInsight] = Field(..., description="Danh sách insights")
+    recommendations: List[str] = Field(..., description="Khuyến nghị")
+    price_alerts: List[Dict[str, Any]] = Field(..., description="Cảnh báo giá")
+
+class PricePredictionResponse(BaseModel):
+    """Response model cho dự đoán giá"""
+    food_name: str = Field(..., description="Tên thực phẩm")
+    current_price: float = Field(..., description="Giá hiện tại")
+    predicted_price: float = Field(..., description="Giá dự đoán")
+    prediction_days: int = Field(..., description="Số ngày dự đoán")
+    confidence: float = Field(..., description="Độ tin cậy (0-100)", ge=0, le=100)
+    trend: str = Field(..., description="Xu hướng (increasing/decreasing/stable)")
+    factors: List[str] = Field(..., description="Yếu tố ảnh hưởng")
+    recommendation: str = Field(..., description="Khuyến nghị")
+    price_range: Dict[str, float] = Field(..., description="Khoảng giá dự kiến")
+    generated_at: str = Field(..., description="Thời gian tạo dự đoán")
+
+class GroceryOptimizationResponse(BaseModel):
+    """Response model cho tối ưu hóa grocery"""
+    total_items: int = Field(..., description="Tổng số mặt hàng")
+    optimization_suggestions: List[str] = Field(..., description="Gợi ý tối ưu hóa")
+    substitution_recommendations: Dict[str, str] = Field(..., description="Gợi ý thay thế")
+    timing_advice: str = Field(..., description="Lời khuyên về thời điểm mua")
+    budget_optimization: str = Field(..., description="Tối ưu ngân sách")
+    health_insights: str = Field(..., description="Insights về dinh dưỡng")
+    sustainability_tips: str = Field(..., description="Tips bền vững")
+    generated_at: str = Field(..., description="Thời gian tạo")
+
+class SeasonalAnalysisResponse(BaseModel):
+    """Response model cho phân tích mùa vụ"""
+    current_season: str = Field(..., description="Mùa hiện tại")
+    seasonal_foods: List[str] = Field(..., description="Thực phẩm theo mùa")
+    price_predictions: Dict[str, str] = Field(..., description="Dự đoán giá theo mùa")
+    buying_recommendations: List[str] = Field(..., description="Khuyến nghị mua")
+    avoid_buying: List[str] = Field(..., description="Nên tránh mua")
+    best_deals: List[str] = Field(..., description="Deals tốt nhất")
+    analysis_date: str = Field(..., description="Ngày phân tích")
+
+class MarketInsightsResponse(BaseModel):
+    """Response model cho market insights"""
+    market_overview: str = Field(..., description="Tổng quan thị trường")
+    trending_foods: List[str] = Field(..., description="Thực phẩm trending")
+    price_volatility: Dict[str, List[str]] = Field(..., description="Biến động giá")
+    regional_differences: str = Field(..., description="Khác biệt theo vùng")
+    consumer_behavior: str = Field(..., description="Hành vi người tiêu dùng")
+    economic_factors: str = Field(..., description="Yếu tố kinh tế")
+    recommendations: List[str] = Field(..., description="Khuyến nghị")
+    generated_at: str = Field(..., description="Thời gian tạo")

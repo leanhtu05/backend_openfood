@@ -9,6 +9,7 @@ FALLBACK_MEALS = {
     "bữa sáng": [
         {
             "name": "Bánh mì trứng và rau",
+            "description": "Bánh mì sandwich với trứng chiên và rau tươi, bữa sáng bổ dưỡng và ngon miệng",
             "ingredients": [
                 {"name": "Bánh mì", "amount": "2 lát"},
                 {"name": "Trứng gà", "amount": "2 quả"},
@@ -18,13 +19,21 @@ FALLBACK_MEALS = {
                 {"name": "Muối", "amount": "1/4 muỗng cà phê"},
                 {"name": "Tiêu", "amount": "1 nhúm"}
             ],
-            "preparation": "Đập trứng vào tô, đánh đều. Cho dầu vào chảo, đổ trứng vào và chiên đến khi chín. Cắt cà chua thành lát mỏng. Xếp trứng, rau xà lách và cà chua vào bánh mì. Rắc muối và tiêu lên trên.",
+            "preparation": [
+                "Đập trứng vào tô, đánh đều với muối và tiêu",
+                "Cho dầu oliu vào chảo, đổ trứng vào và chiên đến khi chín vàng",
+                "Cắt cà chua thành lát mỏng, rửa sạch rau xà lách",
+                "Xếp trứng, rau xà lách và cà chua vào bánh mì",
+                "Trình bày đẹp mắt và thưởng thức"
+            ],
             "nutrition": {
                 "calories": 350,
                 "protein": 18,
                 "fat": 20,
                 "carbs": 28
-            }
+            },
+            "preparation_time": "10 phút",
+            "health_benefits": "Giàu protein từ trứng giúp xây dựng cơ bắp. Rau xà lách và cà chua cung cấp vitamin C và chất xơ tốt cho tiêu hóa. Bánh mì cung cấp carbohydrate cho năng lượng buổi sáng."
         },
         {
             "name": "Cháo yến mạch với trái cây",

@@ -1,0 +1,476 @@
+{% extends "base.html" %}
+
+{% block title %}Quản lý kế hoạch bữa ăn - OpenFood Admin{% endblock %}
+
+{% block page_title %}Quản lý kế hoạch bữa ăn{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group" role="group">
+    <button type="button" class="btn btn-outline-primary" onclick="refreshMealPlans()">
+        <i class="fas fa-sync-alt"></i> Làm mới
+    </button>
+    <button type="button" class="btn btn-outline-success" onclick="exportMealPlans()">
+        <i class="fas fa-download"></i> Xuất danh sách
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Filter -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <form method="GET" class="d-flex">
+            <input type="text" class="form-control me-2" name="user_id" placeholder="Lọc theo User ID..." value="{{ user_id }}">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-filter"></i> Lọc
+            </button>
+            {% if user_id %}
+            <a href="/admin/meal-plans" class="btn btn-outline-secondary ms-2">
+                <i class="fas fa-times"></i> Xóa bộ lọc
+            </a>
+            {% endif %}
+        </form>
+    </div>
+    <div class="col-md-4 text-end">
+        <div class="text-muted">
+            Tổng cộng: <strong>{{ total_plans }}</strong> kế hoạch
+        </div>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger" role="alert">
+    <i class="fas fa-exclamation-triangle"></i> {{ error }}
+</div>
+{% endif %}
+
+<!-- Meal Plans Table -->
+<div class="card">
+    <div class="card-header">
+        <h6 class="m-0 font-weight-bold text-primary">Danh sách kế hoạch bữa ăn</h6>
+    </div>
+    <div class="card-body">
+        {% if meal_plans %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>ID</th>
+                        <th>Người dùng</th>
+                        <th>Thời gian</th>
+                        <th>Mục tiêu dinh dưỡng</th>
+                        <th>Số ngày</th>
+                        <th>Trạng thái</th>
+                        <th>Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for plan in meal_plans %}
+                    <tr>
+                        <td>
+                            <code>{{ plan.id[:8] }}...</code>
+                        </td>
+                        <td>
+                            <div>
+                                <strong>{{ plan.user_id[:8] }}...</strong>
+                            </div>
+                            <small class="text-muted">{{ plan.user_email or 'Không rõ' }}</small>
+                        </td>
+                        <td>
+                            <div>
+                                <strong>{{ plan.start_date or 'Không rõ' }}</strong>
+                            </div>
+                            <small class="text-muted">đến {{ plan.end_date or 'Không rõ' }}</small>
+                        </td>
+                        <td>
+                            {% if plan.nutrition_goals %}
+                            <div class="nutrition-summary">
+                                <small>
+                                    <i class="fas fa-fire text-danger"></i> {{ plan.nutrition_goals.calories or 0 }} kcal<br>
+                                    <i class="fas fa-drumstick-bite text-warning"></i> {{ plan.nutrition_goals.protein or 0 }}g protein<br>
+                                    <i class="fas fa-bread-slice text-info"></i> {{ plan.nutrition_goals.carbs or 0 }}g carbs
+                                </small>
+                            </div>
+                            {% else %}
+                            <small class="text-muted">Chưa có mục tiêu</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-info">{{ plan.days|length if plan.days else 0 }} ngày</span>
+                        </td>
+                        <td>
+                            {% if plan.is_active %}
+                            <span class="badge bg-success">Đang sử dụng</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Không hoạt động</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-outline-primary" onclick="viewMealPlan('{{ plan.id }}')">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-info" onclick="editMealPlan('{{ plan.id }}')">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-danger" onclick="deleteMealPlan('{{ plan.id }}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if total_pages > 1 %}
+        <nav aria-label="Meal plan pagination">
+            <ul class="pagination justify-content-center">
+                {% if has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ current_page - 1 }}{% if user_id %}&user_id={{ user_id }}{% endif %}">Trước</a>
+                </li>
+                {% endif %}
+                
+                {% for page_num in range(1, total_pages + 1) %}
+                {% if page_num == current_page %}
+                <li class="page-item active">
+                    <span class="page-link">{{ page_num }}</span>
+                </li>
+                {% elif page_num <= 3 or page_num > total_pages - 3 or (page_num >= current_page - 1 and page_num <= current_page + 1) %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_num }}{% if user_id %}&user_id={{ user_id }}{% endif %}">{{ page_num }}</a>
+                </li>
+                {% elif page_num == 4 or page_num == total_pages - 3 %}
+                <li class="page-item disabled">
+                    <span class="page-link">...</span>
+                </li>
+                {% endif %}
+                {% endfor %}
+                
+                {% if has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ current_page + 1 }}{% if user_id %}&user_id={{ user_id }}{% endif %}">Sau</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-calendar-alt fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">Không có kế hoạch bữa ăn nào</h5>
+            <p class="text-muted">
+                {% if user_id %}
+                Không tìm thấy kế hoạch nào cho User ID "{{ user_id }}"
+                {% else %}
+                Hệ thống chưa có kế hoạch bữa ăn nào
+                {% endif %}
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Meal Plan Detail Modal -->
+<div class="modal fade" id="mealPlanDetailModal" tabindex="-1" aria-labelledby="mealPlanDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="mealPlanDetailModalLabel">Chi tiết kế hoạch bữa ăn</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="mealPlanDetailContent">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Đang tải...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.nutrition-summary {
+    font-size: 0.85rem;
+}
+.meal-day-card {
+    border-left: 4px solid #007bff;
+}
+.meal-item {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 8px;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function refreshMealPlans() {
+    location.reload();
+}
+
+function exportMealPlans() {
+    // Implement export functionality
+    alert('Tính năng xuất danh sách kế hoạch bữa ăn sẽ được triển khai sau');
+}
+
+function viewMealPlan(planId) {
+    // Show meal plan detail modal
+    const modal = new bootstrap.Modal(document.getElementById('mealPlanDetailModal'));
+    const content = document.getElementById('mealPlanDetailContent');
+    
+    // Show loading
+    content.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Đang tải...</span>
+            </div>
+        </div>
+    `;
+    
+    modal.show();
+    
+    // Load meal plan details (implement API call)
+    setTimeout(() => {
+        content.innerHTML = `
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <h6>Thông tin kế hoạch</h6>
+                    <p><strong>ID:</strong> ${planId}</p>
+                    <p><strong>Thời gian:</strong> 01/01/2024 - 07/01/2024</p>
+                    <p><strong>Trạng thái:</strong> <span class="badge bg-success">Đang sử dụng</span></p>
+                </div>
+                <div class="col-md-6">
+                    <h6>Mục tiêu dinh dưỡng</h6>
+                    <p><strong>Calories:</strong> 2000 kcal/ngày</p>
+                    <p><strong>Protein:</strong> 150g/ngày</p>
+                    <p><strong>Carbs:</strong> 250g/ngày</p>
+                </div>
+            </div>
+            <hr>
+            <h6>Chi tiết các ngày</h6>
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="card meal-day-card">
+                        <div class="card-header">
+                            <strong>Thứ 2</strong>
+                        </div>
+                        <div class="card-body">
+                            <div class="meal-item">
+                                <strong>Bữa sáng:</strong> Phở bò
+                            </div>
+                            <div class="meal-item">
+                                <strong>Bữa trưa:</strong> Cơm gà
+                            </div>
+                            <div class="meal-item">
+                                <strong>Bữa tối:</strong> Bún bò Huế
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Add more days as needed -->
+            </div>
+        `;
+    }, 1000);
+}
+
+function editMealPlan(planId) {
+    console.log('Loading meal plan for editing, ID:', planId);
+
+    // Load meal plan for editing
+    fetch(`/admin/api/meal-plans/${planId}`)
+        .then(response => {
+            console.log('Edit response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Edit API response:', data);
+
+            if (data.success) {
+                const plan = data.meal_plan;
+                console.log('Meal plan data for editing:', plan);
+
+                document.getElementById('editMealPlanContent').innerHTML = `
+                    <input type="hidden" name="plan_id" value="${plan.id}">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label>Tên kế hoạch *</label>
+                                <input type="text" class="form-control" name="name" value="${plan.name || ''}" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label>Người dùng</label>
+                                <input type="text" class="form-control" name="user_id" value="${plan.user_id || ''}" readonly>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label>Ngày bắt đầu</label>
+                                <input type="date" class="form-control" name="start_date" value="${plan.start_date || ''}">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label>Ngày kết thúc</label>
+                                <input type="date" class="form-control" name="end_date" value="${plan.end_date || ''}">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label>Mô tả</label>
+                        <textarea class="form-control" name="description" rows="3">${plan.description || ''}</textarea>
+                    </div>
+
+                    <h6 class="mt-4 mb-3">Mục tiêu dinh dưỡng hàng ngày</h6>
+
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="form-group mb-3">
+                                <label>Calories mục tiêu</label>
+                                <input type="number" class="form-control" name="target_calories" value="${plan.target_calories || 2000}" min="0">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group mb-3">
+                                <label>Protein (g)</label>
+                                <input type="number" class="form-control" name="target_protein" value="${plan.target_protein || 150}" min="0" step="0.1">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group mb-3">
+                                <label>Fat (g)</label>
+                                <input type="number" class="form-control" name="target_fat" value="${plan.target_fat || 65}" min="0" step="0.1">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group mb-3">
+                                <label>Carbs (g)</label>
+                                <input type="number" class="form-control" name="target_carbs" value="${plan.target_carbs || 250}" min="0" step="0.1">
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // Show modal using Bootstrap 5
+                const modal = new bootstrap.Modal(document.getElementById('editMealPlanModal'));
+                modal.show();
+            } else {
+                console.error('Edit API returned error:', data.message);
+                alert('Không thể tải thông tin kế hoạch bữa ăn: ' + (data.message || 'Lỗi không xác định'));
+            }
+        })
+        .catch(error => {
+            console.error('Edit fetch error:', error);
+            alert('Có lỗi xảy ra khi tải thông tin kế hoạch bữa ăn: ' + error.message);
+        });
+}
+
+function updateMealPlan() {
+    const form = document.getElementById('editMealPlanContent');
+    const formData = new FormData();
+
+    // Collect form data
+    const inputs = form.querySelectorAll('input, textarea, select');
+    inputs.forEach(input => {
+        if (input.name) {
+            formData.append(input.name, input.value);
+        }
+    });
+
+    const planId = formData.get('plan_id');
+
+    // Prepare data object
+    const updateData = {
+        name: formData.get('name'),
+        description: formData.get('description'),
+        start_date: formData.get('start_date'),
+        end_date: formData.get('end_date'),
+        target_calories: parseFloat(formData.get('target_calories')),
+        target_protein: parseFloat(formData.get('target_protein')),
+        target_fat: parseFloat(formData.get('target_fat')),
+        target_carbs: parseFloat(formData.get('target_carbs'))
+    };
+
+    fetch(`/admin/api/meal-plans/${planId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Cập nhật kế hoạch bữa ăn thành công');
+            // Hide modal using Bootstrap 5
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editMealPlanModal'));
+            if (modal) modal.hide();
+            location.reload();
+        } else {
+            alert('Lỗi: ' + (data.message || 'Không thể cập nhật kế hoạch bữa ăn'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Có lỗi xảy ra khi cập nhật kế hoạch bữa ăn');
+    });
+}
+
+function deleteMealPlan(planId) {
+    if (confirm('Bạn có chắc chắn muốn xóa kế hoạch bữa ăn này?')) {
+        fetch(`/admin/api/meal-plans/${planId}`, {
+            method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Xóa kế hoạch bữa ăn thành công');
+                location.reload();
+            } else {
+                alert('Lỗi: ' + (data.message || 'Không thể xóa kế hoạch bữa ăn'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Có lỗi xảy ra khi xóa kế hoạch bữa ăn');
+        });
+    }
+}
+</script>
+{% endblock %}
+
+<!-- Edit Meal Plan Modal -->
+<div class="modal fade" id="editMealPlanModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Chỉnh sửa kế hoạch bữa ăn</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="editMealPlanContent">
+                <!-- Content will be loaded here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                <button type="button" class="btn btn-primary" onclick="updateMealPlan()">Cập nhật</button>
+            </div>
+        </div>
+    </div>
+</div>

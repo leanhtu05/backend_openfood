@@ -22,9 +22,21 @@ from models.flutter_user_profile import FlutterUserProfile, FlutterUserUpdate
 from auth_utils import get_current_user
 from models.token import TokenPayload
 
-router = APIRouter(tags=["firestore"], prefix="/firestore")
+router = APIRouter(tags=["firestore"])
 
 # ===== USER ROUTES =====
+
+@router.get("/users")
+async def get_all_users():
+    """Lấy danh sách tất cả người dùng (cho admin)"""
+    try:
+        users = firestore_service.get_all_users()
+        return {"users": users, "total": len(users)}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching users: {str(e)}"
+        )
 
 @router.post("/users/{user_id}", status_code=status.HTTP_201_CREATED)
 async def create_user(user_id: str, user_data: UserProfile):
@@ -247,6 +259,30 @@ async def update_daily_log(user_id: str, date: str, data: Dict[str, Any]):
     return {"message": "Daily log updated successfully"}
 
 # ===== MEAL PLAN ROUTES =====
+
+@router.get("/meal-plans")
+async def get_all_meal_plans():
+    """Lấy danh sách tất cả meal plans (cho admin)"""
+    try:
+        meal_plans = firestore_service.get_all_meal_plans()
+        return {"meal_plans": meal_plans, "total": len(meal_plans)}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching meal plans: {str(e)}"
+        )
+
+@router.get("/foods")
+async def get_all_foods():
+    """Lấy danh sách tất cả foods (cho admin)"""
+    try:
+        foods = firestore_service.get_all_foods()
+        return {"foods": foods, "total": len(foods)}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching foods: {str(e)}"
+        )
 
 @router.post("/meal-plans", status_code=status.HTTP_201_CREATED)
 async def create_meal_plan(meal_plan: MealPlan):

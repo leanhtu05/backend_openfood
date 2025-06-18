@@ -1,0 +1,637 @@
+{% extends "base.html" %}
+
+{% block title %}Báo cáo & Thống kê - OpenFood Admin{% endblock %}
+
+{% block page_title %}Báo cáo & Thống kê{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group" role="group">
+    <button type="button" class="btn btn-outline-primary" onclick="refreshReports()">
+        <i class="fas fa-sync-alt"></i> Làm mới
+    </button>
+    <button type="button" class="btn btn-outline-success" onclick="exportReport()">
+        <i class="fas fa-download"></i> Xuất báo cáo
+    </button>
+    <div class="btn-group" role="group">
+        <button type="button" class="btn btn-outline-info dropdown-toggle" data-bs-toggle="dropdown">
+            <i class="fas fa-calendar"></i> Thời gian
+        </button>
+        <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="#" onclick="setTimeRange('7days')">7 ngày qua</a></li>
+            <li><a class="dropdown-item" href="#" onclick="setTimeRange('30days')">30 ngày qua</a></li>
+            <li><a class="dropdown-item" href="#" onclick="setTimeRange('90days')">3 tháng qua</a></li>
+            <li><a class="dropdown-item" href="#" onclick="setTimeRange('1year')">1 năm qua</a></li>
+        </ul>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Time Range Selector -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <h6 class="mb-0">Khoảng thời gian báo cáo</h6>
+                        <small class="text-muted">Chọn khoảng thời gian để xem báo cáo chi tiết</small>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="startDate" class="form-label">Từ ngày</label>
+                                <input type="date" class="form-control" id="startDate" value="{{ start_date }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="endDate" class="form-label">Đến ngày</label>
+                                <input type="date" class="form-control" id="endDate" value="{{ end_date }}">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Key Metrics -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-uppercase mb-1">Tổng API Calls</div>
+                        <div class="h5 mb-0 font-weight-bold">{{ metrics.total_api_calls or 0 }}</div>
+                        <div class="text-xs">
+                            <span class="text-success">+{{ metrics.api_calls_growth or 0 }}%</span> so với kỳ trước
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-chart-line fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card-success">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-uppercase mb-1">Người dùng mới</div>
+                        <div class="h5 mb-0 font-weight-bold">{{ metrics.new_users or 0 }}</div>
+                        <div class="text-xs">
+                            <span class="text-success">+{{ metrics.new_users_growth or 0 }}%</span> so với kỳ trước
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-user-plus fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card-warning">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-uppercase mb-1">Meal Plans tạo</div>
+                        <div class="h5 mb-0 font-weight-bold">{{ metrics.meal_plans_created or 0 }}</div>
+                        <div class="text-xs">
+                            <span class="text-success">+{{ metrics.meal_plans_growth or 0 }}%</span> so với kỳ trước
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-calendar-plus fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card-info">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-uppercase mb-1">Tỷ lệ hoạt động</div>
+                        <div class="h5 mb-0 font-weight-bold">{{ metrics.activity_rate or 0 }}%</div>
+                        <div class="text-xs">
+                            <span class="text-success">+{{ metrics.activity_rate_change or 0 }}%</span> so với kỳ trước
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-chart-pie fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row 1 -->
+<div class="row mb-4">
+    <div class="col-xl-8 col-lg-7">
+        <div class="card">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold text-primary">Hoạt động người dùng theo thời gian</h6>
+                <div class="dropdown no-arrow">
+                    <a class="dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-right shadow">
+                        <a class="dropdown-item" href="#" onclick="changeChartType('line')">Biểu đồ đường</a>
+                        <a class="dropdown-item" href="#" onclick="changeChartType('bar')">Biểu đồ cột</a>
+                        <a class="dropdown-item" href="#" onclick="changeChartType('area')">Biểu đồ vùng</a>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="chart-area">
+                    <canvas id="userActivityChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-4 col-lg-5">
+        <div class="card">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Phân bố thiết bị</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-pie pt-4 pb-2">
+                    <canvas id="deviceChart"></canvas>
+                </div>
+                <div class="mt-4 text-center small">
+                    <span class="mr-2">
+                        <i class="fas fa-circle text-primary"></i> Mobile
+                    </span>
+                    <span class="mr-2">
+                        <i class="fas fa-circle text-success"></i> Desktop
+                    </span>
+                    <span class="mr-2">
+                        <i class="fas fa-circle text-info"></i> Tablet
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row 2 -->
+<div class="row mb-4">
+    <div class="col-xl-6 col-lg-6">
+        <div class="card">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Món ăn phổ biến nhất</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-bar">
+                    <canvas id="popularFoodsChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-6 col-lg-6">
+        <div class="card">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Tỷ lệ sử dụng tính năng</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-doughnut">
+                    <canvas id="featureUsageChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Data Tables -->
+<div class="row">
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Top người dùng hoạt động</h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered" width="100%" cellspacing="0">
+                        <thead>
+                            <tr>
+                                <th>Người dùng</th>
+                                <th>Hoạt động</th>
+                                <th>Meal Plans</th>
+                                <th>Lần cuối</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in top_users %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="mr-3">
+                                            {% if user.photo_url %}
+                                            <img class="rounded-circle" width="30" height="30" src="{{ user.photo_url }}">
+                                            {% else %}
+                                            <div class="bg-secondary rounded-circle d-flex align-items-center justify-content-center" style="width: 30px; height: 30px;">
+                                                <i class="fas fa-user text-white"></i>
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                        <div>
+                                            <div class="font-weight-bold">{{ user.display_name or 'Không rõ' }}</div>
+                                            <div class="text-muted small">{{ user.email }}</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>{{ user.activity_count or 0 }}</td>
+                                <td>{{ user.meal_plans_count or 0 }}</td>
+                                <td>{{ user.last_activity or 'Không rõ' }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted">Chưa có dữ liệu</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Lỗi và cảnh báo gần đây</h6>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    {% for error in recent_errors %}
+                    <div class="list-group-item d-flex justify-content-between align-items-start">
+                        <div class="ms-2 me-auto">
+                            <div class="fw-bold">{{ error.type }}</div>
+                            <small class="text-muted">{{ error.message }}</small>
+                        </div>
+                        <span class="badge bg-{% if error.level == 'error' %}danger{% elif error.level == 'warning' %}warning{% else %}info{% endif %} rounded-pill">{{ error.count }}</span>
+                    </div>
+                    {% else %}
+                    <div class="list-group-item text-center text-muted">
+                        <i class="fas fa-check-circle text-success fa-2x mb-2"></i>
+                        <div>Không có lỗi nào được ghi nhận</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.chart-area {
+    position: relative;
+    height: 300px;
+}
+.chart-pie {
+    position: relative;
+    height: 250px;
+}
+.chart-bar {
+    position: relative;
+    height: 250px;
+}
+.chart-doughnut {
+    position: relative;
+    height: 250px;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// User Activity Chart
+const userActivityCtx = document.getElementById('userActivityChart').getContext('2d');
+let userActivityChart = new Chart(userActivityCtx, {
+    type: 'line',
+    data: {
+        labels: {{ activity_labels | tojson }},
+        datasets: [{
+            label: 'Người dùng hoạt động',
+            data: {{ activity_data | tojson }},
+            borderColor: 'rgb(75, 192, 192)',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            tension: 0.1,
+            fill: true
+        }, {
+            label: 'API Calls',
+            data: {{ api_calls_data | tojson }},
+            borderColor: 'rgb(255, 99, 132)',
+            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+            tension: 0.1,
+            fill: false
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            y: {
+                beginAtZero: true
+            }
+        },
+        plugins: {
+            legend: {
+                position: 'top',
+            },
+            title: {
+                display: true,
+                text: 'Hoạt động người dùng theo thời gian'
+            }
+        }
+    }
+});
+
+// Device Chart
+const deviceCtx = document.getElementById('deviceChart').getContext('2d');
+const deviceChart = new Chart(deviceCtx, {
+    type: 'doughnut',
+    data: {
+        labels: {{ device_labels | tojson }},
+        datasets: [{
+            data: {{ device_data | tojson }},
+            backgroundColor: [
+                '#4e73df',
+                '#1cc88a',
+                '#36b9cc',
+                '#f6c23e',
+                '#e74a3b'
+            ]
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom',
+            }
+        }
+    }
+});
+
+// Popular Foods Chart
+const popularFoodsCtx = document.getElementById('popularFoodsChart').getContext('2d');
+const popularFoodsChart = new Chart(popularFoodsCtx, {
+    type: 'bar',
+    data: {
+        labels: {{ popular_foods_labels | tojson }},
+        datasets: [{
+            label: 'Số lần được chọn',
+            data: {{ popular_foods_data | tojson }},
+            backgroundColor: 'rgba(54, 162, 235, 0.8)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 1
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            y: {
+                beginAtZero: true
+            }
+        }
+    }
+});
+
+// Feature Usage Chart
+const featureUsageCtx = document.getElementById('featureUsageChart').getContext('2d');
+const featureUsageChart = new Chart(featureUsageCtx, {
+    type: 'doughnut',
+    data: {
+        labels: {{ feature_labels | tojson }},
+        datasets: [{
+            data: {{ feature_data | tojson }},
+            backgroundColor: [
+                '#ff6384',
+                '#36a2eb',
+                '#ffce56',
+                '#4bc0c0',
+                '#9966ff',
+                '#ff9f40'
+            ]
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'right',
+            }
+        }
+    }
+});
+
+// Functions
+function refreshReports() {
+    location.reload();
+}
+
+function exportReport() {
+    // Lấy ngày từ form nếu có
+    const startDateInput = document.querySelector('input[name="start_date"]');
+    const endDateInput = document.querySelector('input[name="end_date"]');
+
+    const startDate = startDateInput ? startDateInput.value : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const endDate = endDateInput ? endDateInput.value : new Date().toISOString().split('T')[0];
+
+    // Tạo modal chọn format
+    const modal = document.createElement('div');
+    modal.innerHTML = `
+        <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center;">
+            <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); max-width: 450px; width: 90%;">
+                <h4 style="margin-top: 0; color: #333; text-align: center;">📊 Xuất báo cáo từ ${startDate} đến ${endDate}</h4>
+                <div style="margin: 20px 0;">
+                    <button onclick="downloadReportWithDates('excel', '${startDate}', '${endDate}')" style="width: 100%; margin: 5px 0; padding: 12px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">
+                        📊 Excel (.xlsx) - Bảng tính chuyên nghiệp
+                    </button>
+                    <button onclick="downloadReportWithDates('word', '${startDate}', '${endDate}')" style="width: 100%; margin: 5px 0; padding: 12px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">
+                        📄 Word (.docx) - Báo cáo trình bày đẹp
+                    </button>
+                    <button onclick="downloadReportWithDates('csv', '${startDate}', '${endDate}')" style="width: 100%; margin: 5px 0; padding: 12px; background: #17a2b8; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">
+                        📋 CSV - Dữ liệu thô, mở được bằng Excel
+                    </button>
+                    <button onclick="downloadReportWithDates('json', '${startDate}', '${endDate}')" style="width: 100%; margin: 5px 0; padding: 12px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">
+                        🔧 JSON - Dữ liệu có cấu trúc
+                    </button>
+                </div>
+                <button onclick="closeReportModal()" style="width: 100%; padding: 10px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 10px;">
+                    ❌ Hủy
+                </button>
+            </div>
+        </div>
+    `;
+    modal.id = 'exportReportModal';
+    document.body.appendChild(modal);
+}
+
+async function downloadReportWithDates(format, startDate, endDate) {
+    // Đóng modal
+    closeReportModal();
+
+    // Hiển thị loading
+    const loadingToast = document.createElement('div');
+    loadingToast.innerHTML = `
+        <div style="position: fixed; top: 20px; right: 20px; background: #007bff; color: white; padding: 15px 20px; border-radius: 5px; z-index: 10000; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">
+            <i class="fas fa-spinner fa-spin"></i> Đang tạo báo cáo ${format.toUpperCase()} (${startDate} - ${endDate})...
+        </div>
+    `;
+    loadingToast.id = 'loadingReportToast';
+    document.body.appendChild(loadingToast);
+
+    try {
+        // Tạo download token
+        const tokenResponse = await fetch('/admin/api/create-download-token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!tokenResponse.ok) {
+            throw new Error('Không thể tạo token download');
+        }
+
+        const tokenData = await tokenResponse.json();
+        if (!tokenData.success) {
+            throw new Error('Không thể tạo token download');
+        }
+
+        // Tạo URL với token
+        const exportUrl = `/admin/api/export/report?format=${format}&start_date=${startDate}&end_date=${endDate}&token=${tokenData.token}`;
+
+        // Tạo link download và click tự động
+        const link = document.createElement('a');
+        link.href = exportUrl;
+
+        // Xác định extension
+        let extension = format;
+        if (format === 'excel') extension = 'xlsx';
+        if (format === 'word') extension = 'docx';
+
+        link.download = `admin_report_${startDate}_to_${endDate}.${extension}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        // Xóa loading và hiển thị success
+        setTimeout(() => {
+            const toast = document.getElementById('loadingReportToast');
+            if (toast) {
+                document.body.removeChild(toast);
+            }
+
+            // Hiển thị success message
+            const successToast = document.createElement('div');
+            successToast.innerHTML = `
+                <div style="position: fixed; top: 20px; right: 20px; background: #28a745; color: white; padding: 15px 20px; border-radius: 5px; z-index: 10000; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">
+                    <i class="fas fa-check"></i> Báo cáo ${format.toUpperCase()} đã được tải xuống!
+                </div>
+            `;
+            document.body.appendChild(successToast);
+
+            setTimeout(() => {
+                document.body.removeChild(successToast);
+            }, 3000);
+        }, 2000);
+
+    } catch (error) {
+        console.error('Error downloading report:', error);
+
+        // Xóa loading
+        const toast = document.getElementById('loadingReportToast');
+        if (toast) {
+            document.body.removeChild(toast);
+        }
+
+        // Hiển thị error message
+        const errorToast = document.createElement('div');
+        errorToast.innerHTML = `
+            <div style="position: fixed; top: 20px; right: 20px; background: #dc3545; color: white; padding: 15px 20px; border-radius: 5px; z-index: 10000; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">
+                <i class="fas fa-exclamation-triangle"></i> Lỗi: ${error.message}
+            </div>
+        `;
+        document.body.appendChild(errorToast);
+
+        setTimeout(() => {
+            document.body.removeChild(errorToast);
+        }, 5000);
+    }
+}
+
+function closeReportModal() {
+    const modal = document.getElementById('exportReportModal');
+    if (modal) {
+        document.body.removeChild(modal);
+    }
+}
+
+function setTimeRange(range) {
+    const endDate = new Date();
+    let startDate = new Date();
+
+    switch(range) {
+        case '7days':
+            startDate.setDate(endDate.getDate() - 7);
+            break;
+        case '30days':
+            startDate.setDate(endDate.getDate() - 30);
+            break;
+        case '90days':
+            startDate.setDate(endDate.getDate() - 90);
+            break;
+        case '1year':
+            startDate.setFullYear(endDate.getFullYear() - 1);
+            break;
+    }
+
+    document.getElementById('startDate').value = startDate.toISOString().split('T')[0];
+    document.getElementById('endDate').value = endDate.toISOString().split('T')[0];
+
+    // Reload with new date range
+    updateReports();
+}
+
+function changeChartType(type) {
+    userActivityChart.destroy();
+    userActivityChart = new Chart(userActivityCtx, {
+        type: type,
+        data: userActivityChart.data,
+        options: userActivityChart.options
+    });
+}
+
+function updateReports() {
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+
+    // Reload page with new parameters
+    window.location.href = `/admin/reports?start_date=${startDate}&end_date=${endDate}`;
+}
+
+// Auto-update date inputs
+document.getElementById('startDate').addEventListener('change', updateReports);
+document.getElementById('endDate').addEventListener('change', updateReports);
+</script>
+{% endblock %}

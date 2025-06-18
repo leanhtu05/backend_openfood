@@ -230,22 +230,22 @@ class FirestoreService:
     def delete_user(self, user_id: str) -> bool:
         """
         Xóa người dùng
-        
+
         Args:
             user_id: ID của người dùng
-            
+
         Returns:
             True nếu thành công, False nếu thất bại
         """
         try:
             # Xóa người dùng
             self.db.collection('users').document(user_id).delete()
-            
+
             # Xóa các daily logs của người dùng
             daily_logs = self.db.collection('users').document(user_id).collection('daily_logs').get()
             for log in daily_logs:
                 log.reference.delete()
-                
+
             # Xóa các meal plans liên quan
             batch = self.db.batch()
             meal_plans = self.db.collection('meal_plans').where(
@@ -253,21 +253,136 @@ class FirestoreService:
             ).get()
             for plan in meal_plans:
                 batch.delete(plan.reference)
-                
+
             # Xóa các AI suggestions liên quan
             ai_suggestions = self.db.collection('ai_suggestions').where(
                 filter=FieldFilter('userId', '==', user_id)
             ).get()
             for suggestion in ai_suggestions:
                 batch.delete(suggestion.reference)
-                
+
             # Commit batch
             batch.commit()
-            
+
             return True
         except Exception as e:
             print(f"Error deleting user: {e}")
             traceback.print_exc()
+            return False
+
+    def get_all_users(self) -> List[Dict[str, Any]]:
+        """
+        Lấy danh sách tất cả người dùng
+
+        Returns:
+            List[Dict[str, Any]]: Danh sách người dùng
+        """
+        try:
+            users = []
+            users_ref = self.db.collection('users')
+            docs = users_ref.get()
+
+            for doc in docs:
+                user_data = doc.to_dict()
+                user_data['uid'] = doc.id
+                users.append(user_data)
+
+            return users
+        except Exception as e:
+            print(f"Error getting all users: {e}")
+            traceback.print_exc()
+            return []
+
+    def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Lấy thông tin người dùng theo ID
+
+        Args:
+            user_id: ID của người dùng
+
+        Returns:
+            Dict chứa thông tin người dùng hoặc None nếu không tìm thấy
+        """
+        try:
+            doc = self.db.collection('users').document(user_id).get()
+            if doc.exists:
+                data = doc.to_dict()
+                data['user_id'] = doc.id  # Thêm ID vào data
+                return data
+            return None
+        except Exception as e:
+            print(f"Error getting user by ID: {e}")
+            traceback.print_exc()
+            return None
+
+    def delete_user(self, user_id: str) -> bool:
+        """
+        Xóa người dùng và tất cả dữ liệu liên quan
+
+        Args:
+            user_id: ID của người dùng cần xóa
+
+        Returns:
+            True nếu xóa thành công, False nếu có lỗi
+        """
+        try:
+            print(f"[FIRESTORE] Starting to delete user: {user_id}")
+
+            # 1. Xóa user document
+            user_ref = self.db.collection('users').document(user_id)
+            user_doc = user_ref.get()
+            if user_doc.exists:
+                user_ref.delete()
+                print(f"[FIRESTORE] Deleted user document: {user_id}")
+            else:
+                print(f"[FIRESTORE] User document not found: {user_id}")
+
+            # 2. Xóa tất cả food_records của user
+            food_records_query = self.db.collection('food_records').where('user_id', '==', user_id)
+            food_records = food_records_query.get()
+
+            deleted_food_records = 0
+            for doc in food_records:
+                doc.reference.delete()
+                deleted_food_records += 1
+
+            print(f"[FIRESTORE] Deleted {deleted_food_records} food_records for user: {user_id}")
+
+            # 3. Xóa tất cả meal_plans của user (nếu có collection này)
+            try:
+                meal_plans_query = self.db.collection('meal_plans').where('user_id', '==', user_id)
+                meal_plans = meal_plans_query.get()
+
+                deleted_meal_plans = 0
+                for doc in meal_plans:
+                    doc.reference.delete()
+                    deleted_meal_plans += 1
+
+                print(f"[FIRESTORE] Deleted {deleted_meal_plans} meal_plans for user: {user_id}")
+            except Exception as e:
+                print(f"[FIRESTORE] No meal_plans collection or error: {e}")
+
+            print(f"[FIRESTORE] Successfully deleted user and all related data: {user_id}")
+            return True
+
+        except Exception as e:
+            print(f"Error deleting user: {e}")
+            traceback.print_exc()
+            return False
+
+    def check_connection(self) -> bool:
+        """
+        Kiểm tra kết nối với Firestore
+
+        Returns:
+            bool: True nếu kết nối thành công, False nếu thất bại
+        """
+        try:
+            # Thử truy vấn một collection đơn giản
+            self.db.collection('users').limit(1).get()
+            return True
+        except Exception as e:
+            print(f"Firestore connection check failed: {e}")
             return False
     
     # ===== DAILY LOG OPERATIONS =====
@@ -402,7 +517,29 @@ class FirestoreService:
             print(f"Error getting meal plan: {e}")
             traceback.print_exc()
             return None
-            
+
+    def get_meal_plan_dict(self, plan_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Lấy kế hoạch bữa ăn theo ID dưới dạng dictionary
+
+        Args:
+            plan_id: ID của kế hoạch bữa ăn
+
+        Returns:
+            Dict hoặc None nếu không tìm thấy
+        """
+        try:
+            doc = self.db.collection('meal_plans').document(plan_id).get()
+            if doc.exists:
+                data = doc.to_dict()
+                data['id'] = doc.id  # Thêm ID vào data
+                return data
+            return None
+        except Exception as e:
+            print(f"Error getting meal plan dict: {e}")
+            traceback.print_exc()
+            return None
+
     def get_meal_plans_by_user_date(self, user_id: str, date: str) -> List[MealPlan]:
         """
         Lấy các kế hoạch bữa ăn của người dùng theo ngày
@@ -432,14 +569,34 @@ class FirestoreService:
             print(f"Error getting meal plans: {e}")
             traceback.print_exc()
             return []
-            
+
+    def update_meal_plan(self, plan_id: str, meal_plan_data: Dict[str, Any]) -> bool:
+        """
+        Cập nhật kế hoạch bữa ăn
+
+        Args:
+            plan_id: ID của kế hoạch bữa ăn
+            meal_plan_data: Dữ liệu cập nhật
+        """
+        try:
+            # Thêm timestamp cập nhật
+            meal_plan_data['updated_at'] = datetime.now()
+
+            # Cập nhật document
+            self.db.collection('meal_plans').document(plan_id).update(meal_plan_data)
+            return True
+        except Exception as e:
+            print(f"Error updating meal plan: {e}")
+            traceback.print_exc()
+            return False
+
     def delete_meal_plan(self, plan_id: str) -> bool:
         """
         Xóa kế hoạch bữa ăn
-        
+
         Args:
             plan_id: ID của kế hoạch bữa ăn
-            
+
         Returns:
             True nếu thành công, False nếu thất bại
         """
@@ -450,6 +607,81 @@ class FirestoreService:
             print(f"Error deleting meal plan: {e}")
             traceback.print_exc()
             return False
+
+    def get_all_meal_plans(self) -> List[Dict[str, Any]]:
+        """
+        Lấy danh sách tất cả kế hoạch bữa ăn
+
+        Returns:
+            List[Dict[str, Any]]: Danh sách kế hoạch bữa ăn
+        """
+        try:
+            meal_plans = []
+
+            # Lấy từ collection meal_plans
+            meal_plans_ref = self.db.collection('meal_plans')
+            docs = meal_plans_ref.get()
+
+            for doc in docs:
+                plan_data = doc.to_dict()
+                plan_data['id'] = doc.id
+                meal_plans.append(plan_data)
+
+            # Lấy từ collection latest_meal_plans
+            latest_plans_ref = self.db.collection('latest_meal_plans')
+            latest_docs = latest_plans_ref.get()
+
+            for doc in latest_docs:
+                plan_data = doc.to_dict()
+                plan_data['id'] = doc.id
+                plan_data['user_id'] = doc.id  # Document ID là user_id
+                meal_plans.append(plan_data)
+
+            return meal_plans
+        except Exception as e:
+            print(f"Error getting all meal plans: {e}")
+            traceback.print_exc()
+            return []
+
+    def get_user_meal_plans(self, user_id: str) -> List[Dict[str, Any]]:
+        """
+        Lấy danh sách kế hoạch bữa ăn của một người dùng
+
+        Args:
+            user_id: ID của người dùng
+
+        Returns:
+            List[Dict[str, Any]]: Danh sách kế hoạch bữa ăn của người dùng
+        """
+        try:
+            meal_plans = []
+
+            # Lấy từ collection meal_plans
+            meal_plans_ref = self.db.collection('meal_plans').where(
+                filter=FieldFilter('user_id', '==', user_id)
+            )
+            docs = meal_plans_ref.get()
+
+            for doc in docs:
+                plan_data = doc.to_dict()
+                plan_data['id'] = doc.id
+                meal_plans.append(plan_data)
+
+            # Lấy từ collection latest_meal_plans
+            latest_plan_ref = self.db.collection('latest_meal_plans').document(user_id)
+            latest_doc = latest_plan_ref.get()
+
+            if latest_doc.exists:
+                plan_data = latest_doc.to_dict()
+                plan_data['id'] = latest_doc.id
+                plan_data['user_id'] = user_id
+                meal_plans.append(plan_data)
+
+            return meal_plans
+        except Exception as e:
+            print(f"Error getting user meal plans: {e}")
+            traceback.print_exc()
+            return []
     
     # ===== AI SUGGESTION OPERATIONS =====
     
@@ -1583,29 +1815,208 @@ class FirestoreService:
     def delete_food(self, food_id: str) -> bool:
         """
         Xóa món ăn
-        
+
         Args:
             food_id: ID của món ăn
-            
+
         Returns:
             True nếu xóa thành công, False nếu thất bại
         """
         if not self.initialized:
             return False
-            
+
         try:
             doc_ref = self.db.collection('foods').document(food_id)
             doc = doc_ref.get()
-            
+
             if not doc.exists:
                 return False
-                
+
             doc_ref.delete()
             return True
         except Exception as e:
             print(f"Error deleting food: {e}")
             return False
-    
+
+    def get_all_foods(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """
+        Lấy danh sách tất cả món ăn từ food_records (cho admin)
+
+        Args:
+            limit: Số lượng món ăn tối đa
+
+        Returns:
+            Danh sách các món ăn dưới dạng dict
+        """
+        if not self.initialized:
+            return []
+
+        try:
+            foods = []
+            query = self.db.collection('food_records').limit(limit)
+            results = query.get()
+
+            for doc in results:
+                food_record = doc.to_dict()
+
+                # Chuyển đổi food_record thành format phù hợp cho admin
+                food_data = {
+                    'id': doc.id,
+                    'name': food_record.get('description', 'Không có tên'),
+                    'description': food_record.get('description', ''),
+                    'calories': food_record.get('calories', 0),
+                    'created_at': food_record.get('created_at', ''),
+                    'date': food_record.get('date', ''),
+                    'user_id': food_record.get('user_id', ''),
+                    'mealType': food_record.get('mealType', ''),
+                    'imageUrl': food_record.get('imageUrl', ''),
+                    'items': food_record.get('items', []),
+                    'nutritionInfo': food_record.get('nutritionInfo', {}),
+                    # Lấy thông tin dinh dưỡng từ nutritionInfo
+                    'nutrition': {
+                        'calories': food_record.get('nutritionInfo', {}).get('calories', food_record.get('calories', 0)),
+                        'protein': food_record.get('nutritionInfo', {}).get('protein', 0),
+                        'fat': food_record.get('nutritionInfo', {}).get('fat', 0),
+                        'carbs': food_record.get('nutritionInfo', {}).get('carbs', 0),
+                        'fiber': food_record.get('nutritionInfo', {}).get('fiber', 0),
+                        'sodium': food_record.get('nutritionInfo', {}).get('sodium', 0),
+                        'sugar': food_record.get('nutritionInfo', {}).get('sugar', 0)
+                    }
+                }
+
+                foods.append(food_data)
+
+            return foods
+        except Exception as e:
+            print(f"Error getting all food records: {e}")
+            return []
+
+    def get_food_record(self, food_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Lấy thông tin một food record theo ID (cho admin)
+
+        Args:
+            food_id: ID của food record
+
+        Returns:
+            Thông tin food record hoặc None nếu không tìm thấy
+        """
+        if not self.initialized:
+            return None
+
+        try:
+            doc = self.db.collection('food_records').document(food_id).get()
+            if doc.exists:
+                food_record = doc.to_dict()
+
+                # Chuyển đổi food_record thành format phù hợp cho admin
+                food_data = {
+                    'id': doc.id,
+                    'name': food_record.get('description', 'Không có tên'),
+                    'description': food_record.get('description', ''),
+                    'calories': food_record.get('calories', 0),
+                    'created_at': food_record.get('created_at', ''),
+                    'date': food_record.get('date', ''),
+                    'user_id': food_record.get('user_id', ''),
+                    'mealType': food_record.get('mealType', ''),
+                    'imageUrl': food_record.get('imageUrl', ''),
+                    'items': food_record.get('items', []),
+                    'nutritionInfo': food_record.get('nutritionInfo', {}),
+                    # Lấy thông tin dinh dưỡng từ nutritionInfo
+                    'nutrition': {
+                        'calories': food_record.get('nutritionInfo', {}).get('calories', food_record.get('calories', 0)),
+                        'protein': food_record.get('nutritionInfo', {}).get('protein', 0),
+                        'fat': food_record.get('nutritionInfo', {}).get('fat', 0),
+                        'carbs': food_record.get('nutritionInfo', {}).get('carbs', 0),
+                        'fiber': food_record.get('nutritionInfo', {}).get('fiber', 0),
+                        'sodium': food_record.get('nutritionInfo', {}).get('sodium', 0),
+                        'sugar': food_record.get('nutritionInfo', {}).get('sugar', 0)
+                    }
+                }
+
+                return food_data
+            return None
+        except Exception as e:
+            print(f"Error getting food record {food_id}: {e}")
+            return None
+
+    def update_food_record(self, food_id: str, food_data: Dict[str, Any]) -> bool:
+        """
+        Cập nhật thông tin food record (cho admin)
+
+        Args:
+            food_id: ID của food record
+            food_data: Dữ liệu cần cập nhật
+
+        Returns:
+            True nếu cập nhật thành công, False nếu thất bại
+        """
+        if not self.initialized:
+            return False
+
+        try:
+            doc_ref = self.db.collection('food_records').document(food_id)
+            doc = doc_ref.get()
+
+            if not doc.exists:
+                return False
+
+            # Chuyển đổi dữ liệu admin format về food_record format
+            update_data = {
+                'description': food_data.get('name', food_data.get('description', '')),
+                'updated_at': datetime.now().isoformat()
+            }
+
+            # Cập nhật nutrition info nếu có
+            if 'nutrition' in food_data:
+                nutrition = food_data['nutrition']
+                update_data['nutritionInfo'] = {
+                    'calories': nutrition.get('calories', 0),
+                    'protein': nutrition.get('protein', 0),
+                    'fat': nutrition.get('fat', 0),
+                    'carbs': nutrition.get('carbs', 0),
+                    'fiber': nutrition.get('fiber', 0),
+                    'sodium': nutrition.get('sodium', 0),
+                    'sugar': nutrition.get('sugar', 0)
+                }
+                update_data['calories'] = nutrition.get('calories', 0)
+
+            # Cập nhật category nếu có
+            if 'category' in food_data:
+                update_data['mealType'] = food_data['category']
+
+            doc_ref.update(update_data)
+            return True
+        except Exception as e:
+            print(f"Error updating food record: {e}")
+            return False
+
+    def delete_food_record(self, food_id: str) -> bool:
+        """
+        Xóa food record (cho admin)
+
+        Args:
+            food_id: ID của food record
+
+        Returns:
+            True nếu xóa thành công, False nếu thất bại
+        """
+        if not self.initialized:
+            return False
+
+        try:
+            doc_ref = self.db.collection('food_records').document(food_id)
+            doc = doc_ref.get()
+
+            if not doc.exists:
+                return False
+
+            doc_ref.delete()
+            return True
+        except Exception as e:
+            print(f"Error deleting food record: {e}")
+            return False
+
     def get_favorite_foods(self, user_id: str, limit: int = 50) -> List[FoodItem]:
         """
         Lấy danh sách món ăn yêu thích

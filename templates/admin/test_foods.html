@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Foods API</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1>Test Foods API</h1>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <h3>Test API Calls</h3>
+                <button class="btn btn-primary mb-2" onclick="testAPI()">Test API</button>
+                <button class="btn btn-success mb-2" onclick="testRealAPI()">Test Real API</button>
+                <button class="btn btn-info mb-2" onclick="viewFood('1749067371671')">View Food</button>
+            </div>
+            <div class="col-md-6">
+                <h3>Console Output</h3>
+                <div id="output" style="background: #f8f9fa; padding: 15px; height: 400px; overflow-y: auto; font-family: monospace; font-size: 12px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal fade" id="viewFoodModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Chi tiết món ăn</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="viewFoodContent">
+                    <!-- Content will be loaded here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function log(message) {
+            const output = document.getElementById('output');
+            const timestamp = new Date().toLocaleTimeString();
+            output.innerHTML += `[${timestamp}] ${message}\n`;
+            output.scrollTop = output.scrollHeight;
+            console.log(message);
+        }
+
+        function testAPI() {
+            log('Testing API endpoint...');
+            
+            fetch('/admin/api/foods/1749067371671/test')
+                .then(response => {
+                    log(`Response status: ${response.status}`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    log(`API response: ${JSON.stringify(data, null, 2)}`);
+                })
+                .catch(error => {
+                    log(`Error: ${error.message}`);
+                });
+        }
+
+        function testRealAPI() {
+            log('Testing real API endpoint...');
+            
+            fetch('/admin/api/foods/1749067371671')
+                .then(response => {
+                    log(`Response status: ${response.status}`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    log(`Real API response: ${JSON.stringify(data, null, 2)}`);
+                })
+                .catch(error => {
+                    log(`Error: ${error.message}`);
+                });
+        }
+
+        function viewFood(foodId) {
+            log(`Loading food details for ID: ${foodId}`);
+            
+            fetch(`/admin/api/foods/${foodId}`)
+                .then(response => {
+                    log(`Response status: ${response.status}`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    log(`API response: ${JSON.stringify(data, null, 2)}`);
+                    
+                    if (data.success) {
+                        const food = data.food;
+                        log(`Food data: ${JSON.stringify(food, null, 2)}`);
+                        
+                        // Tạo danh sách món ăn từ items
+                        let itemsList = '';
+                        if (food.items && food.items.length > 0) {
+                            itemsList = '<h6>Danh sách món ăn:</h6><ul>';
+                            food.items.forEach(item => {
+                                itemsList += `<li><strong>${item.name || 'Không rõ'}</strong> - ${item.calories || 0} kcal`;
+                                if (item.portionSize) itemsList += ` (${item.portionSize})`;
+                                itemsList += '</li>';
+                            });
+                            itemsList += '</ul>';
+                        }
+
+                        document.getElementById('viewFoodContent').innerHTML = `
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>Thông tin cơ bản</h6>
+                                    <p><strong>Mô tả:</strong> ${food.description || 'Không có mô tả'}</p>
+                                    <p><strong>Loại bữa ăn:</strong> ${food.mealType || 'N/A'}</p>
+                                    <p><strong>Người dùng:</strong> ${food.user_id || 'N/A'}</p>
+                                    <p><strong>Ngày:</strong> ${food.date || 'N/A'}</p>
+                                    ${food.imageUrl ? `<p><strong>Hình ảnh:</strong> <a href="${food.imageUrl}" target="_blank">Xem ảnh</a></p>` : ''}
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>Thông tin dinh dưỡng tổng</h6>
+                                    <p><strong>Calories:</strong> ${food.nutrition?.calories || 0}</p>
+                                    <p><strong>Protein:</strong> ${(food.nutrition?.protein || 0).toFixed(1)}g</p>
+                                    <p><strong>Fat:</strong> ${(food.nutrition?.fat || 0).toFixed(1)}g</p>
+                                    <p><strong>Carbs:</strong> ${(food.nutrition?.carbs || 0).toFixed(1)}g</p>
+                                    <p><strong>Fiber:</strong> ${(food.nutrition?.fiber || 0).toFixed(1)}g</p>
+                                    <p><strong>Sodium:</strong> ${(food.nutrition?.sodium || 0).toFixed(1)}mg</p>
+                                </div>
+                            </div>
+                            ${itemsList}
+                            <hr>
+                            <p><strong>Ngày tạo:</strong> ${food.created_at || 'N/A'}</p>
+                        `;
+                        
+                        // Show modal
+                        const modal = new bootstrap.Modal(document.getElementById('viewFoodModal'));
+                        modal.show();
+                        
+                        log('Modal should be displayed now');
+                    } else {
+                        log(`API returned error: ${data.message}`);
+                        alert('Không thể tải thông tin món ăn: ' + (data.message || 'Lỗi không xác định'));
+                    }
+                })
+                .catch(error => {
+                    log(`Fetch error: ${error.message}`);
+                    alert('Có lỗi xảy ra khi tải thông tin món ăn: ' + error.message);
+                });
+        }
+
+        // Clear log on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            log('Page loaded, ready for testing');
+        });
+    </script>
+</body>
+</html>

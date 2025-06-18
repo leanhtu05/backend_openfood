@@ -1,0 +1,447 @@
+{% extends "base.html" %}
+
+{% block title %}Quản lý người dùng - OpenFood Admin{% endblock %}
+
+{% block page_title %}Quản lý người dùng{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group" role="group">
+    <button type="button" class="btn btn-outline-primary" onclick="refreshUsers()">
+        <i class="fas fa-sync-alt"></i> Làm mới
+    </button>
+    <button type="button" class="btn btn-outline-success" onclick="exportUsers()">
+        <i class="fas fa-download"></i> Xuất danh sách
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Search and Filter -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <form method="GET" class="d-flex">
+            <input type="text" class="form-control me-2" name="search" placeholder="Tìm kiếm theo email hoặc tên..." value="{{ search }}">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-search"></i> Tìm kiếm
+            </button>
+        </form>
+    </div>
+    <div class="col-md-4 text-end">
+        <div class="text-muted">
+            Tổng cộng: <strong>{{ total_users }}</strong> người dùng
+        </div>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger" role="alert">
+    <i class="fas fa-exclamation-triangle"></i> {{ error }}
+</div>
+{% endif %}
+
+<!-- Users Table -->
+<div class="card">
+    <div class="card-header">
+        <h6 class="m-0 font-weight-bold text-primary">Danh sách người dùng</h6>
+    </div>
+    <div class="card-body">
+        {% if users %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Avatar</th>
+                        <th>Thông tin</th>
+                        <th>Trạng thái</th>
+                        <th>Hoạt động</th>
+                        <th>Ngày tạo</th>
+                        <th>Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td>
+                            {% if user.photo_url %}
+                            <img src="{{ user.photo_url }}" alt="Avatar" class="rounded-circle" width="40" height="40">
+                            {% else %}
+                            <div class="bg-secondary rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                <i class="fas fa-user text-white"></i>
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div>
+                                <strong>{{ user.get('name', 'Chưa có tên') }}</strong>
+                            </div>
+                            <small class="text-muted">{{ user.get('email', 'N/A') }}</small>
+                        </td>
+                        <td>
+                            <span class="badge bg-success">Hoạt động</span>
+                        </td>
+                        <td>
+                            {% if user.get('last_sync_time') %}
+                            <small class="text-muted">Đã đồng bộ</small>
+                            {% else %}
+                            <small class="text-muted">Chưa đồng bộ</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.get('updated_at') %}
+                            <small class="text-muted">{{ user.get('updated_at')[:10] }}</small>
+                            {% else %}
+                            <small class="text-muted">Không rõ</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-outline-primary" onclick="viewUser('{{ user.get('user_id', '') }}')">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-info" onclick="viewUserMealPlans('{{ user.get('user_id', '') }}')">
+                                    <i class="fas fa-calendar-alt"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-warning" onclick="editUser('{{ user.get('user_id', '') }}')">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-danger" onclick="deleteUser('{{ user.get('user_id', '') }}', '{{ user.get('name', user.get('email', 'N/A')) }}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if total_pages > 1 %}
+        <nav aria-label="User pagination">
+            <ul class="pagination justify-content-center">
+                {% if has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ current_page - 1 }}{% if search %}&search={{ search }}{% endif %}">Trước</a>
+                </li>
+                {% endif %}
+                
+                {% for page_num in range(1, total_pages + 1) %}
+                {% if page_num == current_page %}
+                <li class="page-item active">
+                    <span class="page-link">{{ page_num }}</span>
+                </li>
+                {% elif page_num <= 3 or page_num > total_pages - 3 or (page_num >= current_page - 1 and page_num <= current_page + 1) %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_num }}{% if search %}&search={{ search }}{% endif %}">{{ page_num }}</a>
+                </li>
+                {% elif page_num == 4 or page_num == total_pages - 3 %}
+                <li class="page-item disabled">
+                    <span class="page-link">...</span>
+                </li>
+                {% endif %}
+                {% endfor %}
+                
+                {% if has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ current_page + 1 }}{% if search %}&search={{ search }}{% endif %}">Sau</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-users fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">Không có người dùng nào</h5>
+            <p class="text-muted">
+                {% if search %}
+                Không tìm thấy người dùng nào với từ khóa "{{ search }}"
+                {% else %}
+                Hệ thống chưa có người dùng nào đăng ký
+                {% endif %}
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modal xác nhận xóa -->
+<div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-labelledby="confirmDeleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="confirmDeleteModalLabel">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Xác nhận xóa người dùng
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-warning me-2"></i>
+                    <strong>Cảnh báo:</strong> Hành động này không thể hoàn tác!
+                </div>
+                <p>Bạn có chắc chắn muốn xóa người dùng <strong id="deleteUserName"></strong>?</p>
+                <p class="text-muted">Việc xóa sẽ bao gồm:</p>
+                <ul class="text-muted">
+                    <li>Thông tin tài khoản người dùng</li>
+                    <li>Tất cả food records (lịch sử ăn uống)</li>
+                    <li>Tất cả meal plans (kế hoạch bữa ăn)</li>
+                    <li>Các dữ liệu liên quan khác</li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-2"></i>
+                    Hủy
+                </button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
+                    <i class="fas fa-trash me-2"></i>
+                    Xóa người dùng
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- User Detail Modal -->
+<div class="modal fade" id="userDetailModal" tabindex="-1" aria-labelledby="userDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="userDetailModalLabel">Chi tiết người dùng</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="userDetailContent">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Đang tải...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function refreshUsers() {
+    location.reload();
+}
+
+function exportUsers() {
+    // Implement export functionality
+    alert('Tính năng xuất danh sách người dùng sẽ được triển khai sau');
+}
+
+function viewUser(userId) {
+    // Show user detail modal
+    const modal = new bootstrap.Modal(document.getElementById('userDetailModal'));
+    const content = document.getElementById('userDetailContent');
+    
+    // Show loading
+    content.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Đang tải...</span>
+            </div>
+        </div>
+    `;
+    
+    modal.show();
+    
+    // Load user details from API
+    fetch(`/admin/api/users/${userId}`)
+        .then(response => {
+            console.log('User API response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('User API response:', data);
+
+            if (data.success) {
+                const user = data.user;
+                console.log('User data:', user);
+
+                content.innerHTML = `
+                    <div class="row">
+                        <div class="col-md-4 text-center">
+                            <div class="bg-secondary rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" style="width: 120px; height: 120px;">
+                                <i class="fas fa-user text-white" style="font-size: 50px;"></i>
+                            </div>
+                            <h5>${user.name || 'N/A'}</h5>
+                            <p class="text-muted">${user.email || 'N/A'}</p>
+                            <span class="badge bg-success">Hoạt động</span>
+                        </div>
+                        <div class="col-md-8">
+                            <h6>Thông tin cơ bản</h6>
+                            <p><strong>ID:</strong> ${user.user_id || 'N/A'}</p>
+                            <p><strong>Tuổi:</strong> ${user.age || 'N/A'}</p>
+                            <p><strong>Giới tính:</strong> ${user.gender || 'N/A'}</p>
+                            <p><strong>Chiều cao:</strong> ${user.height_cm || 'N/A'} cm</p>
+                            <p><strong>Cân nặng:</strong> ${user.weight_kg ? user.weight_kg.toFixed(1) : 'N/A'} kg</p>
+                            <hr>
+                            <h6>Mục tiêu & Dinh dưỡng</h6>
+                            <p><strong>Mục tiêu:</strong> ${user.goal || 'N/A'}</p>
+                            <p><strong>Mức độ hoạt động:</strong> ${user.activity_level || 'N/A'}</p>
+                            <p><strong>Calories mục tiêu:</strong> ${user.nutrition_goals?.calories ? user.nutrition_goals.calories.toFixed(0) : 'N/A'}</p>
+                            <p><strong>Cập nhật lần cuối:</strong> ${user.updated_at ? user.updated_at.substring(0, 10) : 'N/A'}</p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                console.error('User API returned error:', data.message);
+                content.innerHTML = `
+                    <div class="alert alert-danger">
+                        Không thể tải thông tin người dùng: ${data.message || 'Lỗi không xác định'}
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('User fetch error:', error);
+            content.innerHTML = `
+                <div class="alert alert-danger">
+                    Có lỗi xảy ra khi tải thông tin người dùng: ${error.message}
+                </div>
+            `;
+        });
+}
+
+function viewUserMealPlans(userId) {
+    window.location.href = `/admin/meal-plans?user_id=${userId}`;
+}
+
+function disableUser(userId) {
+    if (confirm('Bạn có chắc chắn muốn khóa tài khoản này?')) {
+        // Implement disable user API call
+        alert('Tính năng khóa tài khoản sẽ được triển khai sau');
+    }
+}
+
+function enableUser(userId) {
+    if (confirm('Bạn có chắc chắn muốn mở khóa tài khoản này?')) {
+        // Implement enable user API call
+        alert('Tính năng mở khóa tài khoản sẽ được triển khai sau');
+    }
+}
+
+function editUser(userId) {
+    alert('Chức năng chỉnh sửa người dùng đang được phát triển');
+}
+
+function deleteUser(userId, userName) {
+    console.log('Deleting user:', userId, userName);
+
+    // Hiển thị modal xác nhận
+    const confirmModal = new bootstrap.Modal(document.getElementById('confirmDeleteModal'));
+
+    // Cập nhật nội dung modal
+    document.getElementById('deleteUserName').textContent = userName;
+    document.getElementById('confirmDeleteBtn').onclick = function() {
+        performDeleteUser(userId, userName);
+        confirmModal.hide();
+    };
+
+    confirmModal.show();
+}
+
+function performDeleteUser(userId, userName) {
+    console.log('Performing delete for user:', userId);
+
+    // Hiển thị loading
+    const loadingToast = showToast('Đang xóa người dùng...', 'info');
+
+    fetch(`/admin/api/users/${userId}`, {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => {
+        console.log('Delete API response status:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Delete API response:', data);
+
+        // Ẩn loading toast
+        if (loadingToast) loadingToast.hide();
+
+        if (data.success) {
+            showToast(data.message || `Đã xóa người dùng ${userName}`, 'success');
+
+            // Reload trang sau 1.5 giây
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        } else {
+            console.error('Delete API returned error:', data.message);
+            showToast(data.message || 'Không thể xóa người dùng', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Delete fetch error:', error);
+
+        // Ẩn loading toast
+        if (loadingToast) loadingToast.hide();
+
+        showToast('Có lỗi xảy ra khi xóa người dùng: ' + error.message, 'error');
+    });
+}
+
+function showToast(message, type = 'info') {
+    // Tạo toast element
+    const toastId = 'toast-' + Date.now();
+    const toastHtml = `
+        <div id="${toastId}" class="toast align-items-center text-white bg-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    `;
+
+    // Thêm vào container
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+        toastContainer.style.zIndex = '9999';
+        document.body.appendChild(toastContainer);
+    }
+
+    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+
+    // Hiển thị toast
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement, {
+        autohide: type !== 'info', // Info toast không tự ẩn (cho loading)
+        delay: 3000
+    });
+
+    toast.show();
+
+    // Trả về object để có thể ẩn manual
+    return {
+        hide: () => toast.hide(),
+        element: toastElement
+    };
+}
+
+function viewUserMealPlans(userId) {
+    window.location.href = `/admin/meal-plans?user_id=${userId}`;
+}
+</script>
+{% endblock %}

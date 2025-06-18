@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Danh sách món ăn - OpenFood{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1 class="mb-3">Danh sách món ăn</h1>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="/food/create" class="btn btn-success">
+            <span class="me-1">+</span> Thêm món ăn mới
+        </a>
+        <a href="/food/generate" class="btn btn-info ms-2">
+            <span class="me-1">✨</span> Tạo với AI
+        </a>
+    </div>
+</div>
+
+<!-- Thanh tìm kiếm -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <form method="get" action="/food" class="row g-3">
+                    <div class="col-md-4">
+                        <input type="text" class="form-control" name="search" placeholder="Tìm kiếm món ăn..." value="{{ request.query_params.get('search', '') }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="meal-type-select" class="visually-hidden">Loại bữa ăn</label>
+                        <select id="meal-type-select" class="form-select" name="meal_type" aria-label="Chọn loại bữa ăn">
+                            <option value="">-- Loại bữa ăn --</option>
+                            <option value="breakfast" {% if request.query_params.get('meal_type') == 'breakfast' %}selected{% endif %}>Bữa sáng</option>
+                            <option value="lunch" {% if request.query_params.get('meal_type') == 'lunch' %}selected{% endif %}>Bữa trưa</option>
+                            <option value="dinner" {% if request.query_params.get('meal_type') == 'dinner' %}selected{% endif %}>Bữa tối</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="sort-select" class="visually-hidden">Sắp xếp theo</label>
+                        <select id="sort-select" class="form-select" name="sort" aria-label="Sắp xếp danh sách">
+                            <option value="name" {% if request.query_params.get('sort') == 'name' %}selected{% endif %}>Sắp xếp theo tên</option>
+                            <option value="calories" {% if request.query_params.get('sort') == 'calories' %}selected{% endif %}>Sắp xếp theo calories</option>
+                            <option value="protein" {% if request.query_params.get('sort') == 'protein' %}selected{% endif %}>Sắp xếp theo protein</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">Lọc</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if foods and foods|length > 0 %}
+    <div class="row row-cols-1 row-cols-md-3 g-4">
+        {% for food in foods %}
+        <div class="col">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">{{ food.name }}</h5>
+                    <p class="card-text">{{ food.description }}</p>
+                    <div class="nutrition-info">
+                        <small class="text-muted">
+                            <strong>Dinh dưỡng:</strong> 
+                            {{ food.nutrition.calories }} kcal | 
+                            Protein: {{ food.nutrition.protein }}g | 
+                            Chất béo: {{ food.nutrition.fat }}g | 
+                            Carbs: {{ food.nutrition.carbs }}g
+                        </small>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <div class="d-flex justify-content-between">
+                        <a href="/food/{{ food.id }}" class="btn btn-sm btn-info">Chi tiết</a>
+                        <a href="/food/edit/{{ food.id }}" class="btn btn-sm btn-warning">Sửa</a>
+                        <button class="btn btn-sm btn-danger" onclick="confirmDelete('{{ food.id }}')">Xóa</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="alert alert-info">
+        Không tìm thấy món ăn nào. <a href="/food/create">Thêm món ăn mới</a> hoặc <a href="/food/generate">tạo món ăn với AI</a>.
+    </div>
+{% endif %}
+{% endblock %} 

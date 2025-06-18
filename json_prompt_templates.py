@@ -31,10 +31,10 @@ def get_strict_json_prompt(meal_type: str, calories_target: int, protein_target:
         ],
         "preparation": ["Bước 1", "Bước 2", "Bước 3"],
         "nutrition": {
-            "calories": calories_target // 2,
-            "protein": protein_target // 2,
-            "fat": fat_target // 2,
-            "carbs": carbs_target // 2
+            "calories": {calories_target},
+            "protein": {protein_target},
+            "fat": {fat_target},
+            "carbs": {carbs_target}
         },
         "preparation_time": "Thời gian chuẩn bị",
         "health_benefits": "Lợi ích sức khỏe"

@@ -198,7 +198,8 @@ def generate_meal(
             print(f"Attempting to generate dishes using AI ({AI_SERVICE.__class__.__name__}) for {meal_type}")
             
             # Thêm tham số ngày và random seed vào yêu cầu AI để tăng tính đa dạng
-            random_seed = random.randint(1, 1000)
+            import time
+            random_seed = random.randint(1, 10000) + int(time.time() % 1000)  # Stronger randomization
             
             ai_dish_dicts = AI_SERVICE.generate_meal_suggestions(
                 calories_target=int(target_calories),

@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 import asyncio
 import httpx
 import os
+from urllib.parse import quote_plus, urlencode
 from pydantic import BaseModel
 
 from auth_utils import get_current_user
@@ -257,8 +258,8 @@ async def search_videos(
             'key': YOUTUBE_API_KEY
         }
         
-        # Add parameters to URL
-        param_string = '&'.join([f"{k}={v}" for k, v in params.items()])
+        # Add parameters to URL with proper encoding
+        param_string = urlencode(params, quote_via=quote_plus)
         full_url = f"{url}?{param_string}"
         
         logger.info(f"Searching YouTube for: {vietnamese_query}")
@@ -329,7 +330,7 @@ async def _enhance_videos_with_details(video_ids: List[str], videos: List[Dict])
             'key': YOUTUBE_API_KEY
         }
         
-        param_string = '&'.join([f"{k}={v}" for k, v in params.items()])
+        param_string = urlencode(params, quote_via=quote_plus)
         full_url = f"{url}?{param_string}"
         
         # Make API request
@@ -408,7 +409,7 @@ async def get_trending_cooking_videos(
             'key': YOUTUBE_API_KEY
         }
         
-        param_string = '&'.join([f"{k}={v}" for k, v in params.items()])
+        param_string = urlencode(params, quote_via=quote_plus)
         full_url = f"{url}?{param_string}"
         
         logger.info("Getting trending cooking videos")
@@ -524,7 +525,7 @@ async def get_video_details(
             'key': YOUTUBE_API_KEY
         }
 
-        param_string = '&'.join([f"{k}={v}" for k, v in params.items()])
+        param_string = urlencode(params, quote_via=quote_plus)
         full_url = f"{url}?{param_string}"
 
         logger.info(f"Getting details for {len(request.video_ids)} videos")

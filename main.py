@@ -70,7 +70,7 @@ from generate_random_data import generate_weekly_plan
 from usda_integration import usda_api
 
 # Import routers
-from routers import firestore_router, api_router, compat_router, meal_plan_router, openfood_router, admin_router
+from routers import firestore_router, api_router, compat_router, meal_plan_router, openfood_router, admin_router, youtube_router
 
 # Thêm import cho chat API
 from pydantic import BaseModel, Field, validator
@@ -272,6 +272,9 @@ app.include_router(openfood_router.router, tags=["OpenFood Management"])
 
 # Mount Admin router
 app.include_router(admin_router.router, tags=["Admin Management"])
+
+# Mount YouTube router
+app.include_router(youtube_router.router, tags=["YouTube Proxy"])
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")

@@ -475,8 +475,96 @@ async def clear_cache():  # user: TokenPayload = Depends(get_current_user)  # Te
     global VIDEO_CACHE
     old_size = len(VIDEO_CACHE)
     VIDEO_CACHE.clear()
-    
+
     return {
         'message': f'Cache cleared. Removed {old_size} entries.',
         'entries_removed': old_size
     }
+
+@router.post("/details", response_model=VideoDetailsResponse)
+async def get_video_details(
+    request: VideoDetailsRequest
+    # user: TokenPayload = Depends(get_current_user)  # Temporarily disabled for testing
+):
+    """
+    Get detailed information for specific video IDs
+
+    Parameters:
+    - video_ids: List of YouTube video IDs
+
+    Returns:
+    - List of videos with detailed information (duration, views, etc.)
+    """
+    try:
+        if not request.video_ids:
+            return VideoDetailsResponse(videos=[], cached=False)
+
+        # Clean expired cache entries
+        _clean_cache()
+
+        # Generate cache key
+        cache_params = {'video_ids': sorted(request.video_ids)}
+        cache_key = _generate_cache_key('details', cache_params)
+
+        # Check cache first
+        if cache_key in VIDEO_CACHE and _is_cache_valid(VIDEO_CACHE[cache_key]):
+            logger.info(f"Cache hit for video details: {len(request.video_ids)} videos")
+            cache_entry = VIDEO_CACHE[cache_key]
+            return VideoDetailsResponse(
+                videos=cache_entry['data'],
+                cached=True
+            )
+
+        # Build YouTube API URL
+        ids_string = ','.join(request.video_ids)
+        url = f"{YOUTUBE_BASE_URL}/videos"
+        params = {
+            'part': 'snippet,contentDetails,statistics',
+            'id': ids_string,
+            'key': YOUTUBE_API_KEY
+        }
+
+        param_string = '&'.join([f"{k}={v}" for k, v in params.items()])
+        full_url = f"{url}?{param_string}"
+
+        logger.info(f"Getting details for {len(request.video_ids)} videos")
+
+        # Make API request
+        data = await _make_youtube_request(full_url)
+
+        # Process results
+        videos = []
+        for item in data.get('items', []):
+            snippet = item.get('snippet', {})
+            statistics = item.get('statistics', {})
+            content_details = item.get('contentDetails', {})
+
+            video_data = {
+                'title': snippet.get('title', 'Video không có tiêu đề'),
+                'channel': snippet.get('channelTitle', 'Kênh không xác định'),
+                'description': snippet.get('description', 'Không có mô tả'),
+                'thumbnail': snippet.get('thumbnails', {}).get('high', {}).get('url', ''),
+                'videoId': item.get('id', ''),
+                'views': _format_view_count(statistics.get('viewCount', '')),
+                'duration': _format_duration(content_details.get('duration', '')),
+                'publishedAt': snippet.get('publishedAt', ''),
+            }
+
+            videos.append(video_data)
+
+        # Cache the results
+        VIDEO_CACHE[cache_key] = {
+            'data': videos,
+            'timestamp': datetime.now().isoformat()
+        }
+
+        logger.info(f"Found details for {len(videos)} videos")
+
+        return VideoDetailsResponse(
+            videos=videos,
+            cached=False
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting video details: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting video details: {str(e)}")

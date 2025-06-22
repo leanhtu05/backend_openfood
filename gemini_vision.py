@@ -22,6 +22,7 @@ from vietnamese_nutrition_extended import (
     VEGETABLES_NUTRITION, FRUITS_NUTRITION, MEAT_NUTRITION,
     SEAFOOD_NUTRITION, EGGS_NUTRITION, DAIRY_NUTRITION
 )
+from vietnamese_traditional_dishes import ALL_TRADITIONAL_DISHES
 from groq_integration import GroqService
 
 # Try to import Gemini from Google Generative AI SDK
@@ -381,9 +382,87 @@ class GeminiVisionService:
             # Return empty results on error
             return [], {"error": str(e)}
 
+    def normalize_food_name(self, food_name: str) -> List[str]:
+        """
+        🔧 FIX: Chuẩn hóa và tạo các biến thể tên món ăn để tìm kiếm
+        """
+        normalized_name = food_name.lower().strip()
+
+        # Tạo danh sách các biến thể tên để tìm kiếm
+        variations = [normalized_name]
+
+        # Mapping các tên thường gặp
+        name_mappings = {
+            # Món cơm
+            "cơm chiên": "cơm rang",
+            "cơm chiên gà": "cơm rang",
+            "cơm chiên thịt": "cơm rang",
+
+            # Thịt gà
+            "gà": "thịt gà ta",
+            "thịt gà": "thịt gà ta",
+            "gà ta": "thịt gà ta",
+            "gà rán": "thịt gà ta",
+            "gà nướng": "thịt gà ta",
+
+            # Thịt heo/lợn
+            "thịt heo": "thịt lợn nạc",
+            "heo": "thịt lợn nạc",
+            "lợn": "thịt lợn nạc",
+            "thịt ba chỉ": "thịt lợn nửa nạc nửa mỡ",
+
+            # Thịt bò
+            "bò": "thịt bò loại I",
+            "thịt bò": "thịt bò loại I",
+            "thịt bò nạc": "thịt bò loại I",
+
+            # Rau củ chung
+            "rau củ": "rau muống",
+            "rau xanh": "rau muống",
+            "rau": "rau muống",
+            "củ": "cà rốt",
+
+            # Cá
+            "cá": "cá chép",
+            "cá tươi": "cá chép",
+
+            # Tôm
+            "tôm": "tôm biển",
+            "tôm tươi": "tôm biển",
+            "tôm sú": "tôm biển",
+
+            # Trứng
+            "trứng": "trứng gà",
+
+            # Phở và món nước
+            "phở": "phở bò",
+            "phở tái": "phở bò",
+            "phở chín": "phở bò",
+            "bún bò": "bún bò huế",
+            "bún riêu": "bún riêu cua",
+            "hủ tiếu": "hủ tiếu",
+
+            # Món xào
+            "rau muống xào": "rau muống",
+            "cải xào": "cải xanh",
+            "thịt xào": "thịt lợn nạc",
+        }
+
+        # Thêm mapping nếu có
+        if normalized_name in name_mappings:
+            variations.append(name_mappings[normalized_name])
+
+        # Thêm các biến thể khác
+        for original, mapped in name_mappings.items():
+            if original in normalized_name:
+                variations.append(mapped)
+                variations.append(normalized_name.replace(original, mapped))
+
+        return list(set(variations))  # Remove duplicates
+
     def get_official_nutrition_data(self, food_name: str, estimated_grams: float) -> Optional[Dict]:
         """
-        🔧 FIX: Lấy dữ liệu dinh dưỡng chính thức từ database Việt Nam
+        🔧 FIX: Lấy dữ liệu dinh dưỡng chính thức từ database Việt Nam với smart lookup
 
         Args:
             food_name: Tên món ăn/nguyên liệu
@@ -393,49 +472,54 @@ class GeminiVisionService:
             Dict chứa nutrition data chính thức hoặc None
         """
         try:
-            # Chuẩn hóa tên
-            normalized_name = food_name.lower().strip()
+            # Tạo các biến thể tên để tìm kiếm
+            name_variations = self.normalize_food_name(food_name)
+            print(f"🔍 Searching for '{food_name}' with variations: {name_variations}")
 
             # 1. Tìm trong database món ăn hoàn chỉnh trước
-            dish_nutrition = get_dish_nutrition(normalized_name)
-            if dish_nutrition:
-                # Scale theo estimated_grams nếu cần
-                serving_size_text = dish_nutrition.get("serving_size", "")
-
-                return {
-                    "calories": dish_nutrition["calories"],
-                    "protein": dish_nutrition["protein"],
-                    "fat": dish_nutrition["fat"],
-                    "carbs": dish_nutrition["carbs"],
-                    "fiber": dish_nutrition.get("fiber", 0),
-                    "sodium": dish_nutrition.get("sodium", 0),
-                    "source": f"Official Vietnamese Database - {dish_nutrition['source']}",
-                    "reference_code": dish_nutrition["reference_code"],
-                    "serving_size": serving_size_text,
-                    "data_quality": "official_dish"
-                }
+            for name_variant in name_variations:
+                dish_nutrition = get_dish_nutrition(name_variant)
+                if dish_nutrition:
+                    print(f"✅ Found dish nutrition for '{name_variant}'")
+                    return {
+                        "calories": dish_nutrition["calories"],
+                        "protein": dish_nutrition["protein"],
+                        "fat": dish_nutrition["fat"],
+                        "carbs": dish_nutrition["carbs"],
+                        "fiber": dish_nutrition.get("fiber", 0),
+                        "sodium": dish_nutrition.get("sodium", 0),
+                        "source": f"Official Vietnamese Database - {dish_nutrition['source']}",
+                        "reference_code": dish_nutrition["reference_code"],
+                        "serving_size": dish_nutrition.get("serving_size", f"{estimated_grams}g"),
+                        "data_quality": "official_dish"
+                    }
 
             # 2. Tìm trong database nguyên liệu
-            ingredient_nutrition = get_ingredient_nutrition(normalized_name, estimated_grams)
-            if ingredient_nutrition:
-                return {
-                    "calories": round(ingredient_nutrition["calories"], 1),
-                    "protein": round(ingredient_nutrition["protein"], 1),
-                    "fat": round(ingredient_nutrition["fat"], 1),
-                    "carbs": round(ingredient_nutrition["carbs"], 1),
-                    "fiber": round(ingredient_nutrition["fiber"], 1),
-                    "sodium": 0,  # Default
-                    "source": f"Official Vietnamese Database - {ingredient_nutrition['source']}",
-                    "reference_code": ingredient_nutrition["reference_code"],
-                    "serving_size": f"{estimated_grams}g",
-                    "data_quality": "official_ingredient"
-                }
+            for name_variant in name_variations:
+                ingredient_nutrition = get_ingredient_nutrition(name_variant, estimated_grams)
+                if ingredient_nutrition:
+                    print(f"✅ Found ingredient nutrition for '{name_variant}'")
+                    return {
+                        "calories": round(ingredient_nutrition["calories"], 1),
+                        "protein": round(ingredient_nutrition["protein"], 1),
+                        "fat": round(ingredient_nutrition["fat"], 1),
+                        "carbs": round(ingredient_nutrition["carbs"], 1),
+                        "fiber": round(ingredient_nutrition["fiber"], 1),
+                        "sodium": 0,  # Default
+                        "source": f"Official Vietnamese Database - {ingredient_nutrition['source']}",
+                        "reference_code": ingredient_nutrition["reference_code"],
+                        "serving_size": f"{estimated_grams}g",
+                        "data_quality": "official_ingredient"
+                    }
 
             # 3. Tìm trong extended database
-            extended_nutrition = self.get_extended_nutrition_data(normalized_name, estimated_grams)
-            if extended_nutrition:
-                return extended_nutrition
+            for name_variant in name_variations:
+                extended_nutrition = self.get_extended_nutrition_data(name_variant, estimated_grams)
+                if extended_nutrition:
+                    print(f"✅ Found extended nutrition for '{name_variant}'")
+                    return extended_nutrition
 
+            print(f"❌ No nutrition data found for '{food_name}' and its variations")
             return None
 
         except Exception as e:
@@ -444,16 +528,21 @@ class GeminiVisionService:
 
     def get_extended_nutrition_data(self, food_name: str, estimated_grams: float) -> Optional[Dict]:
         """
-        Lấy dữ liệu từ extended nutrition database
+        🔧 FIX: Lấy dữ liệu từ extended nutrition database với fuzzy matching
         """
         try:
             # Tìm trong các database extended
             all_databases = [
-                VEGETABLES_NUTRITION, FRUITS_NUTRITION, MEAT_NUTRITION,
-                SEAFOOD_NUTRITION, EGGS_NUTRITION, DAIRY_NUTRITION
+                ("VEGETABLES", VEGETABLES_NUTRITION),
+                ("FRUITS", FRUITS_NUTRITION),
+                ("MEAT", MEAT_NUTRITION),
+                ("SEAFOOD", SEAFOOD_NUTRITION),
+                ("EGGS", EGGS_NUTRITION),
+                ("DAIRY", DAIRY_NUTRITION)
             ]
 
-            for db in all_databases:
+            # Tìm exact match trước
+            for db_name, db in all_databases:
                 if food_name in db:
                     nutrition_per_100g = db[food_name]
                     scale_factor = estimated_grams / 100.0
@@ -465,11 +554,34 @@ class GeminiVisionService:
                         "carbs": round(nutrition_per_100g["carbs"] * scale_factor, 1),
                         "fiber": round(nutrition_per_100g.get("fiber", 0) * scale_factor, 1),
                         "sodium": 0,  # Default
-                        "source": "Vietnamese Extended Nutrition Database",
+                        "source": f"Vietnamese Extended Database - {db_name}",
                         "reference_code": "VN-EXT",
                         "serving_size": f"{estimated_grams}g",
                         "data_quality": "extended_database"
                     }
+
+            # Tìm partial match nếu không có exact match
+            for db_name, db in all_databases:
+                for key in db.keys():
+                    # Kiểm tra nếu food_name chứa trong key hoặc ngược lại
+                    if food_name in key or key in food_name:
+                        nutrition_per_100g = db[key]
+                        scale_factor = estimated_grams / 100.0
+
+                        print(f"🔍 Partial match: '{food_name}' -> '{key}' in {db_name}")
+
+                        return {
+                            "calories": round(nutrition_per_100g["calories"] * scale_factor, 1),
+                            "protein": round(nutrition_per_100g["protein"] * scale_factor, 1),
+                            "fat": round(nutrition_per_100g["fat"] * scale_factor, 1),
+                            "carbs": round(nutrition_per_100g["carbs"] * scale_factor, 1),
+                            "fiber": round(nutrition_per_100g.get("fiber", 0) * scale_factor, 1),
+                            "sodium": 0,  # Default
+                            "source": f"Vietnamese Extended Database - {db_name} (partial match: {key})",
+                            "reference_code": "VN-EXT",
+                            "serving_size": f"{estimated_grams}g",
+                            "data_quality": "extended_database"
+                        }
 
             return None
 

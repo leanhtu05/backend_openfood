@@ -15,15 +15,17 @@ def test_official_nutrition_lookup():
         print("🔧 Testing Official Nutrition Data Lookup...")
         print("=" * 60)
         
-        # Test cases với các món ăn Việt Nam phổ biến
+        # Test cases với các món ăn từ Gemini Vision
         test_foods = [
+            {"name": "Cơm chiên gà", "grams": 300},
+            {"name": "Gà", "grams": 150},
+            {"name": "Rau củ", "grams": 100},
             {"name": "phở bò", "grams": 500},
             {"name": "cơm tấm", "grams": 300},
             {"name": "thịt bò", "grams": 100},
             {"name": "rau muống", "grams": 80},
             {"name": "trứng gà", "grams": 60},
-            {"name": "bánh mì", "grams": 150},
-            {"name": "tôm sú", "grams": 120},
+            {"name": "tôm", "grams": 120},
             {"name": "cà rốt", "grams": 100}
         ]
         

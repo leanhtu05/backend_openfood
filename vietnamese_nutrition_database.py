@@ -355,6 +355,90 @@ def get_ingredient_nutrition(ingredient_name: str, amount_grams: float = 100.0):
         }
     }
 
+def parse_ingredient_amount(amount_str: str, ingredient_name: str) -> float:
+    """
+    🔧 FIX: Parse ingredient amount với realistic conversions
+
+    Args:
+        amount_str: String như "2 quả", "1 cup", "50g"
+        ingredient_name: Tên nguyên liệu để estimate weight
+
+    Returns:
+        float: Khối lượng ước tính (grams)
+    """
+    amount_str = amount_str.lower().strip()
+    ingredient_name = ingredient_name.lower().strip()
+
+    # Extract number from string
+    import re
+    numbers = re.findall(r'\d+\.?\d*', amount_str)
+    base_number = float(numbers[0]) if numbers else 1.0
+
+    # Conversion mappings
+    if any(unit in amount_str for unit in ['g', 'gram', 'gam']):
+        return base_number
+    elif any(unit in amount_str for unit in ['kg', 'kilo']):
+        return base_number * 1000
+    elif any(unit in amount_str for unit in ['ml', 'milliliter']):
+        return base_number  # Assume 1ml ≈ 1g for most liquids
+    elif any(unit in amount_str for unit in ['l', 'liter', 'lít']):
+        return base_number * 1000
+
+    # Vietnamese unit conversions
+    elif any(unit in amount_str for unit in ['quả', 'trái', 'củ']):
+        # Estimate weight based on ingredient type
+        if any(food in ingredient_name for food in ['trứng', 'egg']):
+            return base_number * 60  # 1 trứng ≈ 60g
+        elif any(food in ingredient_name for food in ['cà rốt', 'carrot']):
+            return base_number * 80  # 1 củ cà rốt ≈ 80g
+        elif any(food in ingredient_name for food in ['hành', 'onion']):
+            return base_number * 50  # 1 củ hành ≈ 50g
+        else:
+            return base_number * 100  # Default fruit/vegetable ≈ 100g
+
+    elif any(unit in amount_str for unit in ['ổ', 'chiếc']):
+        if any(food in ingredient_name for food in ['bánh mì', 'bread']):
+            return base_number * 150  # 1 ổ bánh mì ≈ 150g
+        else:
+            return base_number * 100  # Default
+
+    elif any(unit in amount_str for unit in ['tô', 'bát', 'bowl']):
+        return base_number * 200  # 1 tô/bát ≈ 200g
+
+    elif any(unit in amount_str for unit in ['cup', 'ly']):
+        if any(food in ingredient_name for food in ['gạo', 'rice']):
+            return base_number * 180  # 1 cup gạo ≈ 180g
+        elif any(food in ingredient_name for food in ['rau', 'vegetable']):
+            return base_number * 80   # 1 cup rau ≈ 80g
+        else:
+            return base_number * 150  # Default cup ≈ 150g
+
+    elif any(unit in amount_str for unit in ['tbsp', 'tablespoon', 'muỗng canh']):
+        return base_number * 15  # 1 tbsp ≈ 15g
+
+    elif any(unit in amount_str for unit in ['tsp', 'teaspoon', 'muỗng cà phê']):
+        return base_number * 5   # 1 tsp ≈ 5g
+
+    elif any(unit in amount_str for unit in ['lát', 'slice']):
+        if any(food in ingredient_name for food in ['thịt', 'meat']):
+            return base_number * 30  # 1 lát thịt ≈ 30g
+        elif any(food in ingredient_name for food in ['bánh mì', 'bread']):
+            return base_number * 25  # 1 lát bánh mì ≈ 25g
+        else:
+            return base_number * 20  # Default slice ≈ 20g
+
+    elif any(unit in amount_str for unit in ['miếng', 'piece']):
+        return base_number * 50  # 1 miếng ≈ 50g
+
+    # If no unit specified, assume grams if number > 10, else assume pieces
+    elif base_number > 10:
+        return base_number  # Likely grams
+    else:
+        return base_number * 100  # Likely pieces, estimate 100g each
+
+    # Fallback
+    return 100.0
+
 def get_dish_nutrition(dish_name: str):
     """
     Lấy thông tin dinh dưỡng chính thức cho món ăn Việt Nam hoàn chỉnh
@@ -392,13 +476,8 @@ def calculate_dish_nutrition_from_ingredients(ingredients: list):
         name = ingredient.get("name", "")
         amount_str = ingredient.get("amount", "100g")
         
-        # Parse amount (extract number from string like "200g", "1 tbsp")
-        try:
-            amount_grams = float(''.join(filter(str.isdigit, amount_str)))
-            if amount_grams == 0:
-                amount_grams = 100.0  # Default
-        except:
-            amount_grams = 100.0
+        # 🔧 FIX: Improved amount parsing với realistic conversions
+        amount_grams = parse_ingredient_amount(amount_str, name)
         
         # Get nutrition for this ingredient
         ingredient_nutrition = get_ingredient_nutrition(name, amount_grams)

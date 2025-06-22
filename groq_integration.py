@@ -824,41 +824,66 @@ class GroqService:
         total_calories = sum(meal.get('nutrition', {}).get('calories', 0) for meal in meals)
         print(f"📊 Current total calories: {total_calories}, Target: {target_calories}")
 
-        # Nếu đã đủ hoặc chỉ thiếu ít (dưới 50 calories), return luôn
-        if total_calories >= target_calories * 0.9:  # 90% target là đủ
-            print(f"✅ Calories adequate: {total_calories}/{target_calories}")
+        # 🔧 FIX: THỰC TẾ VÀ AN TOÀN - Không tạo dữ liệu dinh dưỡng ảo
+        # Chấp nhận sai lệch hợp lý thay vì tạo dữ liệu giả
+        acceptable_range = target_calories * 0.15  # Chấp nhận sai lệch 15%
+
+        if abs(total_calories - target_calories) <= acceptable_range:
+            print(f"✅ Calories within acceptable range: {total_calories}/{target_calories} (±{acceptable_range:.0f})")
             return meals
 
-        # Tính calories còn thiếu
-        missing_calories = target_calories - total_calories
-        print(f"⚠️ Missing {missing_calories} calories, generating additional dish...")
+        # Tính calories còn thiếu/thừa
+        calorie_difference = target_calories - total_calories
+        print(f"📊 Calorie difference: {calorie_difference:.0f} calories")
 
-        # Tạo món bổ sung với calories còn thiếu
-        try:
-            # Tính nutrition targets cho món bổ sung
-            additional_protein = max(10, missing_calories // 20)  # ~4 cal/g protein
-            additional_fat = max(5, missing_calories // 40)       # ~9 cal/g fat
-            additional_carbs = max(15, missing_calories // 8)     # ~4 cal/g carbs
+        # 🔧 FIX: Điều chỉnh portion size của món hiện có thay vì tạo món ảo
+        if meals and abs(calorie_difference) < target_calories * 0.3:  # Chỉ điều chỉnh nếu sai lệch < 30%
+            print(f"🔧 Adjusting portion sizes of existing dishes (realistic approach)")
 
-            # Điều chỉnh để tổng calories khớp
-            calculated_calories = (additional_protein * 4) + (additional_fat * 9) + (additional_carbs * 4)
-            if calculated_calories > missing_calories * 1.2:  # Nếu quá cao, giảm carbs
-                additional_carbs = max(10, (missing_calories - (additional_protein * 4) - (additional_fat * 9)) // 4)
+            # Tính adjustment factor hợp lý
+            adjustment_factor = target_calories / total_calories if total_calories > 0 else 1.0
 
-            print(f"🔧 Generating additional dish: {missing_calories} cal, {additional_protein}g protein")
+            # Giới hạn adjustment factor trong khoảng hợp lý (0.8 - 1.3)
+            # Điều này đảm bảo không thay đổi quá nhiều so với thực tế
+            adjustment_factor = max(0.8, min(1.3, adjustment_factor))
 
-            # Tạo món bổ sung thông minh
-            additional_meal = self._create_smart_additional_meal(
-                missing_calories, additional_protein, additional_fat, additional_carbs, meal_type
-            )
+            print(f"📊 Applying realistic adjustment factor: {adjustment_factor:.2f}")
 
-            if additional_meal:
-                meals.append(additional_meal)
-                new_total = sum(meal.get('nutrition', {}).get('calories', 0) for meal in meals)
-                print(f"✅ Added additional dish. New total: {new_total} calories")
+            # Điều chỉnh nutrition của các món hiện có
+            for meal in meals:
+                if 'nutrition' in meal:
+                    # Cập nhật portion size trong description
+                    if 'description' in meal:
+                        if adjustment_factor > 1.05:
+                            meal['description'] += " (phần lớn)"
+                        elif adjustment_factor < 0.95:
+                            meal['description'] += " (phần nhỏ)"
 
-        except Exception as e:
-            print(f"⚠️ Error creating additional meal: {e}")
+                    # Điều chỉnh nutrition theo tỷ lệ thực tế
+                    meal['nutrition']['calories'] *= adjustment_factor
+                    meal['nutrition']['protein'] *= adjustment_factor
+                    meal['nutrition']['fat'] *= adjustment_factor
+                    meal['nutrition']['carbs'] *= adjustment_factor
+
+            new_total = sum(meal.get('nutrition', {}).get('calories', 0) for meal in meals)
+            print(f"✅ Adjusted portions realistically. New total: {new_total:.1f} calories")
+
+            return meals
+
+        # 🔧 FIX: Nếu sai lệch quá lớn, thông báo và giữ nguyên thay vì tạo dữ liệu ảo
+        if abs(calorie_difference) >= target_calories * 0.3:
+            print(f"⚠️ Large calorie difference ({calorie_difference:.0f}). Keeping realistic values instead of creating fake data.")
+            print(f"📊 Actual total: {total_calories:.0f} calories vs Target: {target_calories:.0f} calories")
+
+            # Thêm note vào meal để user biết
+            for meal in meals:
+                if 'description' in meal:
+                    if calorie_difference > 0:
+                        meal['description'] += f" (Lưu ý: Thực tế ít hơn mục tiêu {abs(calorie_difference):.0f} kcal)"
+                    else:
+                        meal['description'] += f" (Lưu ý: Thực tế nhiều hơn mục tiêu {abs(calorie_difference):.0f} kcal)"
+
+            return meals
 
         return meals
 
@@ -874,13 +899,17 @@ class GroqService:
         Returns:
             Dict: Món ăn bổ sung
         """
-        # Chọn món phù hợp theo calories range
-        if calories <= 150:
-            # Món nhẹ
+        # 🔧 FIX: Đảm bảo calories tối thiểu để tránh món quá nhỏ
+        min_calories = max(150, calories)  # Minimum 150 calories
+        print(f"🔧 Adjusted calories from {calories} to {min_calories} (minimum 150)")
+
+        # Chọn món phù hợp theo calories range (đã điều chỉnh)
+        if min_calories <= 200:
+            # Món nhẹ nhưng đủ chất
             dish_templates = {
-                "bữa sáng": ["Trứng Luộc", "Sữa Đậu Nành", "Bánh Quy Yến Mạch"],
-                "bữa trưa": ["Canh Rau", "Salad Trộn", "Chả Cá Chiên"],
-                "bữa tối": ["Chè Đậu Xanh", "Yaourt", "Bánh Flan"]
+                "bữa sáng": ["Bánh Mì Trứng", "Cháo Yến Mạch", "Sữa Chua Granola"],
+                "bữa trưa": ["Cơm Chiên Trứng", "Bún Chả Nhỏ", "Mì Xào Rau"],
+                "bữa tối": ["Bánh Xèo Nhỏ", "Gỏi Cuốn", "Chả Giò"]
             }
         elif calories <= 250:
             # Món vừa
@@ -923,7 +952,14 @@ class GroqService:
             final_name = f"{base_name} Phiên Bản {counter}"
             counter += 1
 
-        # Tạo meal object
+        # 🔧 FIX: Tính toán lại nutrition với min_calories
+        adjusted_protein = max(8, min_calories * 0.15 / 4)  # 15% from protein, min 8g
+        adjusted_fat = max(5, min_calories * 0.25 / 9)      # 25% from fat, min 5g
+        adjusted_carbs = max(15, min_calories * 0.60 / 4)   # 60% from carbs, min 15g
+
+        print(f"🔧 Adjusted nutrition: {min_calories} kcal, {adjusted_protein:.1f}g protein, {adjusted_fat:.1f}g fat, {adjusted_carbs:.1f}g carbs")
+
+        # Tạo meal object với nutrition đã điều chỉnh
         additional_meal = {
             "name": final_name,
             "description": f"Món {base_name} bổ sung để đạt đủ mục tiêu dinh dưỡng",
@@ -935,14 +971,14 @@ class GroqService:
                 "Trình bày đẹp mắt"
             ],
             "nutrition": {
-                "calories": calories,
-                "protein": protein,
-                "fat": fat,
-                "carbs": carbs
+                "calories": min_calories,      # 🔧 FIX: Use adjusted calories
+                "protein": adjusted_protein,   # 🔧 FIX: Use adjusted protein
+                "fat": adjusted_fat,          # 🔧 FIX: Use adjusted fat
+                "carbs": adjusted_carbs       # 🔧 FIX: Use adjusted carbs
             },
-            "preparation_time": "15 phút",
+            "preparation_time": "20 phút",
             "health_benefits": self._generate_detailed_health_benefits(base_name, base_ingredients, {
-                "calories": calories, "protein": protein, "fat": fat, "carbs": carbs
+                "calories": min_calories, "protein": adjusted_protein, "fat": adjusted_fat, "carbs": adjusted_carbs
             })
         }
 
@@ -1650,10 +1686,25 @@ class GroqService:
     
     def clear_cache(self):
         """Xóa cache và recent dishes để buộc tạo mới dữ liệu hoàn toàn"""
-        print("Clearing Groq service cache")
+        print("🗑️ Clearing Groq service cache")
         self.cache = {}
-        print("Clearing recent dishes to allow dish repetition")
+        print("🗑️ Clearing recent dishes to allow dish repetition")
         self.recent_dishes = []
+
+        # 🔧 FIX: Enhanced diversity enforcement
+        import time
+        import random
+
+        # Reset random seed với timestamp để đảm bảo diversity
+        diversity_seed = int(time.time() * 1000) % 1000000
+        random.seed(diversity_seed)
+
+        # Clear any internal tracking
+        if hasattr(self, 'used_dishes_tracker'):
+            self.used_dishes_tracker = {}
+
+        print(f"🎲 Reset random seed for diversity: {diversity_seed}")
+        print("✅ Cache cleared completely for maximum diversity")
     
     def get_cache_info(self):
         """

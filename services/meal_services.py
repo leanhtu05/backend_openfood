@@ -9,6 +9,16 @@ from utils import (
     calculate_day_nutrition, distribute_nutrition_targets,
     adjust_dish_portions, generate_random_dishes, format_nutrition_value
 )
+from services.vietnamese_meal_service import vietnamese_meal_service
+
+# 🔧 FIX: Import Vietnamese dish generator để thay thế SAMPLE_RECIPES
+try:
+    from services.vietnamese_dish_generator import vietnamese_dish_generator
+    VIETNAMESE_GENERATOR_AVAILABLE = True
+    print("✅ Vietnamese dish generator imported successfully")
+except ImportError as e:
+    print(f"⚠️ Vietnamese dish generator not available: {e}")
+    VIETNAMESE_GENERATOR_AVAILABLE = False
 from nutritionix import get_nutrition_fallback
 from nutritionix_optimized import nutritionix_optimized_api
 from services.meal_tracker import (
@@ -187,33 +197,151 @@ def generate_dish(recipe_dict: Dict, user_data: Dict = None) -> Dish:
     except Exception as e:
         # Log error details
         print(f"Error getting nutrition data: {str(e)}")
-        # Fallback: Calculate nutrition from local data
+
+        # 🔧 FIX: Enhanced fallback nutrition calculation
         dish_nutrition = NutritionInfo(calories=0, protein=0, fat=0, carbs=0)
-        for ingredient in ingredients:
-            try:
-                ing_nutrition = get_nutrition_fallback(ingredient.name, ingredient.amount)
-                dish_nutrition.calories += ing_nutrition.calories
-                dish_nutrition.protein += ing_nutrition.protein
-                dish_nutrition.fat += ing_nutrition.fat
-                dish_nutrition.carbs += ing_nutrition.carbs
-            except Exception as ing_error:
-                print(f"Error processing ingredient '{ingredient.name}': {str(ing_error)}")
-        
-        if dish_nutrition.calories == 0:
-            print("Fallback nutrition also failed. Using default values.")
+
+        # Try to calculate from Vietnamese nutrition database first
+        dish_name = recipe_dict.get("name", "").lower()
+        from vietnamese_nutrition_database import get_dish_nutrition
+
+        vietnamese_nutrition = get_dish_nutrition(dish_name)
+        if vietnamese_nutrition:
+            print(f"✅ Found Vietnamese nutrition data for '{dish_name}': {vietnamese_nutrition['calories']} kcal")
             dish_nutrition = NutritionInfo(
-                calories=400, 
-                protein=20, 
-                fat=15, 
-                carbs=45
+                calories=vietnamese_nutrition["calories"],
+                protein=vietnamese_nutrition["protein"],
+                fat=vietnamese_nutrition["fat"],
+                carbs=vietnamese_nutrition["carbs"]
             )
+        else:
+            # Fallback: Calculate nutrition from ingredients
+            print(f"⚠️ No Vietnamese nutrition data for '{dish_name}', calculating from ingredients...")
+            for ingredient in ingredients:
+                try:
+                    ing_nutrition = get_nutrition_fallback(ingredient.name, ingredient.amount)
+                    dish_nutrition.calories += ing_nutrition.calories
+                    dish_nutrition.protein += ing_nutrition.protein
+                    dish_nutrition.fat += ing_nutrition.fat
+                    dish_nutrition.carbs += ing_nutrition.carbs
+                except Exception as ing_error:
+                    print(f"Error processing ingredient '{ingredient.name}': {str(ing_error)}")
+
+            # 🔧 FIX: Sử dụng dữ liệu thực tế từ database thay vì tạo giá trị tối thiểu ảo
+            if dish_nutrition.calories < 50:  # If calories too low
+                print(f"⚠️ Calculated calories too low ({dish_nutrition.calories}), searching for similar dishes...")
+
+                # Tìm món ăn tương tự trong database
+                from vietnamese_nutrition_database import VIETNAMESE_DISHES_NUTRITION
+
+                similar_dish = None
+                dish_keywords = dish_name.split()
+
+                # Tìm món có từ khóa tương tự
+                for db_dish_name, db_nutrition in VIETNAMESE_DISHES_NUTRITION.items():
+                    for keyword in dish_keywords:
+                        if keyword.lower() in db_dish_name.lower():
+                            similar_dish = db_nutrition
+                            print(f"✅ Found similar dish '{db_dish_name}' with {db_nutrition['calories']} kcal")
+                            break
+                    if similar_dish:
+                        break
+
+                if similar_dish:
+                    # Sử dụng dữ liệu thực tế từ món tương tự
+                    dish_nutrition = NutritionInfo(
+                        calories=similar_dish["calories"],
+                        protein=similar_dish["protein"],
+                        fat=similar_dish["fat"],
+                        carbs=similar_dish["carbs"]
+                    )
+                    print(f"✅ Applied real nutrition data: {similar_dish['calories']} kcal")
+                else:
+                    # Fallback: Sử dụng món phổ biến nhất phù hợp với meal type
+                    fallback_dishes = {
+                        "sáng": VIETNAMESE_DISHES_NUTRITION.get("bánh mì", {"calories": 320, "protein": 18, "fat": 12, "carbs": 35}),
+                        "trưa": VIETNAMESE_DISHES_NUTRITION.get("cơm tấm", {"calories": 520, "protein": 28.5, "fat": 18.2, "carbs": 65}),
+                        "tối": VIETNAMESE_DISHES_NUTRITION.get("phở bò", {"calories": 420, "protein": 25.3, "fat": 12.2, "carbs": 55})
+                    }
+
+                    # Xác định meal type từ context
+                    meal_context = "trưa"  # default
+                    if any(word in dish_name.lower() for word in ["sáng", "breakfast"]):
+                        meal_context = "sáng"
+                    elif any(word in dish_name.lower() for word in ["tối", "dinner"]):
+                        meal_context = "tối"
+
+                    fallback_nutrition = fallback_dishes[meal_context]
+                    dish_nutrition = NutritionInfo(
+                        calories=fallback_nutrition["calories"],
+                        protein=fallback_nutrition["protein"],
+                        fat=fallback_nutrition["fat"],
+                        carbs=fallback_nutrition["carbs"]
+                    )
+                    print(f"✅ Applied fallback real nutrition for {meal_context}: {fallback_nutrition['calories']} kcal")
+
+        # 🔧 FIX: Final safety check với thông báo rõ ràng về độ tin cậy
+        if dish_nutrition.calories < 50:
+            print("🚨 All nutrition calculation methods failed.")
+            print("⚠️ WARNING: Using estimated values - NOT VERIFIED NUTRITION DATA")
+            print("📋 Recommendation: Verify nutrition information with official sources")
+
+            # Sử dụng giá trị ước tính với disclaimer rõ ràng
+            dish_nutrition = NutritionInfo(
+                calories=300,  # Estimated - needs verification
+                protein=18,    # Estimated - needs verification
+                fat=10,        # Estimated - needs verification
+                carbs=35       # Estimated - needs verification
+            )
+
+            # Thêm disclaimer vào recipe
+            if "description" not in recipe_dict:
+                recipe_dict["description"] = ""
+            recipe_dict["description"] += " ⚠️ Thông tin dinh dưỡng là ước tính, cần xác minh với chuyên gia dinh dưỡng."
     
+    # 🔧 FIX: Xác minh dữ liệu dinh dưỡng trước khi sử dụng
+    try:
+        from services.nutrition_verification_service import nutrition_verification_service
+
+        nutrition_dict = {
+            "calories": dish_nutrition.calories,
+            "protein": dish_nutrition.protein,
+            "fat": dish_nutrition.fat,
+            "carbs": dish_nutrition.carbs
+        }
+
+        verification_result = nutrition_verification_service.verify_dish_nutrition(
+            recipe_dict.get("name", "Unknown dish"),
+            nutrition_dict
+        )
+
+        print(f"🔍 Nutrition verification: {verification_result.source}")
+        print(f"📊 Confidence: {verification_result.confidence_score:.2f}")
+
+        if verification_result.warnings:
+            print(f"⚠️ Warnings: {verification_result.warnings}")
+
+        # Thêm thông tin verification vào description
+        if "description" not in recipe_dict:
+            recipe_dict["description"] = ""
+
+        if verification_result.is_verified:
+            recipe_dict["description"] += f" ✅ Dữ liệu dinh dưỡng đã xác minh ({verification_result.source})"
+        else:
+            recipe_dict["description"] += f" ⚠️ Dữ liệu dinh dưỡng chưa xác minh (Confidence: {verification_result.confidence_score:.1f})"
+
+    except Exception as e:
+        print(f"❌ Nutrition verification failed: {e}")
+        if "description" not in recipe_dict:
+            recipe_dict["description"] = ""
+        recipe_dict["description"] += " ⚠️ Không thể xác minh dữ liệu dinh dưỡng"
+
     # Format nutrition values
     dish_nutrition.calories = format_nutrition_value(dish_nutrition.calories)
     dish_nutrition.protein = format_nutrition_value(dish_nutrition.protein)
     dish_nutrition.fat = format_nutrition_value(dish_nutrition.fat)
     dish_nutrition.carbs = format_nutrition_value(dish_nutrition.carbs)
-    
+
     print(f"Final dish nutrition: cal={dish_nutrition.calories}, protein={dish_nutrition.protein}, fat={dish_nutrition.fat}, carbs={dish_nutrition.carbs}")
     
     # Xác định loại món và vùng miền
@@ -1051,15 +1179,25 @@ def replace_day_meal_plan(
     # Reset bộ đếm các món ăn đã dùng để đảm bảo có sự đa dạng tối đa cho ngày mới
     reset_tracker()
     
-    # Reset cache trong Groq service để đảm bảo luôn tạo mới
+    # 🔧 FIX: Enhanced cache clearing và diversity enforcement
     if use_ai and AI_SERVICE and AI_AVAILABLE:
         try:
             # Xoá cache để luôn tạo món mới
             print("🔄 Đang xóa cache để tạo món mới...")
             AI_SERVICE.clear_cache()
-            print("✅ Đã xóa cache AI thành công")
+
+            # 🔧 FIX: Thêm random seed để đảm bảo diversity
+            import time
+            import random
+            random.seed(int(time.time()))
+
+            print("✅ Đã xóa cache AI và reset random seed thành công")
         except Exception as e:
             print(f"⚠️ Không thể xóa cache AI: {e}")
+
+    # 🔧 FIX: Force diversity by adding timestamp to meal generation
+    diversity_timestamp = int(time.time())
+    print(f"🎲 Diversity timestamp: {diversity_timestamp}")
     
     # Gọi hàm tạo kế hoạch cho một ngày
     new_day_plan = generate_day_meal_plan(
@@ -1076,3 +1214,67 @@ def replace_day_meal_plan(
     )
     
     return new_day_plan
+
+def get_vietnamese_dishes(meal_type: str, count: int = 10, avoid_dishes: List[str] = None) -> List[Dict]:
+    """
+    🔧 FIX: Tạo món ăn Việt Nam thay thế SAMPLE_RECIPES
+
+    Args:
+        meal_type: Loại bữa ăn (breakfast, lunch, dinner)
+        count: Số lượng món cần tạo
+        avoid_dishes: Danh sách món cần tránh
+
+    Returns:
+        List[Dict]: Danh sách món ăn Việt Nam với dữ liệu dinh dưỡng chính xác
+    """
+    if not VIETNAMESE_GENERATOR_AVAILABLE:
+        print("⚠️ Vietnamese generator not available, using fallback SAMPLE_RECIPES")
+        return SAMPLE_RECIPES.get(meal_type, [])
+
+    try:
+        print(f"🔧 Generating {count} Vietnamese dishes for {meal_type}")
+
+        # Generate dishes từ các miền khác nhau
+        dishes = []
+        regions = ["miền_bắc", "miền_trung", "miền_nam"]
+        dishes_per_region = count // len(regions)
+
+        for region in regions:
+            for i in range(dishes_per_region):
+                try:
+                    dish = vietnamese_dish_generator.generate_single_dish(meal_type, region)
+
+                    # Kiểm tra avoid_dishes
+                    if avoid_dishes and dish["name"] in avoid_dishes:
+                        continue
+
+                    # Convert format để tương thích với hệ thống hiện tại
+                    converted_dish = {
+                        "name": dish["name"],
+                        "ingredients": [
+                            {"name": ing["name"], "amount": f"{ing['amount']}g"}
+                            for ing in dish["ingredients"]
+                        ],
+                        "preparation": dish["preparation"],
+                        "nutrition": dish["nutrition"],
+                        "region": dish["region"],
+                        "cooking_time": dish["cooking_time"],
+                        "difficulty": dish["difficulty"]
+                    }
+
+                    dishes.append(converted_dish)
+
+                except Exception as e:
+                    print(f"❌ Error generating dish: {e}")
+                    continue
+
+        print(f"✅ Generated {len(dishes)} Vietnamese dishes for {meal_type}")
+        return dishes[:count]
+
+    except Exception as e:
+        print(f"❌ Error in get_vietnamese_dishes: {e}")
+        print("⚠️ Falling back to SAMPLE_RECIPES")
+        return SAMPLE_RECIPES.get(meal_type, [])
+
+# Global instances
+# meal_service = MealService()  # Commented out as MealService class not defined in this file

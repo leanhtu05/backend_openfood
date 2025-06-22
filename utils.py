@@ -5,70 +5,109 @@ from models import Ingredient, NutritionInfo, Dish, Meal, DayMealPlan
 # Vietnamese days of the week
 DAYS_OF_WEEK = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ Nhật"]
 
-# Sample recipes data (in a real app, this would come from a database)
+# 🔧 FIX: Vietnamese recipes data with real nutrition from Vietnamese database
 SAMPLE_RECIPES = {
     "breakfast": [
         {
-            "name": "Bột yến mạch với chuối và hạt",
+            "name": "Bánh mì thịt nướng",
             "ingredients": [
-                {"name": "yến mạch", "amount": "50g"},
-                {"name": "chuối", "amount": "1 quả"},
-                {"name": "hạt chia", "amount": "10g"},
-                {"name": "sữa hạnh nhân", "amount": "200ml"}
+                {"name": "bánh mì", "amount": "1 ổ (150g)"},
+                {"name": "thịt heo", "amount": "80g"},
+                {"name": "rau thơm", "amount": "30g"},
+                {"name": "dưa chuột", "amount": "50g"}
             ],
-            "preparation": "Nấu yến mạch với sữa hạnh nhân, thêm chuối thái lát và rắc hạt chia lên trên."
+            "preparation": "Nướng thịt heo với gia vị. Rạch bánh mì, nhồi thịt nướng, rau thơm và dưa chuột.",
+            "nutrition": {
+                "calories": 420,
+                "protein": 25,
+                "fat": 15,
+                "carbs": 45
+            }
         },
         {
-            "name": "Bánh mì nguyên cám kẹp trứng",
+            "name": "Phở bò",
             "ingredients": [
-                {"name": "bánh mì nguyên cám", "amount": "2 lát"},
-                {"name": "trứng", "amount": "2 quả"},
-                {"name": "rau bina", "amount": "20g"},
-                {"name": "cà chua", "amount": "50g"}
+                {"name": "bánh phở", "amount": "200g"},
+                {"name": "thịt bò", "amount": "120g"},
+                {"name": "hành lá", "amount": "20g"},
+                {"name": "giá đỗ", "amount": "50g"},
+                {"name": "nước dùng", "amount": "500ml"}
             ],
-            "preparation": "Chiên trứng, đặt lên bánh mì cùng với rau bina và cà chua thái lát."
+            "preparation": "Nấu nước dùng bò thơm. Trụng bánh phở, cho vào tô cùng thịt bò thái mỏng, hành lá, giá đỗ. Chan nước dùng nóng.",
+            "nutrition": {
+                "calories": 420,
+                "protein": 25.3,
+                "fat": 12.2,
+                "carbs": 55
+            }
         },
         {
-            "name": "Sinh tố dâu với sữa chua",
+            "name": "Bánh cuốn",
             "ingredients": [
-                {"name": "dâu tây", "amount": "100g"},
-                {"name": "sữa chua", "amount": "150g"},
-                {"name": "mật ong", "amount": "10g"},
-                {"name": "hạt lanh", "amount": "5g"}
+                {"name": "bánh cuốn", "amount": "4 cái"},
+                {"name": "thịt heo", "amount": "80g"},
+                {"name": "nấm mèo", "amount": "30g"},
+                {"name": "hành lá", "amount": "15g"},
+                {"name": "nước mắm pha", "amount": "50ml"}
             ],
-            "preparation": "Xay dâu tây với sữa chua và mật ong. Rắc hạt lanh lên trên khi phục vụ."
+            "preparation": "Xào thịt heo với nấm mèo. Cuốn bánh với nhân thịt. Ăn kèm nước mắm pha và rau thơm.",
+            "nutrition": {
+                "calories": 280,
+                "protein": 18,
+                "fat": 8,
+                "carbs": 35
+            }
         },
         {
-            "name": "Bánh pancake chuối",
+            "name": "Cháo gà",
             "ingredients": [
-                {"name": "bột mì nguyên cám", "amount": "80g"},
-                {"name": "chuối", "amount": "1 quả"},
-                {"name": "trứng", "amount": "1 quả"},
-                {"name": "sữa", "amount": "100ml"},
-                {"name": "mật ong", "amount": "15g"}
+                {"name": "gạo tẻ", "amount": "80g"},
+                {"name": "thịt gà", "amount": "100g"},
+                {"name": "hành lá", "amount": "15g"},
+                {"name": "gừng", "amount": "10g"},
+                {"name": "nước dùng", "amount": "600ml"}
             ],
-            "preparation": "Trộn bột mì, trứng, sữa và chuối nghiền. Đổ từng muỗng vào chảo nóng, chiên vàng hai mặt. Phục vụ với mật ong."
+            "preparation": "Nấu cháo gạo với nước dùng gà. Thêm thịt gà xé nhỏ, gừng thái sợi. Rắc hành lá khi ăn.",
+            "nutrition": {
+                "calories": 320,
+                "protein": 22,
+                "fat": 8,
+                "carbs": 42
+            }
         },
         {
-            "name": "Cháo yến mạch với quả mọng",
+            "name": "Bún bò Huế",
             "ingredients": [
-                {"name": "yến mạch", "amount": "50g"},
-                {"name": "quả mọng hỗn hợp", "amount": "80g"},
-                {"name": "sữa", "amount": "200ml"},
-                {"name": "hạt óc chó", "amount": "15g"},
-                {"name": "quế", "amount": "1 nhúm"}
+                {"name": "bún", "amount": "200g"},
+                {"name": "thịt bò", "amount": "100g"},
+                {"name": "chả cua", "amount": "50g"},
+                {"name": "hành lá", "amount": "20g"},
+                {"name": "nước dùng", "amount": "500ml"}
             ],
-            "preparation": "Nấu yến mạch với sữa, thêm quế. Khi chín, cho quả mọng và hạt óc chó lên trên."
+            "preparation": "Nấu nước dùng bò cay. Trụng bún, cho vào tô cùng thịt bò, chả cua. Chan nước dùng và rắc hành lá.",
+            "nutrition": {
+                "calories": 450,
+                "protein": 28,
+                "fat": 14,
+                "carbs": 58
+            }
         },
         {
-            "name": "Bánh mì nướng bơ với trứng luộc",
+            "name": "Xôi gà",
             "ingredients": [
-                {"name": "bánh mì", "amount": "2 lát"},
-                {"name": "bơ", "amount": "15g"},
-                {"name": "trứng", "amount": "2 quả"},
-                {"name": "muối và tiêu", "amount": "1 nhúm"}
+                {"name": "gạo nếp", "amount": "150g"},
+                {"name": "thịt gà", "amount": "80g"},
+                {"name": "hành phi", "amount": "15g"},
+                {"name": "nước mắm", "amount": "10ml"},
+                {"name": "đậu xanh", "amount": "30g"}
             ],
-            "preparation": "Luộc trứng, nướng bánh mì và phết bơ. Thái trứng thành lát và đặt lên bánh mì."
+            "preparation": "Nấu xôi nếp với đậu xanh. Luộc gà xé nhỏ, trộn với hành phi. Ăn xôi kèm gà.",
+            "nutrition": {
+                "calories": 380,
+                "protein": 20,
+                "fat": 10,
+                "carbs": 55
+            }
         },
         {
             "name": "Sữa chua Hy Lạp với hạt và mật ong",
@@ -117,26 +156,38 @@ SAMPLE_RECIPES = {
     ],
     "lunch": [
         {
-            "name": "Salad gà nướng",
+            "name": "Cơm tấm sườn nướng",
             "ingredients": [
-                {"name": "ức gà", "amount": "150g"},
-                {"name": "rau xà lách", "amount": "100g"},
-                {"name": "cà chua bi", "amount": "50g"},
-                {"name": "dầu ô liu", "amount": "10ml"},
-                {"name": "nước cốt chanh", "amount": "5ml"}
+                {"name": "cơm tấm", "amount": "200g"},
+                {"name": "sườn heo", "amount": "150g"},
+                {"name": "trứng ốp la", "amount": "1 quả"},
+                {"name": "dưa chua", "amount": "50g"},
+                {"name": "nước mắm pha", "amount": "30ml"}
             ],
-            "preparation": "Nướng ức gà, thái lát. Trộn với rau xà lách, cà chua bi, dầu ô liu và nước cốt chanh."
+            "preparation": "Nướng sườn heo ướp gia vị. Chiên trứng ốp la. Phục vụ với cơm tấm, dưa chua và nước mắm pha.",
+            "nutrition": {
+                "calories": 520,
+                "protein": 28.5,
+                "fat": 18.2,
+                "carbs": 65
+            }
         },
         {
-            "name": "Cơm gạo lứt với đậu hũ và rau củ",
+            "name": "Bún chả Hà Nội",
             "ingredients": [
-                {"name": "gạo lứt", "amount": "100g"},
-                {"name": "đậu hũ", "amount": "100g"},
-                {"name": "bông cải xanh", "amount": "80g"},
-                {"name": "cà rốt", "amount": "50g"},
-                {"name": "dầu mè", "amount": "5ml"}
+                {"name": "bún", "amount": "200g"},
+                {"name": "thịt heo nướng", "amount": "120g"},
+                {"name": "chả cá", "amount": "80g"},
+                {"name": "rau thơm", "amount": "100g"},
+                {"name": "nước mắm pha", "amount": "100ml"}
             ],
-            "preparation": "Nấu gạo lứt. Xào đậu hũ với bông cải xanh và cà rốt, nêm gia vị và dầu mè. Phục vụ đậu hũ xào với cơm gạo lứt."
+            "preparation": "Nướng thịt heo và chả cá. Trụng bún, ăn kèm rau thơm và nước mắm pha chua ngọt.",
+            "nutrition": {
+                "calories": 480,
+                "protein": 32,
+                "fat": 16,
+                "carbs": 52
+            }
         },
         {
             "name": "Bún trộn rau thơm",
@@ -497,14 +548,16 @@ def adjust_dish_portions(
     current_fat = sum(dish["nutrition"]["fat"] for dish in dishes)
     current_carbs = sum(dish["nutrition"]["carbs"] for dish in dishes)
     
-    # Avoid division by zero
+    # 🔧 FIX: Tránh tạo dữ liệu ảo khi calories = 0
     if current_calories <= 0:
-        print("WARNING: Current calories is zero or negative. Using default values.")
+        print("WARNING: Current calories is zero or negative. Cannot adjust portions safely.")
+        print("🔧 Keeping original nutrition values instead of creating fake data.")
+
+        # Thay vì tạo dữ liệu ảo, giữ nguyên và thông báo
         for dish in dishes:
-            dish["nutrition"]["calories"] = target_calories / len(dishes)
-            dish["nutrition"]["protein"] = target_protein / len(dishes)
-            dish["nutrition"]["fat"] = target_fat / len(dishes)
-            dish["nutrition"]["carbs"] = target_carbs / len(dishes)
+            if "description" in dish:
+                dish["description"] += " (Lưu ý: Dữ liệu dinh dưỡng cần được xác minh)"
+
         return dishes
     
     # Calculate scaling factors (prioritize calories)
@@ -513,13 +566,20 @@ def adjust_dish_portions(
     # Log adjustment details
     print(f"Adjusting dish portions: current calories={current_calories:.1f}, target={target_calories:.1f}, factor={calorie_factor:.2f}")
     
-    # Limit extreme scaling to prevent unreasonable portion sizes
-    if calorie_factor > 3.0:
-        print(f"WARNING: Scaling factor {calorie_factor:.2f} is too high. Limiting to 3.0")
-        calorie_factor = 3.0
-    elif calorie_factor < 0.33:
-        print(f"WARNING: Scaling factor {calorie_factor:.2f} is too low. Limiting to 0.33")
-        calorie_factor = 0.33
+    # 🔧 FIX: Giới hạn scaling factor để đảm bảo tính thực tế
+    # Chỉ cho phép điều chỉnh trong khoảng hợp lý để không tạo dữ liệu ảo
+    if calorie_factor > 1.5:
+        print(f"WARNING: Scaling factor {calorie_factor:.2f} is too high. Limiting to 1.5 for realism")
+        calorie_factor = 1.5
+    elif calorie_factor < 0.7:
+        print(f"WARNING: Scaling factor {calorie_factor:.2f} is too low. Limiting to 0.7 for realism")
+        calorie_factor = 0.7
+
+    # Thông báo về việc điều chỉnh portion size
+    if calorie_factor > 1.1:
+        print(f"📊 Increasing portion sizes by {((calorie_factor - 1) * 100):.0f}%")
+    elif calorie_factor < 0.9:
+        print(f"📊 Decreasing portion sizes by {((1 - calorie_factor) * 100):.0f}%")
     
     # Apply scaling to all dishes
     for dish in dishes:
@@ -577,11 +637,32 @@ def generate_random_dishes(meal_type: str, count: int = 1, used_dishes: List[str
         "dinner": "dinner"
     }
     
+    # 🔧 FIX: Try Vietnamese dish generator first
+    try:
+        from services.meal_services import get_vietnamese_dishes
+        print(f"🔧 Trying Vietnamese dish generator for {meal_type} (count: {count})")
+
+        # Chuyển đổi meal_type sang dạng chuẩn
+        normalized_meal_type = meal_type_map.get(meal_type.lower(), "breakfast")
+
+        vietnamese_dishes = get_vietnamese_dishes(normalized_meal_type, count * 2, used_dishes)
+        if vietnamese_dishes and len(vietnamese_dishes) >= count:
+            selected_dishes = random.sample(vietnamese_dishes, count)
+            print(f"✅ Selected {len(selected_dishes)} Vietnamese dishes: {[d['name'] for d in selected_dishes]}")
+            return selected_dishes
+        else:
+            print(f"⚠️ Vietnamese generator returned insufficient dishes ({len(vietnamese_dishes) if vietnamese_dishes else 0})")
+    except Exception as e:
+        print(f"❌ Error using Vietnamese dish generator: {e}")
+
+    # Fallback to original SAMPLE_RECIPES logic
+    print(f"⚠️ Falling back to SAMPLE_RECIPES for {meal_type}")
+
     # Log cho debugging
     print(f"Generating random dishes for meal type: '{meal_type}', day index: {day_index}")
     if used_dishes:
         print(f"Avoiding previously used dishes: {used_dishes}")
-    
+
     # Chuyển đổi meal_type sang dạng chuẩn
     normalized_meal_type = meal_type_map.get(meal_type.lower(), "breakfast")
     print(f"Normalized to: '{normalized_meal_type}'")
@@ -694,14 +775,56 @@ def generate_random_dishes(meal_type: str, count: int = 1, used_dishes: List[str
             
     return selected_dishes
 
+def validate_nutrition_data(nutrition_dict: Dict) -> bool:
+    """
+    Kiểm tra tính hợp lý của dữ liệu dinh dưỡng để tránh dữ liệu ảo
+
+    Args:
+        nutrition_dict: Dictionary chứa thông tin dinh dưỡng
+
+    Returns:
+        bool: True nếu dữ liệu hợp lý, False nếu có vấn đề
+    """
+    try:
+        calories = float(nutrition_dict.get('calories', 0))
+        protein = float(nutrition_dict.get('protein', 0))
+        fat = float(nutrition_dict.get('fat', 0))
+        carbs = float(nutrition_dict.get('carbs', 0))
+
+        # Kiểm tra giá trị âm
+        if any(val < 0 for val in [calories, protein, fat, carbs]):
+            print("❌ Nutrition validation failed: Negative values detected")
+            return False
+
+        # Kiểm tra calories quá thấp (có thể là lỗi tính toán)
+        if calories < 10:
+            print(f"❌ Nutrition validation failed: Calories too low ({calories})")
+            return False
+
+        # Kiểm tra tỷ lệ macro hợp lý
+        calculated_calories = (protein * 4) + (fat * 9) + (carbs * 4)
+        if calories > 0 and abs(calculated_calories - calories) > calories * 0.5:
+            print(f"⚠️ Nutrition warning: Macro mismatch. Calculated: {calculated_calories:.1f}, Stated: {calories:.1f}")
+            # Không return False vì có thể có fiber và các thành phần khác
+
+        # Kiểm tra giá trị quá cao (có thể là lỗi)
+        if calories > 2000:  # Một món ăn thường không quá 2000 calories
+            print(f"⚠️ Nutrition warning: Very high calories ({calories}) for a single dish")
+
+        return True
+
+    except (TypeError, ValueError) as e:
+        print(f"❌ Nutrition validation failed: Invalid data format - {e}")
+        return False
+
 def format_nutrition_value(value, precision=1):
     """
-    Làm tròn giá trị dinh dưỡng với độ chính xác phù hợp.
-    
+    Làm tròn giá trị dinh dưỡng với độ chính xác phù hợp và validation.
+
     Args:
         value: Giá trị cần làm tròn
         precision: Số chữ số sau dấu phẩy (mặc định: 1)
-    
+
     Returns:
         Giá trị đã làm tròn phù hợp
     """
@@ -713,7 +836,12 @@ def format_nutrition_value(value, precision=1):
         value = float(value)
     except (TypeError, ValueError):
         return 0
-    
+
+    # 🔧 FIX: Kiểm tra giá trị hợp lý
+    if value < 0:
+        print(f"⚠️ Warning: Negative nutrition value ({value}) detected, setting to 0")
+        return 0
+
     # Làm tròn theo logic:
     # - Giá trị < 1: giữ 2 số thập phân
     # - Giá trị 1-10: giữ 1 số thập phân

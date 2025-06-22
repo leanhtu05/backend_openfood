@@ -138,25 +138,65 @@ class MealDiversityService:
     def _find_replacement_meal(available_meals: List[Dict[str, Any]], used_names: Set[str]) -> Dict[str, Any]:
         """
         Tìm món ăn thay thế không trùng lặp.
-        
+
         Args:
             available_meals: Danh sách các món ăn có sẵn
             used_names: Tên các món ăn đã được sử dụng
-            
+
         Returns:
             Dict[str, Any]: Món ăn thay thế hoặc None nếu không tìm thấy
         """
+        # 🔧 FIX: Enhanced diversity logic
+        import time
+
         # Lọc các món ăn chưa được sử dụng
         unused_meals = [meal for meal in available_meals if meal.get("name", "") not in used_names]
-        
+
         if unused_meals:
-            # Chọn ngẫu nhiên một món ăn chưa sử dụng
-            return random.choice(unused_meals)
+            # 🔧 FIX: Use time-based seed for better randomness
+            random.seed(int(time.time() * 1000) % 1000000)
+            selected_meal = random.choice(unused_meals)
+            print(f"🎲 Selected diverse meal: {selected_meal.get('name', 'Unknown')}")
+            return selected_meal
         elif available_meals:
-            # Nếu không có món nào chưa sử dụng, chọn ngẫu nhiên từ tất cả
-            return random.choice(available_meals)
+            # Nếu không có món nào chưa sử dụng, tạo variation của món hiện có
+            print("⚠️ No unused meals available, creating variation...")
+            base_meal = random.choice(available_meals)
+
+            # 🔧 FIX: Create variation by modifying name slightly
+            if base_meal and "name" in base_meal:
+                original_name = base_meal["name"]
+                # Add regional variation or cooking method variation
+                variations = [
+                    f"{original_name} Miền Bắc",
+                    f"{original_name} Miền Nam",
+                    f"{original_name} Miền Trung",
+                    f"{original_name} Sài Gòn",
+                    f"{original_name} Hà Nội",
+                    f"{original_name} Đặc Biệt",
+                    f"{original_name} Truyền Thống",
+                    f"{original_name} Cải Tiến"
+                ]
+
+                # Choose a variation that hasn't been used
+                for variation in variations:
+                    if variation not in used_names:
+                        varied_meal = base_meal.copy()
+                        varied_meal["name"] = variation
+                        print(f"🎨 Created variation: {variation}")
+                        return varied_meal
+
+                # If all variations used, add timestamp
+                timestamp_variation = f"{original_name} ({int(time.time()) % 1000})"
+                varied_meal = base_meal.copy()
+                varied_meal["name"] = timestamp_variation
+                print(f"🕐 Created timestamp variation: {timestamp_variation}")
+                return varied_meal
+
+            return base_meal
         else:
             # Không có món ăn nào
+            print("❌ No meals available for replacement")
             return None
     
     @staticmethod

@@ -712,7 +712,7 @@ def replace_day_meal_plan(
 def replace_meal(request: Dict) -> Dict:
     """
     Thay thế một bữa ăn cụ thể trong kế hoạch ăn uống.
-    
+
     Args:
         request: Thông tin yêu cầu thay thế bữa ăn, bao gồm:
             - user_id: ID người dùng
@@ -722,12 +722,21 @@ def replace_meal(request: Dict) -> Dict:
             - protein_target: Mục tiêu protein
             - fat_target: Mục tiêu chất béo
             - carbs_target: Mục tiêu carbs
-            
+
     Returns:
         Dict: Kết quả thay thế bữa ăn
     """
-    print(f"Replacing meal with request: {request}")
-    
+    print(f"🔄 Replacing meal with request: {request}")
+
+    # 🔧 FIX: Enhanced diversity enforcement
+    import time
+    import random
+
+    # Reset random seed với timestamp để đảm bảo diversity
+    diversity_seed = int(time.time() * 1000) % 1000000
+    random.seed(diversity_seed)
+    print(f"🎲 Using diversity seed: {diversity_seed}")
+
     user_id = request.get("user_id")
     day_of_week = request.get("day_of_week")
     meal_type = request.get("meal_type", "").lower()
@@ -793,19 +802,72 @@ def replace_meal(request: Dict) -> Dict:
     cuisine_style = request.get("cuisine_style")
     use_ai = request.get("use_ai", False)
     
-    # Tạo bữa ăn mới
-    new_meal = generate_meal(
-        meal_type,
-        calories_target,
-        protein_target,
-        fat_target,
-        carbs_target,
-        preferences=preferences,
-        allergies=allergies,
-        cuisine_style=cuisine_style,
-        use_ai=use_ai,
-        day_of_week=day_of_week  # Thêm day_of_week để tăng tính đa dạng
-    )
+    # 🔧 FIX: Load existing meal plan first to check for duplicates
+    from storage_manager import storage_manager
+    print(f"📋 Đang load meal plan cho user {user_id} để check duplicates")
+    existing_meal_plan = storage_manager.load_meal_plan(user_id)
+
+    # Collect existing meal names to avoid duplicates
+    existing_meal_names = set()
+    if existing_meal_plan:
+        for day in existing_meal_plan.days:
+            for meal in [day.breakfast, day.lunch, day.dinner]:
+                if meal and meal.dishes:
+                    for dish in meal.dishes:
+                        existing_meal_names.add(dish.name)
+
+    print(f"🔍 Existing meals to avoid: {existing_meal_names}")
+
+    # 🔧 FIX: Generate new meal with diversity enforcement
+    max_attempts = 3
+    new_meal = None
+
+    for attempt in range(max_attempts):
+        print(f"🎲 Attempt {attempt + 1}/{max_attempts} to generate diverse meal")
+
+        # Reset random seed for each attempt
+        diversity_seed = int(time.time() * 1000 + attempt) % 1000000
+        random.seed(diversity_seed)
+
+        temp_meal = generate_meal(
+            meal_type,
+            calories_target,
+            protein_target,
+            fat_target,
+            carbs_target,
+            preferences=preferences,
+            allergies=allergies,
+            cuisine_style=cuisine_style,
+            use_ai=use_ai,
+            day_of_week=day_of_week,  # Thêm day_of_week để tăng tính đa dạng
+            diversity_seed=diversity_seed  # Thêm diversity seed
+        )
+
+        # Check if generated meal is different from existing ones
+        if temp_meal and temp_meal.dishes:
+            meal_names = {dish.name for dish in temp_meal.dishes}
+            if not meal_names.intersection(existing_meal_names):
+                new_meal = temp_meal
+                print(f"✅ Generated diverse meal on attempt {attempt + 1}: {meal_names}")
+                break
+            else:
+                print(f"⚠️ Attempt {attempt + 1} generated duplicate meal: {meal_names}")
+
+    # Fallback if no diverse meal found
+    if not new_meal:
+        print("⚠️ Could not generate diverse meal, using last attempt")
+        new_meal = generate_meal(
+            meal_type,
+            calories_target,
+            protein_target,
+            fat_target,
+            carbs_target,
+            preferences=preferences,
+            allergies=allergies,
+            cuisine_style=cuisine_style,
+            use_ai=use_ai,
+            day_of_week=day_of_week
+        )
     
     # Lấy kế hoạch ăn hiện tại
     from storage_manager import storage_manager
@@ -874,17 +936,70 @@ def replace_meal(request: Dict) -> Dict:
         print(f"❌ Không tìm thấy meal plan cho user {user_id}")
         print(f"🔧 Tạo meal plan mới...")
 
-        # Nếu không có meal plan, tạo mới
+        # Nếu không có meal plan, tạo mới với TDEE từ user profile
         try:
+            # 🔧 FIX: Lấy mục tiêu dinh dưỡng từ user profile thay vì dùng giá trị mặc định
+            user_calories = request.get("calories_target")
+            user_protein = request.get("protein_target")
+            user_fat = request.get("fat_target")
+            user_carbs = request.get("carbs_target")
+
+            # Nếu không có giá trị từ request, lấy từ user profile trong Firestore
+            if not user_calories:
+                try:
+                    from services.firestore_service import firestore_service
+                    user_profile = firestore_service.get_user(user_id)
+
+                    if user_profile:
+                        # Lấy từ nutrition_goals nếu có
+                        nutrition_goals = user_profile.get('nutrition_goals', {})
+                        if nutrition_goals:
+                            user_calories = nutrition_goals.get('calories', 2000)
+                            user_protein = nutrition_goals.get('protein', 120)
+                            user_fat = nutrition_goals.get('fat', 65)
+                            user_carbs = nutrition_goals.get('carbs', 200)
+                            print(f"✅ Sử dụng mục tiêu từ nutrition_goals: {user_calories} kcal")
+                        else:
+                            # Fallback: Tính từ TDEE nếu có
+                            tdee_calories = user_profile.get('tdee_calories')
+                            if tdee_calories and tdee_calories > 0:
+                                user_calories = tdee_calories
+                                user_protein = user_profile.get('tdee_protein', 120)
+                                user_fat = user_profile.get('tdee_fat', 65)
+                                user_carbs = user_profile.get('tdee_carbs', 200)
+                                print(f"✅ Sử dụng TDEE từ user profile: {user_calories} kcal")
+                            else:
+                                # Giá trị mặc định hợp lý
+                                user_calories = 2000
+                                user_protein = 120
+                                user_fat = 65
+                                user_carbs = 200
+                                print(f"⚠️ Không tìm thấy TDEE, sử dụng giá trị mặc định: {user_calories} kcal")
+                    else:
+                        # Giá trị mặc định khi không có user profile
+                        user_calories = 2000
+                        user_protein = 120
+                        user_fat = 65
+                        user_carbs = 200
+                        print(f"⚠️ Không tìm thấy user profile, sử dụng giá trị mặc định: {user_calories} kcal")
+                except Exception as e:
+                    print(f"❌ Lỗi khi lấy user profile: {e}")
+                    # Giá trị mặc định an toàn
+                    user_calories = 2000
+                    user_protein = 120
+                    user_fat = 65
+                    user_carbs = 200
+
             new_meal_plan = generate_meal_plan(
                 user_id=user_id,
-                calories_target=request.get("calories_target", 2468),
-                protein_target=request.get("protein_target", 185),
-                fat_target=request.get("fat_target", 82),
-                carbs_target=request.get("carbs_target", 247),
-                use_ai=True
+                calories_target=user_calories,
+                protein_target=user_protein,
+                fat_target=user_fat,
+                carbs_target=user_carbs,
+                use_ai=True,
+                use_tdee=True  # Luôn sử dụng TDEE khi có thể
             )
-            print(f"✅ Đã tạo meal plan mới cho user {user_id}")
+            print(f"✅ Đã tạo meal plan mới cho user {user_id} với {user_calories} kcal")
         except Exception as e:
             print(f"❌ Lỗi tạo meal plan mới: {e}")
 

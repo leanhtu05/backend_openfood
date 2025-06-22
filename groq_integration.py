@@ -43,6 +43,13 @@ def safe_regex_search(pattern, text, flags=0):
 # Import fallback data
 from fallback_meals import FALLBACK_MEALS
 
+# 🔧 FIX: Import rich Vietnamese traditional dishes database
+from vietnamese_traditional_dishes import ALL_TRADITIONAL_DISHES
+from vietnamese_nutrition_extended import (
+    VEGETABLES_NUTRITION, FRUITS_NUTRITION, MEAT_NUTRITION,
+    SEAFOOD_NUTRITION, EGGS_NUTRITION, DAIRY_NUTRITION
+)
+
 # Import enhanced JSON prompt templates
 from json_prompt_templates import (
     get_strict_json_prompt,
@@ -147,9 +154,9 @@ class GroqService:
         self.rate_limiter = RateLimiter(requests_per_minute=60, requests_per_day=1000)
         self.max_retries = 3
 
-        # Anti-duplication tracking
+        # 🔧 ENHANCED Anti-duplication tracking
         self.recent_dishes = []  # Track recent dishes to avoid duplication
-        self.max_recent_dishes = 20  # Keep track of last 20 dishes
+        self.max_recent_dishes = 30  # Keep track of last 30 dishes (increased for better diversity)
 
         # Thêm biến để theo dõi trạng thái quota
         self.quota_exceeded = False
@@ -411,16 +418,31 @@ class GroqService:
                         if validated_meals:
                             print(f"🎉 Successfully generated {len(validated_meals)} validated meal suggestions")
 
-                            # ANTI-DUPLICATION: Track recent dishes
+                            # 🔧 ENHANCED ANTI-DUPLICATION: Track recent dishes với similarity checking
                             for meal in validated_meals:
                                 dish_name = meal.get('name', '')
-                                if dish_name and dish_name not in self.recent_dishes:
-                                    self.recent_dishes.append(dish_name)
-                                    # Keep only last N dishes
-                                    if len(self.recent_dishes) > self.max_recent_dishes:
-                                        self.recent_dishes.pop(0)
+                                if dish_name:
+                                    # Check if similar dish already exists in recent dishes
+                                    is_similar_to_existing = False
+                                    dish_name_lower = dish_name.lower()
 
-                            print(f"📝 Recent dishes tracked: {self.recent_dishes[-5:]}")  # Show last 5
+                                    for existing_dish in self.recent_dishes:
+                                        if self._are_dishes_similar(dish_name_lower, existing_dish.lower()):
+                                            is_similar_to_existing = True
+                                            print(f"⚠️ Detected similar dish: '{dish_name}' ~ '{existing_dish}'")
+                                            break
+
+                                    # Only add if not similar to existing dishes
+                                    if not is_similar_to_existing:
+                                        self.recent_dishes.append(dish_name)
+                                        print(f"📝 Added to recent dishes: {dish_name}")
+                                        # Keep only last N dishes
+                                        if len(self.recent_dishes) > self.max_recent_dishes:
+                                            self.recent_dishes.pop(0)
+                                    else:
+                                        print(f"🚫 Skipped similar dish: {dish_name}")
+
+                            print(f"📝 Recent dishes tracked ({len(self.recent_dishes)}): {self.recent_dishes[-5:]}")  # Show last 5
 
                             # Kiểm tra và bổ sung calories nếu cần
                             final_meals = self._ensure_adequate_calories(validated_meals, calories_target, meal_type)
@@ -649,15 +671,42 @@ class GroqService:
             if filtered_dishes:
                 dishes = filtered_dishes
 
-        # Filter out recent dishes to avoid duplication
+        # 🔧 FIX: Enhanced anti-duplication với fuzzy matching
         filtered_dishes = []
         for dish in dishes:
+            # Exact match check
             if dish not in self.recent_dishes:
-                filtered_dishes.append(dish)
+                # Fuzzy match check - tránh các món tương tự
+                is_similar = False
+                dish_lower = dish.lower()
 
-        # If too few dishes after filtering, use all dishes
-        if len(filtered_dishes) < 5:
-            filtered_dishes = dishes
+                for recent_dish in self.recent_dishes:
+                    recent_lower = recent_dish.lower()
+
+                    # Check for similar base dishes
+                    if self._are_dishes_similar(dish_lower, recent_lower):
+                        is_similar = True
+                        break
+
+                if not is_similar:
+                    filtered_dishes.append(dish)
+
+        # If too few dishes after filtering, gradually relax restrictions
+        if len(filtered_dishes) < 8:  # Increased from 5 to 8
+            print(f"⚠️ Only {len(filtered_dishes)} unique dishes found, relaxing restrictions...")
+
+            # First relaxation: only avoid exact matches from last 5 dishes
+            filtered_dishes = []
+            recent_5 = self.recent_dishes[-5:] if len(self.recent_dishes) >= 5 else self.recent_dishes
+
+            for dish in dishes:
+                if dish not in recent_5:
+                    filtered_dishes.append(dish)
+
+            # Second relaxation: if still too few, use all dishes
+            if len(filtered_dishes) < 5:
+                print(f"⚠️ Still only {len(filtered_dishes)} dishes, using all available dishes")
+                filtered_dishes = dishes
 
         # Thêm món ăn đặc sắc từ database riêng
         try:
@@ -676,6 +725,117 @@ class GroqService:
         # Trả về top 15-20 món để AI chọn (tăng từ 15 lên 20 để có thêm món đặc sắc)
         selected_dishes = filtered_dishes[:20]
         return ", ".join(selected_dishes)
+
+    def _are_dishes_similar(self, dish1: str, dish2: str) -> bool:
+        """
+        🔧 ENHANCED: Kiểm tra xem 2 món ăn có tương tự nhau không (improved detection)
+
+        Args:
+            dish1, dish2: Tên món ăn đã lowercase
+
+        Returns:
+            bool: True nếu tương tự
+        """
+        # Exact match
+        if dish1 == dish2:
+            return True
+
+        # 🔧 FIX: Enhanced similarity detection
+
+        # 1. Remove regional variations and check core similarity
+        dish1_core = self._remove_regional_variations(dish1)
+        dish2_core = self._remove_regional_variations(dish2)
+
+        if dish1_core == dish2_core:
+            return True
+
+        # 2. Extract base dish names
+        base1 = self._extract_base_dish_name(dish1)
+        base2 = self._extract_base_dish_name(dish2)
+
+        # Same base dish
+        if base1 == base2:
+            return True
+
+        # 3. Check for word overlap (if >70% words are same, consider similar)
+        words1 = set(dish1.split())
+        words2 = set(dish2.split())
+
+        if len(words1) > 0 and len(words2) > 0:
+            overlap = len(words1.intersection(words2))
+            total_unique = len(words1.union(words2))
+            similarity_ratio = overlap / total_unique
+
+            if similarity_ratio > 0.7:  # 70% word overlap
+                return True
+
+        # 4. Enhanced pattern matching
+        similar_patterns = [
+            # Cơm tấm variations (more specific)
+            (["cơm tấm", "sườn"], ["cơm tấm", "sườn"]),
+            # Bánh mì variations
+            (["bánh mì", "chả cá"], ["bánh mì", "chả cá"]),
+            # Phở variations
+            (["phở", "gà"], ["phở", "gà"]),
+            (["phở", "bò"], ["phở", "bò"]),
+            # Cháo variations
+            (["cháo", "gà"], ["cháo", "gà"]),
+            (["cháo", "tôm"], ["cháo", "tôm"]),
+        ]
+
+        for pattern1, pattern2 in similar_patterns:
+            if all(p in dish1 for p in pattern1) and all(p in dish2 for p in pattern2):
+                return True
+
+        return False
+
+    def _remove_regional_variations(self, dish_name: str) -> str:
+        """
+        🔧 NEW: Remove regional variations to detect core dish similarity
+
+        Args:
+            dish_name: Tên món ăn
+
+        Returns:
+            str: Tên món ăn đã loại bỏ variations
+        """
+        # Remove regional indicators
+        regional_terms = [
+            "miền tây", "miền bắc", "miền trung", "sài gòn", "hà nội",
+            "huế", "nha trang", "cà mau", "đồng nai", "an giang",
+            "đặc biệt", "truyền thống", "cổ điển", "đặc sản"
+        ]
+
+        dish_clean = dish_name.lower()
+
+        for term in regional_terms:
+            dish_clean = dish_clean.replace(term, "").strip()
+
+        # Remove extra spaces
+        dish_clean = " ".join(dish_clean.split())
+
+        return dish_clean
+
+    def _extract_base_dish_name(self, dish_name: str) -> str:
+        """
+        Extract base dish name (e.g., "Cơm Tấm Sườn Nướng Mật Ong Sài Gòn" -> "cơm tấm")
+        """
+        dish_lower = dish_name.lower()
+
+        # Common base dishes
+        base_dishes = [
+            "cơm tấm", "bánh mì", "phở", "cháo", "bún", "hủ tiếu",
+            "mì quảng", "bánh xèo", "bánh khọt", "nem", "chả cá",
+            "lẩu", "xôi", "bánh cuốn", "bánh căn"
+        ]
+
+        for base in base_dishes:
+            if base in dish_lower:
+                return base
+
+        # If no base found, return first 2 words
+        words = dish_lower.split()
+        return " ".join(words[:2]) if len(words) >= 2 else dish_lower
 
     def _get_official_nutrition(self, dish_name: str, ingredients: List[Dict]) -> Dict:
         """
@@ -1267,73 +1427,186 @@ class GroqService:
 
     def _create_intelligent_fallback(self, meal_type: str, calories_target: int, protein_target: int, fat_target: int, carbs_target: int) -> List[Dict]:
         """
-        Tạo fallback meals thông minh dựa trên meal_type và nutrition targets
+        🔧 ENHANCED: Tạo intelligent fallback từ database 200+ món ăn truyền thống Việt Nam
         """
         try:
-            print(f"🔧 Creating intelligent fallback for {meal_type}...")
+            print(f"🔧 Creating intelligent fallback for {meal_type} from traditional Vietnamese dishes...")
 
-            # Định nghĩa món ăn theo meal_type
-            meal_templates = {
-                "bữa sáng": [
-                    {"name": "Bánh Mì Trứng", "base_calories": 300, "ingredients": ["Bánh mì", "Trứng gà", "Rau thơm"]},
-                    {"name": "Cháo Gà", "base_calories": 250, "ingredients": ["Gạo", "Thịt gà", "Hành lá"]},
-                    {"name": "Xôi Xéo", "base_calories": 350, "ingredients": ["Gạo nếp", "Đậu xanh", "Nước dừa"]}
-                ],
-                "bữa trưa": [
-                    {"name": "Cơm Tấm Sườn", "base_calories": 500, "ingredients": ["Cơm tấm", "Sườn nướng", "Dưa leo"]},
-                    {"name": "Phở Gà", "base_calories": 400, "ingredients": ["Bánh phở", "Thịt gà", "Hành tây"]},
-                    {"name": "Bún Bò Huế", "base_calories": 450, "ingredients": ["Bún", "Thịt bò", "Rau thơm"]}
-                ],
-                "bữa tối": [
-                    {"name": "Cơm Gà Xối Mỡ", "base_calories": 400, "ingredients": ["Cơm trắng", "Thịt gà", "Rau muống"]},
-                    {"name": "Bún Chả", "base_calories": 350, "ingredients": ["Bún", "Chả nướng", "Rau sống"]},
-                    {"name": "Canh Chua Cá", "base_calories": 300, "ingredients": ["Cá", "Cà chua", "Dứa"]}
-                ]
-            }
+            # Map meal_type to traditional dish categories
+            meal_type_lower = meal_type.lower()
 
-            # Chọn template phù hợp
-            templates = meal_templates.get(meal_type.lower(), meal_templates["bữa sáng"])
-            selected_template = templates[0]  # Chọn món đầu tiên
+            if "sáng" in meal_type_lower:
+                target_meal_types = ["breakfast"]
+                preferred_categories = ["xôi", "bánh mì", "cháo", "bánh cuốn", "bánh bao"]
+            elif "trưa" in meal_type_lower:
+                target_meal_types = ["lunch", "dinner"]
+                preferred_categories = ["cơm", "bún", "phở", "mì quảng", "hủ tiếu"]
+            else:  # dinner
+                target_meal_types = ["dinner", "lunch"]
+                preferred_categories = ["cơm", "canh", "lẩu", "thịt nướng", "cá kho"]
 
-            # Tính toán nutrition dựa trên targets
-            scale_factor = calories_target / selected_template["base_calories"] if selected_template["base_calories"] > 0 else 1.0
+            # Filter suitable dishes from traditional database
+            suitable_dishes = []
 
-            # Tạo ingredients với amounts
-            ingredients = []
-            for i, ingredient_name in enumerate(selected_template["ingredients"]):
-                base_amount = 100 + (i * 20)  # 100g, 120g, 140g...
-                scaled_amount = int(base_amount * scale_factor)
-                ingredients.append({
-                    "name": ingredient_name,
-                    "amount": f"{scaled_amount}g"
-                })
+            for dish_name, dish_info in ALL_TRADITIONAL_DISHES.items():
+                dish_meal_types = dish_info.get("meal_type", [])
 
-            # Tạo meal object
+                # Check if dish is suitable for this meal type
+                if any(mt in dish_meal_types for mt in target_meal_types):
+                    # Check if not recently used
+                    if dish_name not in self.recent_dishes:
+                        suitable_dishes.append((dish_name, dish_info))
+
+            # If no suitable dishes, use any dishes
+            if not suitable_dishes:
+                suitable_dishes = [(name, info) for name, info in ALL_TRADITIONAL_DISHES.items()
+                                 if name not in self.recent_dishes]
+
+            # If still no dishes, use all dishes
+            if not suitable_dishes:
+                suitable_dishes = list(ALL_TRADITIONAL_DISHES.items())
+
+            # Select random dish
+            import random
+            selected_dish_name, selected_dish_info = random.choice(suitable_dishes)
+
+            print(f"   📋 Selected traditional dish: {selected_dish_name}")
+
+            # Create intelligent meal from traditional dish
+            intelligent_meal = self._create_meal_from_traditional_dish(
+                selected_dish_name,
+                selected_dish_info,
+                calories_target,
+                meal_type
+            )
+
+            return [intelligent_meal]
+
+        except Exception as e:
+            print(f"❌ Intelligent fallback creation failed: {e}")
+            # Emergency fallback to simple meal
+            return self._create_emergency_fallback_meal(meal_type, calories_target)
+
+    def _create_meal_from_traditional_dish(self, dish_name: str, dish_info: Dict, calories_target: int, meal_type: str) -> Dict:
+        """
+        🔧 NEW: Tạo meal object từ traditional Vietnamese dish
+
+        Args:
+            dish_name: Tên món ăn
+            dish_info: Thông tin món ăn từ database
+            calories_target: Target calories
+            meal_type: Loại bữa ăn
+
+        Returns:
+            Dict: Meal object hoàn chỉnh
+        """
+        try:
+            # Get basic info from traditional dish
+            description = dish_info.get("description", f"Món {dish_name} truyền thống Việt Nam")
+            ingredients = dish_info.get("ingredients", [])
+            preparation = dish_info.get("preparation", [])
+            region = dish_info.get("region", "Việt Nam")
+
+            # Convert ingredients to proper format
+            formatted_ingredients = []
+            for ing in ingredients:
+                if isinstance(ing, str):
+                    formatted_ingredients.append({"name": ing, "amount": "100g"})
+                elif isinstance(ing, dict):
+                    formatted_ingredients.append({
+                        "name": ing.get("name", "Nguyên liệu"),
+                        "amount": ing.get("amount", "100g")
+                    })
+
+            if not formatted_ingredients:
+                formatted_ingredients = [{"name": "Nguyên liệu chính", "amount": "100g"}]
+
+            # Get nutrition from Vietnamese database
+            nutrition = self._get_official_nutrition(dish_name, formatted_ingredients)
+
+            if not nutrition:
+                # Fallback nutrition based on meal type
+                if "sáng" in meal_type.lower():
+                    nutrition = {"calories": 350, "protein": 18, "fat": 12, "carbs": 45}
+                elif "trưa" in meal_type.lower():
+                    nutrition = {"calories": 500, "protein": 28, "fat": 18, "carbs": 60}
+                else:
+                    nutrition = {"calories": 400, "protein": 22, "fat": 15, "carbs": 50}
+
+            # Create meal object
             meal = {
-                "name": selected_template["name"],
-                "description": f"Món {selected_template['name']} truyền thống Việt Nam, thơm ngon và bổ dưỡng",
-                "ingredients": ingredients,
-                "preparation": [
-                    f"Chuẩn bị nguyên liệu cho {selected_template['name']}",
+                "name": dish_name,
+                "description": description,
+                "ingredients": formatted_ingredients,
+                "preparation": preparation if preparation else [
+                    f"Chuẩn bị nguyên liệu cho {dish_name}",
                     "Sơ chế và làm sạch nguyên liệu",
                     "Chế biến theo phương pháp truyền thống",
                     "Nêm nướng vừa ăn và trình bày đẹp mắt"
                 ],
-                "nutrition": {
-                    "calories": calories_target,
-                    "protein": protein_target,
-                    "fat": fat_target,
-                    "carbs": carbs_target
-                },
+                "nutrition": nutrition,
+                "preparation_time": dish_info.get("preparation_time", "30 phút"),
+                "health_benefits": dish_info.get("health_benefits", f"Món {dish_name} cung cấp dinh dưỡng cân bằng, giàu protein và vitamin, tốt cho sức khỏe"),
+                "region": region,
+                "is_traditional": True,
+                "source": "Vietnamese Traditional Dishes Database"
+            }
+
+            return meal
+
+        except Exception as e:
+            print(f"❌ Error creating meal from traditional dish: {e}")
+            return self._create_simple_fallback_meal(dish_name, meal_type, calories_target)
+
+    def _create_emergency_fallback_meal(self, meal_type: str, calories_target: int) -> List[Dict]:
+        """
+        🔧 NEW: Tạo emergency fallback meal khi tất cả methods khác fail
+        """
+        try:
+            if "sáng" in meal_type.lower():
+                dish_name = "Bánh Mì Trứng"
+                ingredients = [{"name": "Bánh mì", "amount": "1 ổ"}, {"name": "Trứng gà", "amount": "2 quả"}]
+                nutrition = {"calories": 350, "protein": 18, "fat": 12, "carbs": 45}
+            elif "trưa" in meal_type.lower():
+                dish_name = "Cơm Tấm Sườn"
+                ingredients = [{"name": "Cơm tấm", "amount": "150g"}, {"name": "Sườn heo", "amount": "100g"}]
+                nutrition = {"calories": 500, "protein": 28, "fat": 18, "carbs": 60}
+            else:
+                dish_name = "Canh Chua Cá"
+                ingredients = [{"name": "Cá tra", "amount": "150g"}, {"name": "Cà chua", "amount": "2 quả"}]
+                nutrition = {"calories": 400, "protein": 22, "fat": 15, "carbs": 50}
+
+            meal = {
+                "name": dish_name,
+                "description": f"Món {dish_name} truyền thống Việt Nam",
+                "ingredients": ingredients,
+                "preparation": [f"Chuẩn bị {dish_name} theo hướng dẫn truyền thống"],
+                "nutrition": nutrition,
                 "preparation_time": "30 phút",
-                "health_benefits": f"Món {selected_template['name']} cung cấp đầy đủ dinh dưỡng, giàu protein và vitamin, phù hợp với mục tiêu dinh dưỡng của bạn"
+                "health_benefits": f"Món {dish_name} cung cấp dinh dưỡng cân bằng",
+                "is_emergency_fallback": True
             }
 
             return [meal]
 
         except Exception as e:
-            print(f"❌ Error creating intelligent fallback: {e}")
-            return None
+            print(f"❌ Emergency fallback failed: {e}")
+            return []
+
+    def _create_simple_fallback_meal(self, dish_name: str, meal_type: str, calories_target: int) -> Dict:
+        """
+        🔧 NEW: Tạo simple fallback meal cho một món cụ thể
+        """
+        return {
+            "name": dish_name,
+            "description": f"Món {dish_name} truyền thống Việt Nam",
+            "ingredients": [{"name": "Nguyên liệu chính", "amount": "100g"}],
+            "preparation": [f"Chuẩn bị {dish_name} theo hướng dẫn"],
+            "nutrition": {"calories": calories_target, "protein": 20, "fat": 15, "carbs": 45},
+            "preparation_time": "30 phút",
+            "health_benefits": f"Món {dish_name} cung cấp dinh dưỡng cân bằng",
+            "is_simple_fallback": True
+        }
 
     def _create_json_from_text(self, text: str) -> List[Dict]:
         """
@@ -1701,43 +1974,66 @@ class GroqService:
 
     def _get_fallback_meals(self, meal_type: str) -> List[Dict]:
         """
-        Lấy dữ liệu món ăn dự phòng
-        
+        🔧 FIX: Lấy dữ liệu món ăn dự phòng đa dạng
+
         Args:
             meal_type: Loại bữa ăn (bữa sáng, bữa trưa, bữa tối)
-            
+
         Returns:
-            Danh sách các món ăn dự phòng
+            Danh sách các món ăn dự phòng (nhiều món hơn)
         """
         meal_type_lower = meal_type.lower()
-        
+
+        # 🔧 FIX: Sử dụng key mapping chính xác
         if "sáng" in meal_type_lower or "sang" in meal_type_lower:
-            return FALLBACK_MEALS.get("breakfast", [])
+            meals = FALLBACK_MEALS.get("bữa sáng", [])
         elif "trưa" in meal_type_lower or "trua" in meal_type_lower:
-            return FALLBACK_MEALS.get("lunch", [])
+            meals = FALLBACK_MEALS.get("bữa trưa", [])
         elif "tối" in meal_type_lower or "toi" in meal_type_lower:
-            return FALLBACK_MEALS.get("dinner", [])
+            meals = FALLBACK_MEALS.get("bữa tối", [])
         else:
             # Trả về hỗn hợp các món
             all_meals = []
             for meals_list in FALLBACK_MEALS.values():
                 all_meals.extend(meals_list)
-            
+
             # Trộn danh sách để lấy ngẫu nhiên
             random.shuffle(all_meals)
-            return all_meals[:2]  # Trả về tối đa 1-2 món
+            return all_meals[:3]  # Trả về tối đa 3 món
+
+        print(f"🔧 Found {len(meals)} fallback meals for {meal_type}")
+        return meals
     
     def _fallback_meal_suggestions(self, meal_type: str) -> List[Dict]:
         """
-        Trả về dữ liệu dự phòng cho loại bữa ăn
-        
+        🔧 FIX: Trả về dữ liệu dự phòng đa dạng cho loại bữa ăn
+
         Args:
             meal_type: Loại bữa ăn
-            
+
         Returns:
-            Danh sách các món ăn dự phòng
+            Danh sách các món ăn dự phòng (random selection)
         """
-        return self._get_fallback_meals(meal_type)
+        import random
+
+        fallback_meals = self._get_fallback_meals(meal_type)
+
+        if not fallback_meals:
+            return []
+
+        # 🔧 FIX: Random selection để tránh lặp lại
+        # Shuffle để có thứ tự ngẫu nhiên
+        random.shuffle(fallback_meals)
+
+        # Trả về 1-2 món ngẫu nhiên thay vì luôn cùng món
+        num_meals = min(2, len(fallback_meals))
+        selected_meals = fallback_meals[:num_meals]
+
+        print(f"🔧 Selected {len(selected_meals)} random fallback meals for {meal_type}")
+        for meal in selected_meals:
+            print(f"   - {meal.get('name', 'Unknown')}")
+
+        return selected_meals
     
     def clear_cache(self):
         """Xóa cache và recent dishes để buộc tạo mới dữ liệu hoàn toàn"""

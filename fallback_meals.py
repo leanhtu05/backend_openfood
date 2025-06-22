@@ -70,6 +70,112 @@ FALLBACK_MEALS = {
                 "fat": 7,
                 "carbs": 42
             }
+        },
+        # 🔧 FIX: Thêm nhiều món ăn sáng đa dạng
+        {
+            "name": "Phở Gà Truyền Thống",
+            "description": "Phở gà nóng hổi với nước dùng thơm ngon",
+            "ingredients": [
+                {"name": "Bánh phở", "amount": "150g"},
+                {"name": "Thịt gà", "amount": "100g"},
+                {"name": "Hành lá", "amount": "20g"},
+                {"name": "Rau thơm", "amount": "30g"},
+                {"name": "Nước dùng gà", "amount": "400ml"}
+            ],
+            "preparation": [
+                "Luộc bánh phở trong nước sôi 2-3 phút",
+                "Thái thịt gà thành lát mỏng",
+                "Rửa sạch rau thơm và hành lá",
+                "Cho bánh phở vào tô, xếp thịt gà lên trên",
+                "Đổ nước dùng nóng vào, rắc hành lá và rau thơm"
+            ],
+            "nutrition": {
+                "calories": 380,
+                "protein": 25,
+                "fat": 8,
+                "carbs": 55
+            },
+            "preparation_time": "15 phút",
+            "health_benefits": "Giàu protein từ thịt gà, carbohydrate từ bánh phở cung cấp năng lượng, nước dùng bổ sung nước và khoáng chất"
+        },
+        {
+            "name": "Xôi Xéo Đậu Xanh",
+            "description": "Xôi xéo truyền thống với đậu xanh và nước cốt dừa",
+            "ingredients": [
+                {"name": "Gạo nếp", "amount": "100g"},
+                {"name": "Đậu xanh", "amount": "50g"},
+                {"name": "Nước cốt dừa", "amount": "100ml"},
+                {"name": "Muối", "amount": "1/2 tsp"},
+                {"name": "Đường", "amount": "1 tsp"}
+            ],
+            "preparation": [
+                "Ngâm gạo nếp 4-6 tiếng",
+                "Đậu xanh luộc chín, nghiền nhuyễn",
+                "Nấu xôi với nước cốt dừa và muối",
+                "Trộn đậu xanh với xôi",
+                "Trang trí và thưởng thức"
+            ],
+            "nutrition": {
+                "calories": 420,
+                "protein": 12,
+                "fat": 15,
+                "carbs": 65
+            },
+            "preparation_time": "30 phút",
+            "health_benefits": "Đậu xanh giàu protein thực vật, gạo nếp cung cấp năng lượng bền vững, nước cốt dừa bổ sung chất béo tốt"
+        },
+        {
+            "name": "Bánh Cuốn Tôm Thịt",
+            "description": "Bánh cuốn mỏng với nhân tôm thịt thơm ngon",
+            "ingredients": [
+                {"name": "Bánh cuốn", "amount": "3 cái"},
+                {"name": "Thịt heo", "amount": "80g"},
+                {"name": "Tôm", "amount": "60g"},
+                {"name": "Nấm mèo", "amount": "30g"},
+                {"name": "Hành lá", "amount": "15g"},
+                {"name": "Nước mắm", "amount": "2 tsp"}
+            ],
+            "preparation": [
+                "Thịt heo và tôm băm nhỏ",
+                "Nấm mèo ngâm mềm, thái nhỏ",
+                "Xào nhân với hành lá và nước mắm",
+                "Cuốn nhân vào bánh cuốn",
+                "Ăn kèm với nước chấm"
+            ],
+            "nutrition": {
+                "calories": 340,
+                "protein": 22,
+                "fat": 10,
+                "carbs": 40
+            },
+            "preparation_time": "25 phút",
+            "health_benefits": "Tôm và thịt cung cấp protein chất lượng cao, bánh cuốn ít dầu mỡ, dễ tiêu hóa"
+        },
+        {
+            "name": "Cháo Gà Hạt Sen",
+            "description": "Cháo gà bổ dưỡng với hạt sen thơm ngon",
+            "ingredients": [
+                {"name": "Gạo tẻ", "amount": "80g"},
+                {"name": "Thịt gà", "amount": "100g"},
+                {"name": "Hạt sen", "amount": "40g"},
+                {"name": "Hành lá", "amount": "15g"},
+                {"name": "Gừng", "amount": "10g"}
+            ],
+            "preparation": [
+                "Gạo vo sạch, nấu cháo",
+                "Thịt gà luộc chín, xé sợi",
+                "Hạt sen luộc mềm",
+                "Cho gà và hạt sen vào cháo",
+                "Nêm nếm, rắc hành lá"
+            ],
+            "nutrition": {
+                "calories": 360,
+                "protein": 28,
+                "fat": 6,
+                "carbs": 50
+            },
+            "preparation_time": "40 phút",
+            "health_benefits": "Hạt sen giàu vitamin B, thịt gà cung cấp protein, cháo dễ tiêu hóa và bổ dưỡng"
         }
     ],
     
@@ -136,6 +242,115 @@ FALLBACK_MEALS = {
                 "fat": 10,
                 "carbs": 70
             }
+        },
+        # 🔧 FIX: Thêm nhiều món ăn trưa đa dạng
+        {
+            "name": "Bún Bò Huế Đặc Biệt",
+            "description": "Bún bò Huế cay nồng với thịt bò và chả",
+            "ingredients": [
+                {"name": "Bún", "amount": "150g"},
+                {"name": "Thịt bò", "amount": "120g"},
+                {"name": "Chả lụa", "amount": "50g"},
+                {"name": "Hành lá", "amount": "20g"},
+                {"name": "Rau thơm", "amount": "30g"},
+                {"name": "Nước dùng", "amount": "400ml"}
+            ],
+            "preparation": [
+                "Luộc bún trong nước sôi",
+                "Thái thịt bò và chả lụa",
+                "Chuẩn bị rau thơm và hành lá",
+                "Xếp bún vào tô, cho thịt bò và chả lên trên",
+                "Đổ nước dùng nóng, rắc rau thơm"
+            ],
+            "nutrition": {
+                "calories": 480,
+                "protein": 32,
+                "fat": 12,
+                "carbs": 58
+            },
+            "preparation_time": "20 phút",
+            "health_benefits": "Thịt bò giàu sắt và protein, bún cung cấp carbohydrate, rau thơm bổ sung vitamin"
+        },
+        {
+            "name": "Cơm Âm Phủ Huế",
+            "description": "Cơm âm phủ truyền thống Huế với nhiều loại thịt",
+            "ingredients": [
+                {"name": "Cơm trắng", "amount": "150g"},
+                {"name": "Thịt heo", "amount": "80g"},
+                {"name": "Tôm", "amount": "60g"},
+                {"name": "Chả cá", "amount": "40g"},
+                {"name": "Rau sống", "amount": "50g"},
+                {"name": "Nước mắm pha", "amount": "30ml"}
+            ],
+            "preparation": [
+                "Nấu cơm dẻo",
+                "Luộc thịt heo và tôm",
+                "Chiên chả cá vàng",
+                "Chuẩn bị rau sống",
+                "Xếp tất cả lên cơm, chấm nước mắm"
+            ],
+            "nutrition": {
+                "calories": 520,
+                "protein": 28,
+                "fat": 18,
+                "carbs": 62
+            },
+            "preparation_time": "30 phút",
+            "health_benefits": "Đa dạng protein từ thịt, tôm, cá; rau sống cung cấp vitamin và chất xơ"
+        },
+        {
+            "name": "Mì Quảng Tôm Cua",
+            "description": "Mì Quảng đặc sản miền Trung với tôm cua",
+            "ingredients": [
+                {"name": "Mì Quảng", "amount": "120g"},
+                {"name": "Tôm", "amount": "100g"},
+                {"name": "Cua đồng", "amount": "80g"},
+                {"name": "Thịt heo", "amount": "60g"},
+                {"name": "Trứng cút", "amount": "4 quả"},
+                {"name": "Rau thơm", "amount": "40g"}
+            ],
+            "preparation": [
+                "Luộc mì Quảng",
+                "Nấu nước dùng từ tôm cua",
+                "Luộc thịt heo và trứng cút",
+                "Xếp mì vào tô với tôm, cua, thịt",
+                "Đổ nước dùng, rắc rau thơm"
+            ],
+            "nutrition": {
+                "calories": 550,
+                "protein": 35,
+                "fat": 20,
+                "carbs": 55
+            },
+            "preparation_time": "35 phút",
+            "health_benefits": "Hải sản giàu omega-3, protein đa dạng, mì Quảng cung cấp năng lượng"
+        },
+        {
+            "name": "Hủ Tiếu Nam Vang",
+            "description": "Hủ tiếu Nam Vang với tôm, thịt và gan",
+            "ingredients": [
+                {"name": "Hủ tiếu", "amount": "130g"},
+                {"name": "Tôm", "amount": "80g"},
+                {"name": "Thịt heo", "amount": "70g"},
+                {"name": "Gan heo", "amount": "50g"},
+                {"name": "Giá đỗ", "amount": "40g"},
+                {"name": "Hành lá", "amount": "15g"}
+            ],
+            "preparation": [
+                "Luộc hủ tiếu mềm",
+                "Luộc tôm, thịt heo và gan",
+                "Trần giá đỗ qua nước sôi",
+                "Xếp hủ tiếu vào tô với topping",
+                "Đổ nước dùng trong, rắc hành lá"
+            ],
+            "nutrition": {
+                "calories": 460,
+                "protein": 30,
+                "fat": 15,
+                "carbs": 50
+            },
+            "preparation_time": "25 phút",
+            "health_benefits": "Gan heo giàu sắt và vitamin A, tôm cung cấp protein chất lượng cao"
         }
     ],
     
@@ -205,6 +420,115 @@ FALLBACK_MEALS = {
                 "fat": 8,
                 "carbs": 55
             }
+        },
+        # 🔧 FIX: Thêm nhiều món ăn tối đa dạng
+        {
+            "name": "Lẩu Thái Hải Sản",
+            "description": "Lẩu Thái chua cay với hải sản tươi ngon",
+            "ingredients": [
+                {"name": "Tôm", "amount": "150g"},
+                {"name": "Cua", "amount": "100g"},
+                {"name": "Cá", "amount": "120g"},
+                {"name": "Rau muống", "amount": "100g"},
+                {"name": "Nấm", "amount": "80g"},
+                {"name": "Nước dùng lẩu Thái", "amount": "500ml"}
+            ],
+            "preparation": [
+                "Chuẩn bị hải sản tươi sạch",
+                "Rửa rau muống và nấm",
+                "Đun sôi nước dùng lẩu Thái",
+                "Cho hải sản vào nấu trước",
+                "Thêm rau và nấm, nấu chín"
+            ],
+            "nutrition": {
+                "calories": 420,
+                "protein": 45,
+                "fat": 12,
+                "carbs": 25
+            },
+            "preparation_time": "30 phút",
+            "health_benefits": "Hải sản giàu omega-3 và protein, rau xanh cung cấp vitamin và khoáng chất"
+        },
+        {
+            "name": "Bánh Xèo Miền Tây",
+            "description": "Bánh xèo giòn rụm với tôm thịt và giá đỗ",
+            "ingredients": [
+                {"name": "Bột bánh xèo", "amount": "150g"},
+                {"name": "Tôm", "amount": "100g"},
+                {"name": "Thịt ba chỉ", "amount": "80g"},
+                {"name": "Giá đỗ", "amount": "100g"},
+                {"name": "Rau sống", "amount": "80g"},
+                {"name": "Nước mắm pha", "amount": "50ml"}
+            ],
+            "preparation": [
+                "Pha bột bánh xèo với nước",
+                "Tôm và thịt ướp gia vị",
+                "Đổ bột vào chảo nóng",
+                "Cho tôm thịt và giá đỗ vào",
+                "Gấp đôi bánh, ăn kèm rau sống"
+            ],
+            "nutrition": {
+                "calories": 480,
+                "protein": 28,
+                "fat": 22,
+                "carbs": 45
+            },
+            "preparation_time": "25 phút",
+            "health_benefits": "Protein từ tôm thịt, giá đỗ giàu vitamin C, rau sống cung cấp chất xơ"
+        },
+        {
+            "name": "Cà Ri Gà Khoai Tây",
+            "description": "Cà ri gà thơm ngon với khoai tây mềm",
+            "ingredients": [
+                {"name": "Thịt gà", "amount": "200g"},
+                {"name": "Khoai tây", "amount": "150g"},
+                {"name": "Cà rốt", "amount": "80g"},
+                {"name": "Nước cốt dừa", "amount": "200ml"},
+                {"name": "Bột cà ri", "amount": "2 tbsp"},
+                {"name": "Hành tây", "amount": "1 củ"}
+            ],
+            "preparation": [
+                "Thịt gà cắt miếng vừa ăn",
+                "Khoai tây và cà rốt cắt khối",
+                "Phi hành tây với bột cà ri",
+                "Cho gà vào xào, thêm nước cốt dừa",
+                "Thêm khoai tây, cà rốt và niêu"
+            ],
+            "nutrition": {
+                "calories": 520,
+                "protein": 35,
+                "fat": 25,
+                "carbs": 40
+            },
+            "preparation_time": "40 phút",
+            "health_benefits": "Thịt gà cung cấp protein chất lượng, khoai tây giàu vitamin C, nước cốt dừa bổ sung chất béo tốt"
+        },
+        {
+            "name": "Chả Cá Lã Vọng",
+            "description": "Chả cá Hà Nội truyền thống với thì là",
+            "ingredients": [
+                {"name": "Cá tra", "amount": "200g"},
+                {"name": "Thì là", "amount": "50g"},
+                {"name": "Hành lá", "amount": "30g"},
+                {"name": "Bún", "amount": "100g"},
+                {"name": "Đậu phộng rang", "amount": "30g"},
+                {"name": "Mắm tôm", "amount": "2 tsp"}
+            ],
+            "preparation": [
+                "Cá tra ướp nghệ và nướng",
+                "Thì là và hành lá rửa sạch",
+                "Luộc bún mềm",
+                "Xào cá với thì là và hành lá",
+                "Ăn kèm bún và đậu phộng"
+            ],
+            "nutrition": {
+                "calories": 450,
+                "protein": 32,
+                "fat": 18,
+                "carbs": 35
+            },
+            "preparation_time": "30 phút",
+            "health_benefits": "Cá giàu omega-3 và protein, thì là có tính kháng khuẩn, đậu phộng cung cấp chất béo tốt"
         }
     ]
 }

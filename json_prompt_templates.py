@@ -69,8 +69,26 @@ CREATIVE VARIATION GUIDELINES:
 REFERENCE DISHES FOR INSPIRATION:
 {diverse_dishes}
 
-AVOID THESE RECENT DISHES:
+🚫 STRICTLY AVOID THESE RECENT DISHES (DO NOT CREATE ANY VARIATIONS):
 {recent_dishes}
+
+🔧 ENHANCED ANTI-DUPLICATION RULES:
+1. DO NOT create any dish with the same base name as recent dishes
+2. DO NOT create regional variations (Miền Tây, Sài Gòn, etc.) of recent dishes
+3. DO NOT use similar main ingredients as recent dishes
+4. DO NOT add adjectives (Đặc Biệt, Truyền Thống) to recent dishes
+5. MUST create completely different dish categories
+6. If recent dishes include "Cơm Tấm", avoid ALL rice dishes entirely
+7. If recent dishes include "Bánh Mì", avoid ALL bread dishes entirely
+8. If recent dishes include "Cháo", avoid ALL porridge dishes entirely
+9. If recent dishes include "Phở", avoid ALL noodle soup dishes entirely
+10. If recent dishes have "Sườn Nướng", avoid ALL grilled pork dishes
+
+🎯 DIVERSITY ENFORCEMENT:
+- Recent dishes have rice → CREATE noodle/soup/vegetarian dishes ONLY
+- Recent dishes have noodles → CREATE rice/bread/salad dishes ONLY
+- Recent dishes have pork → CREATE chicken/fish/vegetarian dishes ONLY
+- Recent dishes have grilled → CREATE steamed/boiled/stir-fried dishes ONLY
 
 USER PREFERENCES: {preferences}
 ALLERGIES TO AVOID: {allergies}
@@ -91,6 +109,13 @@ VIETNAMESE AUTHENTICITY RULES (FAILURE TO FOLLOW = INVALID RESPONSE):
 2. INGREDIENTS must be authentic Vietnamese (no Western fusion ingredients)
 3. COOKING METHODS must be traditional (nấu, luộc, xào, nướng, hấp, chiên)
 4. FLAVOR PROFILES must use Vietnamese seasonings (nước mắm, mắm tôm, sả, lá chanh)
+
+🎯 DIVERSITY ENFORCEMENT EXAMPLES:
+- If recent dishes have rice → CREATE noodle/bread/porridge dishes
+- If recent dishes have noodles → CREATE rice/bread/soup dishes
+- If recent dishes have pork → CREATE chicken/fish/vegetarian dishes
+- If recent dishes have fried → CREATE steamed/boiled/grilled dishes
+- If recent dishes are Northern → CREATE Central/Southern dishes
 
 CREATIVE VARIATION EXAMPLES (FOLLOW THIS PATTERN):
 - "Phở Bò Đặc Biệt Sài Gòn" instead of "Phở Bò"

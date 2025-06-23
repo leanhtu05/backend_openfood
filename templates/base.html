@@ -96,13 +96,13 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if '/admin/users' in request.url.path %}active{% endif %}" href="/admin/users">
+                            <a class="nav-link {% if '/admin/users' in request.url.path %}active{% endif %}" href="/admin/users" onclick="console.log('🔗 Users link clicked')">
                                 <i class="fas fa-users"></i>
                                 Quản lý người dùng
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if '/admin/meal-plans' in request.url.path %}active{% endif %}" href="/admin/meal-plans">
+                            <a class="nav-link {% if '/admin/meal-plans' in request.url.path %}active{% endif %}" href="/admin/meal-plans" onclick="console.log('🔗 Meal plans link clicked')">
                                 <i class="fas fa-calendar-alt"></i>
                                 Kế hoạch bữa ăn
                             </a>
@@ -120,6 +120,12 @@
                             </a>
                         </li>
                         <hr class="text-white-50">
+                        <li class="nav-item">
+                            <button class="nav-link text-warning btn btn-link" onclick="testNavigation()" style="text-align: left; width: 100%;">
+                                <i class="fas fa-bug"></i>
+                                🔧 Test Navigation
+                            </button>
+                        </li>
                         <li class="nav-item">
                             <a class="nav-link" href="/">
                                 <i class="fas fa-home"></i>
@@ -159,8 +165,11 @@
         document.addEventListener('DOMContentLoaded', function() {
             // Add loading states to all links
             const links = document.querySelectorAll('a[href^="/admin"]');
+            console.log('🔗 Found admin links:', links.length);
             links.forEach(link => {
+                console.log('🔗 Adding click handler to:', link.href);
                 link.addEventListener('click', function(e) {
+                    console.log('🔗 Link clicked:', this.href);
                     if (!this.target || this.target === '_self') {
                         // Show loading indicator
                         const loader = document.createElement('div');
@@ -199,6 +208,25 @@
             const loadTime = performance.now();
             console.log(`🚀 Page loaded in ${Math.round(loadTime)}ms`);
         });
+
+        // 🔧 Test navigation function
+        function testNavigation() {
+            console.log('🔧 Testing navigation...');
+            console.log('🔧 Current URL:', window.location.href);
+            console.log('🔧 Current path:', window.location.pathname);
+
+            // Test direct navigation
+            const testUrls = ['/admin/users', '/admin/meal-plans', '/admin/foods'];
+
+            testUrls.forEach((url, index) => {
+                setTimeout(() => {
+                    console.log(`🔧 Testing URL ${index + 1}: ${url}`);
+                    if (confirm(`Test navigation to ${url}?`)) {
+                        window.location.href = url;
+                    }
+                }, index * 1000);
+            });
+        }
     </script>
 
     {% block extra_js %}{% endblock %}

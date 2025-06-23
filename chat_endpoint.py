@@ -297,33 +297,76 @@ def format_user_context(user_profile, meal_plan, food_logs, exercise_history=Non
             elif log.get('description'):
                 eaten_dishes.append(log.get('description'))
 
-        # 🔧 FIX: Đếm số món ăn thực tế thay vì số bữa ăn
+        # 🔧 FIX: Đếm số bữa ăn thực tế và debug thông tin chi tiết
+        print(f"[DEBUG] 🍽️ Phân tích {len(food_logs)} food logs:")
+        for i, log in enumerate(food_logs):
+            print(f"[DEBUG] 📝 Log #{i+1}: meal_type={log.get('meal_type', 'N/A')}, description={log.get('description', 'N/A')}")
+            print(f"[DEBUG] 📝 Log #{i+1}: items={len(log.get('items', []))}, recognized_foods={len(log.get('recognized_foods', []))}")
+
         # Đếm tổng số món ăn từ tất cả các nguồn
         total_dishes = len(eaten_dishes)
 
         # Phân tích meal_type để đếm số bữa ăn khác nhau (nếu có)
         unique_meals = set()
+        meal_details = {}  # Lưu chi tiết từng bữa ăn
+
         for log in food_logs:
             meal_type = log.get('meal_type', 'unknown')
             if meal_type and meal_type != 'unknown':
                 unique_meals.add(meal_type)
+                if meal_type not in meal_details:
+                    meal_details[meal_type] = []
 
-        # Tạo thông tin chi tiết
+                # Thu thập món ăn cho từng bữa
+                if log.get('recognized_foods'):
+                    for food in log.get('recognized_foods', []):
+                        if food.get('food_name'):
+                            meal_details[meal_type].append(food.get('food_name'))
+                elif log.get('items'):
+                    for item in log.get('items', []):
+                        if item.get('name'):
+                            meal_details[meal_type].append(item.get('name'))
+                elif log.get('description'):
+                    meal_details[meal_type].append(log.get('description'))
+
+        print(f"[DEBUG] 🍽️ Unique meals found: {unique_meals}")
+        print(f"[DEBUG] 🍽️ Meal details: {meal_details}")
+
+        # 🔧 FIX: Tạo thông tin chi tiết với logic chính xác hơn
         if eaten_dishes:
             if unique_meals:
-                # Có thông tin meal_type - hiển thị cả số bữa và số món
-                context_parts.append(f"- Nhật ký đã ăn {time_label}: Đã ăn {len(unique_meals)} bữa với {total_dishes} món: {', '.join(eaten_dishes)}. "
+                # Có thông tin meal_type - hiển thị chi tiết từng bữa
+                meal_summary = []
+                for meal_type in sorted(unique_meals):
+                    dishes_in_meal = meal_details.get(meal_type, [])
+                    # Loại bỏ trùng lặp trong cùng một bữa ăn
+                    unique_dishes_in_meal = list(set(dishes_in_meal))
+                    if unique_dishes_in_meal:
+                        meal_summary.append(f"{meal_type}: {', '.join(unique_dishes_in_meal)}")
+                    else:
+                        meal_summary.append(f"{meal_type}: không rõ món ăn")
+
+                # Đếm số bữa ăn thực tế (unique meal types)
+                actual_meal_count = len(unique_meals)
+                context_parts.append(f"- Nhật ký đã ăn {time_label}: Đã ăn {actual_meal_count} bữa ({'; '.join(meal_summary)}). "
                                   f"Tổng calo đã nạp: {eaten_calories} kcal.")
             else:
-                # Không có meal_type - chỉ hiển thị số món
-                context_parts.append(f"- Nhật ký đã ăn {time_label}: Đã ăn {total_dishes} món: {', '.join(eaten_dishes)}. "
-                                  f"Tổng calo đã nạp: {eaten_calories} kcal.")
+                # Không có meal_type - ước tính từ số records
+                if len(food_logs) == 1:
+                    context_parts.append(f"- Nhật ký đã ăn {time_label}: Đã ăn 1 bữa với {total_dishes} món: {', '.join(eaten_dishes)}. "
+                                      f"Tổng calo đã nạp: {eaten_calories} kcal.")
+                else:
+                    context_parts.append(f"- Nhật ký đã ăn {time_label}: Đã ghi nhận {len(food_logs)} lần với {total_dishes} món: {', '.join(eaten_dishes)}. "
+                                      f"Tổng calo đã nạp: {eaten_calories} kcal.")
         else:
             # Không có thông tin món ăn chi tiết
             if unique_meals:
                 context_parts.append(f"- Nhật ký đã ăn {time_label}: Đã ghi nhận {len(unique_meals)} bữa ăn nhưng không có thông tin chi tiết.")
             else:
-                context_parts.append(f"- Nhật ký đã ăn {time_label}: Đã ghi nhận {len(food_logs)} lần ghi nhận thực phẩm nhưng không có thông tin chi tiết.")
+                if len(food_logs) == 1:
+                    context_parts.append(f"- Nhật ký đã ăn {time_label}: Đã ghi nhận 1 lần ăn nhưng không có thông tin chi tiết.")
+                else:
+                    context_parts.append(f"- Nhật ký đã ăn {time_label}: Đã ghi nhận {len(food_logs)} lần ghi nhận thực phẩm nhưng không có thông tin chi tiết.")
     else:
         context_parts.append(f"- Nhật ký đã ăn {time_label}: Chưa ghi nhận bữa nào.")
     
@@ -743,6 +786,19 @@ def chat():
                 print(f"[DEBUG] 📅 Đang truy vấn dữ liệu cho ngày: {target_date} (context: {context_type})")
                 print(f"[DEBUG] 🌏 Timezone: {VIETNAM_TZ}")
                 food_logs_target = firestore_service.get_food_logs_by_date(user_id, target_date) or []
+                print(f"[DEBUG] 🍽️ Tìm thấy {len(food_logs_target)} food logs cho ngày {target_date}")
+
+                # Debug chi tiết từng food log
+                for i, log in enumerate(food_logs_target):
+                    print(f"[DEBUG] 📝 Food Log #{i+1}:")
+                    print(f"[DEBUG]   - ID: {log.get('id', 'N/A')}")
+                    print(f"[DEBUG]   - Date: {log.get('date', 'N/A')}")
+                    print(f"[DEBUG]   - Meal Type: {log.get('meal_type', 'N/A')}")
+                    print(f"[DEBUG]   - Description: {log.get('description', 'N/A')}")
+                    print(f"[DEBUG]   - Items count: {len(log.get('items', []))}")
+                    print(f"[DEBUG]   - Recognized foods count: {len(log.get('recognized_foods', []))}")
+                    print(f"[DEBUG]   - Timestamp: {log.get('timestamp', 'N/A')}")
+                    print(f"[DEBUG]   - Created at: {log.get('created_at', 'N/A')}")
 
                 # 4. Lấy thông tin bài tập theo ngày được yêu cầu - với fallback logic
                 print(f"[DEBUG] Đang truy vấn dữ liệu bài tập cho user {user_id} với ngày {target_date}...")

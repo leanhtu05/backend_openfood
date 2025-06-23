@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request, Depends, HTTPException, Query, Form
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, Response
 from fastapi.templating import Jinja2Templates
 from typing import List, Dict, Optional, Any
 import os
@@ -57,6 +57,24 @@ async def admin_login_page(request: Request, error: str = None, success: str = N
         "success": success
     })
 
+@router.get("/fast-login", response_class=HTMLResponse)
+async def admin_fast_login_page(
+    request: Request,
+    error: str = None,
+    success: str = None,
+    templates: Jinja2Templates = Depends(get_templates)
+):
+    """🚀 Trang đăng nhập admin tối ưu hóa"""
+    # Nếu đã đăng nhập rồi thì redirect về fast dashboard
+    if get_current_admin(request):
+        return RedirectResponse(url="/admin/fast-dashboard", status_code=302)
+
+    return templates.TemplateResponse("admin/fast_login.html", {
+        "request": request,
+        "error": error,
+        "success": success
+    })
+
 @router.post("/login")
 async def admin_login(request: Request, username: str = Form(...), password: str = Form(...)):
     """Xử lý đăng nhập admin"""
@@ -68,8 +86,8 @@ async def admin_login(request: Request, username: str = Form(...), password: str
             session_token = create_admin_session(username)
             print(f"[AUTH] Admin login successful: {username}")
 
-            # Redirect về dashboard với session cookie
-            response = RedirectResponse(url="/admin/", status_code=302)
+            # 🚀 Redirect về fast dashboard với session cookie
+            response = RedirectResponse(url="/admin/fast-dashboard", status_code=302)
             response.set_cookie(
                 key="admin_session",
                 value=session_token,
@@ -82,13 +100,48 @@ async def admin_login(request: Request, username: str = Form(...), password: str
         else:
             print(f"[AUTH] Admin login failed: {username}")
             return RedirectResponse(
-                url="/admin/login?error=Tên đăng nhập hoặc mật khẩu không đúng",
+                url="/admin/fast-login?error=Tên đăng nhập hoặc mật khẩu không đúng",
                 status_code=302
             )
     except Exception as e:
         print(f"[AUTH] Admin login error: {str(e)}")
         return RedirectResponse(
-            url="/admin/login?error=Có lỗi xảy ra khi đăng nhập",
+            url="/admin/fast-login?error=Có lỗi xảy ra khi đăng nhập",
+            status_code=302
+        )
+
+@router.post("/fast-login")
+async def admin_fast_login(request: Request, username: str = Form(...), password: str = Form(...)):
+    """🚀 Xử lý đăng nhập admin tối ưu hóa"""
+    try:
+        print(f"[FAST-AUTH] Admin login attempt: {username}")
+
+        if authenticate_admin(username, password):
+            # Tạo session
+            session_token = create_admin_session(username)
+            print(f"[FAST-AUTH] Admin login successful: {username}")
+
+            # Redirect về fast dashboard với session cookie
+            response = RedirectResponse(url="/admin/fast-dashboard", status_code=302)
+            response.set_cookie(
+                key="admin_session",
+                value=session_token,
+                max_age=86400,  # 24 hours
+                httponly=True,
+                secure=False,  # Set to True in production with HTTPS
+                samesite="lax"
+            )
+            return response
+        else:
+            print(f"[FAST-AUTH] Admin login failed: {username}")
+            return RedirectResponse(
+                url="/admin/fast-login?error=Tên đăng nhập hoặc mật khẩu không đúng",
+                status_code=302
+            )
+    except Exception as e:
+        print(f"[FAST-AUTH] Admin login error: {str(e)}")
+        return RedirectResponse(
+            url="/admin/fast-login?error=Có lỗi xảy ra khi đăng nhập",
             status_code=302
         )
 
@@ -320,6 +373,42 @@ async def admin_dashboard(
             "activity_chart_data": [],
             "food_type_labels": [],
             "food_type_data": [],
+            "system_status": {"ai_available": False, "ai_type": None, "firebase_connected": False}
+        })
+
+@router.get("/fast-dashboard", response_class=HTMLResponse)
+async def admin_fast_dashboard(
+    request: Request,
+    templates: Jinja2Templates = Depends(get_templates)
+):
+    """🚀 Trang dashboard admin tối ưu hóa"""
+    # Kiểm tra xác thực admin
+    admin_username = get_current_admin(request)
+    if not admin_username:
+        return RedirectResponse(url="/admin/fast-login", status_code=302)
+
+    try:
+        # Lấy dữ liệu thống kê (optimized - ít data hơn)
+        stats = get_system_stats()
+        recent_activities = get_recent_activities()[:5]  # Chỉ lấy 5 activities gần nhất
+        recent_foods = get_recent_foods()[:5]  # Chỉ lấy 5 foods gần nhất
+        system_status = get_system_status()
+
+        return templates.TemplateResponse("admin/fast_dashboard.html", {
+            "request": request,
+            "stats": stats,
+            "recent_activities": recent_activities,
+            "recent_foods": recent_foods,
+            "system_status": system_status
+        })
+    except Exception as e:
+        print(f"Error in fast admin dashboard: {str(e)}")
+        # Trả về trang với dữ liệu mặc định
+        return templates.TemplateResponse("admin/fast_dashboard.html", {
+            "request": request,
+            "stats": {"total_foods": 0, "active_users": 0, "total_meal_plans": 0, "api_calls_today": 0},
+            "recent_activities": [],
+            "recent_foods": [],
             "system_status": {"ai_available": False, "ai_type": None, "firebase_connected": False}
         })
 
@@ -1071,6 +1160,74 @@ async def delete_food_api(food_id: str):
             return {"success": False, "message": "Không thể xóa food record"}
     except Exception as e:
         return {"success": False, "message": f"Lỗi: {str(e)}"}
+
+# 🚀 FAST API ENDPOINTS FOR OPTIMIZED ADMIN
+
+@router.get("/api/quick-stats")
+async def get_quick_stats(request: Request):
+    """🚀 API lấy stats nhanh cho fast dashboard"""
+    # Kiểm tra xác thực admin
+    admin_username = get_current_admin(request)
+    if not admin_username:
+        return {"success": False, "message": "Unauthorized"}
+
+    try:
+        stats = get_system_stats()
+        return {"success": True, "data": stats}
+    except Exception as e:
+        return {"success": False, "message": f"Error: {str(e)}"}
+
+@router.get("/api/quick-export")
+async def quick_export(request: Request):
+    """🚀 API xuất báo cáo nhanh (CSV đơn giản)"""
+    # Kiểm tra xác thực admin
+    admin_username = get_current_admin(request)
+    if not admin_username:
+        return {"success": False, "message": "Unauthorized"}
+
+    try:
+        # Tạo CSV đơn giản với dữ liệu cơ bản
+        stats = get_system_stats()
+        csv_content = f"""Metric,Value
+Total Foods,{stats.get('total_foods', 0)}
+Active Users,{stats.get('active_users', 0)}
+Total Meal Plans,{stats.get('total_meal_plans', 0)}
+API Calls Today,{stats.get('api_calls_today', 0)}
+Export Time,{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+"""
+
+        return Response(
+            content=csv_content,
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=quick_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"}
+        )
+    except Exception as e:
+        return {"success": False, "message": f"Error: {str(e)}"}
+
+@router.post("/api/fast-refresh")
+async def fast_refresh_data(request: Request):
+    """🚀 API làm mới dữ liệu nhanh"""
+    # Kiểm tra xác thực admin
+    admin_username = get_current_admin(request)
+    if not admin_username:
+        return {"success": False, "message": "Unauthorized"}
+
+    try:
+        # Clear cache nếu có
+        # Lấy dữ liệu mới
+        stats = get_system_stats()
+        recent_activities = get_recent_activities()[:3]  # Chỉ lấy 3 activities
+
+        return {
+            "success": True,
+            "data": {
+                "stats": stats,
+                "recent_activities": recent_activities,
+                "timestamp": datetime.now().isoformat()
+            }
+        }
+    except Exception as e:
+        return {"success": False, "message": f"Error: {str(e)}"}
 
 # API endpoint tạo download token
 @router.post("/api/create-download-token")

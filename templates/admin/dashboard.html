@@ -259,11 +259,21 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- 🚀 Load Chart.js asynchronously -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
 <script>
-// Activity Chart
-const activityCtx = document.getElementById('activityChart').getContext('2d');
-const activityChart = new Chart(activityCtx, {
+// 🚀 Wait for Chart.js to load before initializing charts
+document.addEventListener('DOMContentLoaded', function() {
+    // Check if Chart.js is loaded
+    function initCharts() {
+        if (typeof Chart === 'undefined') {
+            setTimeout(initCharts, 100);
+            return;
+        }
+
+        // Activity Chart
+        const activityCtx = document.getElementById('activityChart').getContext('2d');
+        const activityChart = new Chart(activityCtx, {
     type: 'line',
     data: {
         labels: {{ activity_chart_labels | tojson }},
@@ -309,9 +319,35 @@ const foodTypeChart = new Chart(foodTypeCtx, {
         maintainAspectRatio: false
     }
 });
+    }
 
+    // Initialize charts
+    initCharts();
+});
+
+// 🚀 Optimized refresh function
 function refreshStats() {
-    location.reload();
+    // Show loading indicator
+    const statsCards = document.querySelectorAll('.stat-card, .stat-card-success, .stat-card-warning, .stat-card-info');
+    statsCards.forEach(card => {
+        card.style.opacity = '0.6';
+        card.style.pointerEvents = 'none';
+    });
+
+    // Add loading spinner
+    const loadingSpinner = document.createElement('div');
+    loadingSpinner.innerHTML = `
+        <div style="position: fixed; top: 20px; right: 20px; background: #007bff; color: white; padding: 10px 15px; border-radius: 5px; z-index: 1000;">
+            <i class="fas fa-spinner fa-spin"></i> Đang làm mới...
+        </div>
+    `;
+    loadingSpinner.id = 'refreshSpinner';
+    document.body.appendChild(loadingSpinner);
+
+    // Reload page
+    setTimeout(() => {
+        location.reload();
+    }, 500);
 }
 
 function exportReport() {

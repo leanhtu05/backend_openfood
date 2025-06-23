@@ -2427,6 +2427,17 @@ async def verify_phone_number(
 
 # All video cache endpoints removed
 
+# 🔧 FIX: Register chat endpoint từ chat_endpoint.py để sử dụng logic tối ưu hóa
+try:
+    import chat_endpoint
+    # Register routes từ chat_endpoint
+    app.mount("/chat-optimized", chat_endpoint.app)
+    print("✅ Đã mount chat_endpoint tại /chat-optimized - sử dụng logic tối ưu hóa")
+    print("💡 Sử dụng /chat-optimized thay vì /chat để có logic sửa lỗi")
+except ImportError as e:
+    print(f"⚠️ Không thể import chat_endpoint: {e}")
+    print("💡 Sử dụng chat endpoint trong main.py")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

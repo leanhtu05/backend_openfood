@@ -207,12 +207,29 @@ def format_user_context(user_profile, meal_plan, food_logs, exercise_history=Non
     # Thông tin hồ sơ
     if user_profile:
         goal = user_profile.get('goal', 'Không rõ')
-        calories_target = user_profile.get('tdeeValues', {}).get('calories', 'Không rõ')
+
+        # 🔧 FIX: Lấy mục tiêu calories thực tế thay vì TDEE
+        calories_target = 'Không rõ'
+
+        # Ưu tiên lấy từ caloriesGoal (mục tiêu thực tế)
+        if user_profile.get('caloriesGoal'):
+            calories_target = user_profile.get('caloriesGoal')
+        # Fallback về dailyCaloriesGoal
+        elif user_profile.get('dailyCaloriesGoal'):
+            calories_target = user_profile.get('dailyCaloriesGoal')
+        # Fallback về goalCalories
+        elif user_profile.get('goalCalories'):
+            calories_target = user_profile.get('goalCalories')
+        # Cuối cùng mới lấy TDEE (không nên dùng làm mục tiêu)
+        elif user_profile.get('tdeeValues', {}).get('calories'):
+            calories_target = user_profile.get('tdeeValues', {}).get('calories')
+            print(f"⚠️ WARNING: Đang dùng TDEE làm mục tiêu calories cho user {user_profile.get('email', 'unknown')}")
+
         allergies = ", ".join(user_profile.get('allergies', [])) or "không có"
         height = user_profile.get('height', 'Không rõ')
         weight = user_profile.get('weight', 'Không rõ')
         diet_restrictions = ", ".join(user_profile.get('dietRestrictions', [])) or "không có"
-        
+
         context_parts.append(f"- Hồ sơ: Mục tiêu là '{goal}', mục tiêu calo hàng ngày là {calories_target} kcal. "
                            f"Chiều cao: {height}cm, cân nặng: {weight}kg. "
                            f"Dị ứng với: {allergies}. Hạn chế ăn uống: {diet_restrictions}.")
@@ -280,22 +297,33 @@ def format_user_context(user_profile, meal_plan, food_logs, exercise_history=Non
             elif log.get('description'):
                 eaten_dishes.append(log.get('description'))
 
-        # 🔧 FIX: Đếm số bữa ăn thực tế thay vì số food log entries
-        # Phân tích meal_type để đếm số bữa ăn khác nhau
+        # 🔧 FIX: Đếm số món ăn thực tế thay vì số bữa ăn
+        # Đếm tổng số món ăn từ tất cả các nguồn
+        total_dishes = len(eaten_dishes)
+
+        # Phân tích meal_type để đếm số bữa ăn khác nhau (nếu có)
         unique_meals = set()
         for log in food_logs:
             meal_type = log.get('meal_type', 'unknown')
             if meal_type and meal_type != 'unknown':
                 unique_meals.add(meal_type)
 
-        # Nếu không có meal_type, fallback về số lượng food logs
-        actual_meal_count = len(unique_meals) if unique_meals else len(food_logs)
-
+        # Tạo thông tin chi tiết
         if eaten_dishes:
-            context_parts.append(f"- Nhật ký đã ăn {time_label}: Đã ăn {actual_meal_count} bữa với các món: {', '.join(eaten_dishes)}. "
-                              f"Tổng calo đã nạp: {eaten_calories} kcal.")
+            if unique_meals:
+                # Có thông tin meal_type - hiển thị cả số bữa và số món
+                context_parts.append(f"- Nhật ký đã ăn {time_label}: Đã ăn {len(unique_meals)} bữa với {total_dishes} món: {', '.join(eaten_dishes)}. "
+                                  f"Tổng calo đã nạp: {eaten_calories} kcal.")
+            else:
+                # Không có meal_type - chỉ hiển thị số món
+                context_parts.append(f"- Nhật ký đã ăn {time_label}: Đã ăn {total_dishes} món: {', '.join(eaten_dishes)}. "
+                                  f"Tổng calo đã nạp: {eaten_calories} kcal.")
         else:
-            context_parts.append(f"- Nhật ký đã ăn {time_label}: Đã ghi nhận {actual_meal_count} bữa ăn nhưng không có thông tin chi tiết.")
+            # Không có thông tin món ăn chi tiết
+            if unique_meals:
+                context_parts.append(f"- Nhật ký đã ăn {time_label}: Đã ghi nhận {len(unique_meals)} bữa ăn nhưng không có thông tin chi tiết.")
+            else:
+                context_parts.append(f"- Nhật ký đã ăn {time_label}: Đã ghi nhận {len(food_logs)} lần ghi nhận thực phẩm nhưng không có thông tin chi tiết.")
     else:
         context_parts.append(f"- Nhật ký đã ăn {time_label}: Chưa ghi nhận bữa nào.")
     
@@ -412,10 +440,22 @@ def analyze_user_nutrition(user_profile, food_logs, meal_plan):
                 total_carbs += item.get('carbs', 0)
                 total_fat += item.get('fat', 0)
 
-    # Lấy mục tiêu từ user profile
+    # 🔧 FIX: Lấy mục tiêu calories thực tế thay vì TDEE
     target_calories = 2000  # Default
-    if user_profile and user_profile.get('tdeeValues', {}).get('calories'):
-        target_calories = user_profile.get('tdeeValues', {}).get('calories')
+    if user_profile:
+        # Ưu tiên lấy từ caloriesGoal (mục tiêu thực tế)
+        if user_profile.get('caloriesGoal'):
+            target_calories = user_profile.get('caloriesGoal')
+        # Fallback về dailyCaloriesGoal
+        elif user_profile.get('dailyCaloriesGoal'):
+            target_calories = user_profile.get('dailyCaloriesGoal')
+        # Fallback về goalCalories
+        elif user_profile.get('goalCalories'):
+            target_calories = user_profile.get('goalCalories')
+        # Cuối cùng mới lấy TDEE (không nên dùng làm mục tiêu)
+        elif user_profile.get('tdeeValues', {}).get('calories'):
+            target_calories = user_profile.get('tdeeValues', {}).get('calories')
+            print(f"⚠️ WARNING: analyze_user_nutrition đang dùng TDEE làm mục tiêu calories")
 
     # Tính phần trăm macro
     if total_calories > 0:

@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚀 Fast Login - OpenFood Admin</title>
+    
+    <!-- 🚀 CRITICAL PERFORMANCE OPTIMIZATIONS -->
+    <!-- Inline critical CSS for instant rendering -->
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .login-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            max-width: 400px;
+            width: 100%;
+            animation: slideIn 0.5s ease-out;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .login-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+        .login-header h3 { margin: 10px 0 5px 0; font-size: 1.5rem; }
+        .login-header p { margin: 0; opacity: 0.9; font-size: 0.9rem; }
+        .login-body { padding: 2rem; }
+        .form-group { margin-bottom: 1.5rem; }
+        .form-label { 
+            display: block; 
+            margin-bottom: 0.5rem; 
+            font-weight: 600; 
+            color: #333; 
+            font-size: 0.9rem;
+        }
+        .form-control {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background: #fff;
+        }
+        .form-control:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .input-group {
+            position: relative;
+            display: flex;
+        }
+        .input-group-text {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-right: none;
+            border-radius: 10px 0 0 10px;
+            padding: 12px 15px;
+            color: #666;
+        }
+        .form-control.with-icon {
+            border-left: none;
+            border-radius: 0 10px 10px 0;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 100%;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+        .btn-outline-secondary {
+            background: none;
+            border: 2px solid #e9ecef;
+            color: #666;
+            border-radius: 0 10px 10px 0;
+            border-left: none;
+        }
+        .btn-outline-secondary:hover {
+            background: #f8f9fa;
+        }
+        .form-check {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .form-check-input {
+            margin-right: 0.5rem;
+        }
+        .form-check-label {
+            font-size: 0.9rem;
+            color: #666;
+        }
+        .alert {
+            padding: 12px 15px;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+            border: none;
+            font-size: 0.9rem;
+        }
+        .alert-danger {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .alert-success {
+            background: #d1edff;
+            color: #0c5460;
+        }
+        .text-center { text-align: center; }
+        .text-muted { color: #666; }
+        .mt-4 { margin-top: 1.5rem; }
+        .mb-0 { margin-bottom: 0; }
+        .me-1 { margin-right: 0.25rem; }
+        .me-2 { margin-right: 0.5rem; }
+        .w-100 { width: 100%; }
+        .fas { font-style: normal; }
+        .fas:before { content: "🔒"; }
+        .fa-user:before { content: "👤"; }
+        .fa-lock:before { content: "🔒"; }
+        .fa-eye:before { content: "👁"; }
+        .fa-eye-slash:before { content: "🙈"; }
+        .fa-sign-in-alt:before { content: "🚀"; }
+        .fa-shield-alt:before { content: "🛡"; }
+        .fa-exclamation-triangle:before { content: "⚠"; }
+        .fa-check-circle:before { content: "✅"; }
+        .fa-info-circle:before { content: "ℹ"; }
+        
+        /* Loading state */
+        .loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <div style="font-size: 3rem; margin-bottom: 10px;">🛡</div>
+            <h3>Admin Panel</h3>
+            <p>Đăng nhập nhanh để quản lý hệ thống</p>
+        </div>
+        
+        <div class="login-body">
+            {% if error %}
+            <div class="alert alert-danger" role="alert">
+                <span style="margin-right: 8px;">⚠</span>
+                {{ error }}
+            </div>
+            {% endif %}
+            
+            {% if success %}
+            <div class="alert alert-success" role="alert">
+                <span style="margin-right: 8px;">✅</span>
+                {{ success }}
+            </div>
+            {% endif %}
+            
+            <form method="POST" action="/admin/login" id="loginForm">
+                <div class="form-group">
+                    <label for="username" class="form-label">Tên đăng nhập</label>
+                    <div class="input-group">
+                        <span class="input-group-text">👤</span>
+                        <input type="text" class="form-control with-icon" id="username" name="username" 
+                               placeholder="Nhập tên đăng nhập" required autocomplete="username">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password" class="form-label">Mật khẩu</label>
+                    <div class="input-group">
+                        <span class="input-group-text">🔒</span>
+                        <input type="password" class="form-control with-icon" id="password" name="password" 
+                               placeholder="Nhập mật khẩu" required autocomplete="current-password">
+                        <button class="btn btn-outline-secondary" type="button" id="togglePassword">
+                            👁
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="form-check">
+                    <input type="checkbox" class="form-check-input" id="remember" name="remember">
+                    <label class="form-check-label" for="remember">
+                        Ghi nhớ đăng nhập
+                    </label>
+                </div>
+                
+                <button type="submit" class="btn btn-primary" id="loginBtn">
+                    <span id="loginText">🚀 Đăng nhập nhanh</span>
+                    <span id="loginSpinner" class="spinner" style="display: none;"></span>
+                </button>
+            </form>
+            
+            <div class="text-center mt-4">
+                <small class="text-muted">
+                    ℹ Chỉ dành cho quản trị viên hệ thống
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🚀 Optimized JavaScript -->
+    <script>
+        // Fast form handling
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('loginForm');
+            const loginBtn = document.getElementById('loginBtn');
+            const loginText = document.getElementById('loginText');
+            const loginSpinner = document.getElementById('loginSpinner');
+            const togglePassword = document.getElementById('togglePassword');
+            const passwordField = document.getElementById('password');
+            
+            // Fast password toggle
+            togglePassword.addEventListener('click', function() {
+                if (passwordField.type === 'password') {
+                    passwordField.type = 'text';
+                    this.textContent = '🙈';
+                } else {
+                    passwordField.type = 'password';
+                    this.textContent = '👁';
+                }
+            });
+            
+            // Fast form submission
+            form.addEventListener('submit', function(e) {
+                loginBtn.classList.add('loading');
+                loginText.style.display = 'none';
+                loginSpinner.style.display = 'inline-block';
+                loginBtn.disabled = true;
+                
+                // Show loading state immediately
+                setTimeout(() => {
+                    // Form will submit naturally
+                }, 100);
+            });
+            
+            // Auto-focus username field
+            document.getElementById('username').focus();
+            
+            // Auto-hide alerts
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(alert => {
+                setTimeout(() => {
+                    alert.style.transition = 'opacity 0.5s';
+                    alert.style.opacity = '0';
+                    setTimeout(() => {
+                        if (alert.parentNode) {
+                            alert.parentNode.removeChild(alert);
+                        }
+                    }, 500);
+                }, 5000);
+            });
+            
+            // Performance monitoring
+            const loadTime = performance.now();
+            console.log(`🚀 Fast login page loaded in ${Math.round(loadTime)}ms`);
+        });
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Enter key submits form
+            if (e.key === 'Enter' && e.target.tagName !== 'BUTTON') {
+                document.getElementById('loginForm').submit();
+            }
+        });
+    </script>
+</body>
+</html>

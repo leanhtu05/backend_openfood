@@ -154,9 +154,10 @@ class GroqService:
         self.rate_limiter = RateLimiter(requests_per_minute=60, requests_per_day=1000)
         self.max_retries = 3
 
-        # 🔧 ENHANCED Anti-duplication tracking
+        # 🔧 ENHANCED Anti-duplication tracking với force diversity
         self.recent_dishes = []  # Track recent dishes to avoid duplication
-        self.max_recent_dishes = 30  # Keep track of last 30 dishes (increased for better diversity)
+        self.max_recent_dishes = 100  # Tăng lên 100 để track nhiều món hơn
+        self.force_diversity = True  # Force diversity mode
 
         # Thêm biến để theo dõi trạng thái quota
         self.quota_exceeded = False
@@ -288,10 +289,14 @@ class GroqService:
             print("Groq API not available. Using fallback data.")
             return self._fallback_meal_suggestions(meal_type)
         
-        # Tạo cache key với anti-duplication
+        # 🔧 FORCE DIVERSITY: Tạo cache key với timestamp để đảm bảo unique
         import hashlib
+        import time
+
+        # Add timestamp để đảm bảo mỗi lần gọi đều unique
+        diversity_timestamp = int(time.time() * 1000) % 100000  # 5 chữ số cuối
         recent_dishes_hash = hashlib.md5(str(sorted(self.recent_dishes[-5:])).encode()).hexdigest()[:8]
-        cache_key = f"{meal_type}_{calories_target}_{protein_target}_{fat_target}_{carbs_target}_{recent_dishes_hash}"
+        cache_key = f"{meal_type}_{calories_target}_{protein_target}_{fat_target}_{carbs_target}_{recent_dishes_hash}_{diversity_timestamp}"
         if preferences:
             cache_key += f"_pref={'_'.join(sorted(preferences))}"
         if allergies:
@@ -306,11 +311,12 @@ class GroqService:
             # Add user data to cache key
             user_data_str = "_".join([f"{k}:{v}" for k, v in user_data.items() if k in ['gender', 'age', 'goal', 'activity_level']])
             cache_key += f"_user:{user_data_str}"
-        
-        # Kiểm tra cache
-        if cache_key in self.cache:
-            print(f"Using cached meal suggestions for: {cache_key}")
-            return self.cache[cache_key]
+
+        # 🔧 FORCE DIVERSITY: Disable cache để luôn tạo món mới
+        # if cache_key in self.cache:
+        #     print(f"Using cached meal suggestions for: {cache_key}")
+        #     return self.cache[cache_key]
+        print(f"🎲 FORCE DIVERSITY: Bypassing cache, generating new meals for: {cache_key[:50]}...")
         
         # Kiểm tra rate limit
         can_request, wait_time = self.rate_limiter.can_make_request()
@@ -447,8 +453,9 @@ class GroqService:
                             # Kiểm tra và bổ sung calories nếu cần
                             final_meals = self._ensure_adequate_calories(validated_meals, calories_target, meal_type)
 
-                            # Cache kết quả
-                            self.cache[cache_key] = final_meals
+                            # 🔧 FORCE DIVERSITY: Không cache kết quả để luôn tạo mới
+                            # self.cache[cache_key] = final_meals
+                            print(f"🎲 FORCE DIVERSITY: Not caching results to ensure variety")
                             return final_meals
                         else:
                             print("❌ Validation failed - no valid meals after validation")
@@ -746,7 +753,18 @@ class GroqService:
         dish1_core = self._remove_regional_variations(dish1)
         dish2_core = self._remove_regional_variations(dish2)
 
+        # 🔧 RELAXED: Chỉ coi là trùng nếu core dish hoàn toàn giống nhau VÀ không có biến thể vùng miền
         if dish1_core == dish2_core:
+            # Kiểm tra xem có phải chỉ khác vùng miền không
+            dish1_has_region = dish1 != dish1_core
+            dish2_has_region = dish2 != dish2_core
+
+            # Nếu cả hai đều có vùng miền khác nhau, cho phép
+            if dish1_has_region and dish2_has_region:
+                print(f"🔧 Allowing regional variation: '{dish1}' vs '{dish2}'")
+                return False  # Không coi là trùng lặp
+
+            # Nếu một món có vùng miền, một món không có, coi là trùng
             return True
 
         # 2. Extract base dish names
@@ -791,7 +809,7 @@ class GroqService:
 
     def _remove_regional_variations(self, dish_name: str) -> str:
         """
-        🔧 NEW: Remove regional variations to detect core dish similarity
+        🔧 ENHANCED: Remove regional variations to detect core dish similarity
 
         Args:
             dish_name: Tên món ăn
@@ -799,11 +817,20 @@ class GroqService:
         Returns:
             str: Tên món ăn đã loại bỏ variations
         """
-        # Remove regional indicators
+        # 🔧 EXPANDED: More comprehensive regional indicators
         regional_terms = [
-            "miền tây", "miền bắc", "miền trung", "sài gòn", "hà nội",
-            "huế", "nha trang", "cà mau", "đồng nai", "an giang",
-            "đặc biệt", "truyền thống", "cổ điển", "đặc sản"
+            # Vùng miền
+            "miền tây", "miền bắc", "miền trung", "miền nam",
+            # Thành phố
+            "sài gòn", "hà nội", "huế", "đà nẵng", "nha trang", "cà mau",
+            "đồng nai", "an giang", "cần thơ", "vũng tàu", "hải phòng",
+            # Đặc tính
+            "đặc biệt", "truyền thống", "cổ điển", "đặc sản", "cải tiến",
+            "nguyên bản", "chính gốc", "authentic", "original",
+            # Phong cách nấu
+            "nướng than", "nướng lò", "chiên giòn", "luộc", "hấp",
+            # Mức độ
+            "cay", "ngọt", "mặn", "chua", "đậm đà", "nhẹ nhàng"
         ]
 
         dish_clean = dish_name.lower()
@@ -811,10 +838,40 @@ class GroqService:
         for term in regional_terms:
             dish_clean = dish_clean.replace(term, "").strip()
 
-        # Remove extra spaces
+        # Remove extra spaces and normalize
         dish_clean = " ".join(dish_clean.split())
 
         return dish_clean
+
+    def _create_dish_variation(self, original_name: str) -> str:
+        """
+        🔧 NEW: Tạo biến thể của món ăn để tránh trùng lặp
+
+        Args:
+            original_name: Tên món ăn gốc
+
+        Returns:
+            str: Tên món ăn biến thể
+        """
+        # Danh sách các biến thể có thể
+        variations = [
+            "Đặc Biệt", "Truyền Thống", "Cải Tiến", "Nguyên Bản",
+            "Miền Bắc", "Miền Nam", "Miền Trung", "Miền Tây",
+            "Sài Gòn", "Hà Nội", "Huế", "Đà Nẵng",
+            "Nướng Than", "Nướng Lò", "Chiên Giòn", "Hấp",
+            "Cay", "Ngọt", "Đậm Đà", "Nhẹ Nhàng"
+        ]
+
+        import random
+
+        # Chọn ngẫu nhiên một biến thể
+        variation = random.choice(variations)
+
+        # Tạo tên mới
+        if "miền" in variation.lower() or variation in ["Sài Gòn", "Hà Nội", "Huế", "Đà Nẵng"]:
+            return f"{original_name} {variation}"
+        else:
+            return f"{original_name} {variation}"
 
     def _extract_base_dish_name(self, dish_name: str) -> str:
         """

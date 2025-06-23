@@ -72,23 +72,19 @@ REFERENCE DISHES FOR INSPIRATION:
 🚫 STRICTLY AVOID THESE RECENT DISHES (DO NOT CREATE ANY VARIATIONS):
 {recent_dishes}
 
-🔧 ENHANCED ANTI-DUPLICATION RULES:
-1. DO NOT create any dish with the same base name as recent dishes
-2. DO NOT create regional variations (Miền Tây, Sài Gòn, etc.) of recent dishes
-3. DO NOT use similar main ingredients as recent dishes
-4. DO NOT add adjectives (Đặc Biệt, Truyền Thống) to recent dishes
-5. MUST create completely different dish categories
-6. If recent dishes include "Cơm Tấm", avoid ALL rice dishes entirely
-7. If recent dishes include "Bánh Mì", avoid ALL bread dishes entirely
-8. If recent dishes include "Cháo", avoid ALL porridge dishes entirely
-9. If recent dishes include "Phở", avoid ALL noodle soup dishes entirely
-10. If recent dishes have "Sườn Nướng", avoid ALL grilled pork dishes
+🔧 SMART ANTI-DUPLICATION RULES:
+1. ALLOW regional variations of different base dishes (Cơm Gà Xối Mỡ Miền Nam vs Cơm Tấm Sài Gòn = OK)
+2. ALLOW different cooking methods for same ingredients (Gà Nướng vs Gà Luộc = OK)
+3. ALLOW different protein sources (Cơm Gà vs Cơm Bò = OK)
+4. AVOID exact same dish name and region combination
+5. PREFER creating dishes from different food categories when possible
+6. ENCOURAGE creative regional fusion (Miền Tây + Miền Bắc ingredients)
 
-🎯 DIVERSITY ENFORCEMENT:
-- Recent dishes have rice → CREATE noodle/soup/vegetarian dishes ONLY
-- Recent dishes have noodles → CREATE rice/bread/salad dishes ONLY
-- Recent dishes have pork → CREATE chicken/fish/vegetarian dishes ONLY
-- Recent dishes have grilled → CREATE steamed/boiled/stir-fried dishes ONLY
+🎯 SMART DIVERSITY ENFORCEMENT:
+- If recent dishes are mostly rice-based → PREFER noodle/bread dishes but rice variations OK
+- If recent dishes are mostly pork → PREFER chicken/fish/vegetarian but pork variations OK
+- If recent dishes are mostly grilled → PREFER steamed/boiled but grilled variations OK
+- ALWAYS prioritize different regional styles and cooking methods
 
 USER PREFERENCES: {preferences}
 ALLERGIES TO AVOID: {allergies}
@@ -97,6 +93,12 @@ AUTHENTIC INNOVATION EXAMPLES:
 - "Phở Gà Nấu Dừa Miền Tây" (Western-style Coconut Chicken Pho)
 - "Cháo Tôm Cua Đồng Cà Mau" (Ca Mau Field Crab and Shrimp Porridge)
 - "Bánh Mì Chả Cá Nha Trang" (Nha Trang Fish Cake Banh Mi)
+
+🎨 ALLOWED VARIATIONS EXAMPLES:
+- If recent: "Cơm Gà Xối Mỡ Miền Tây" → CREATE: "Cơm Gà Nướng Sài Gòn" (different cooking method + region)
+- If recent: "Bánh Mì Thịt" → CREATE: "Bánh Mì Chả Cá Nha Trang" (different protein + region)
+- If recent: "Phở Bò" → CREATE: "Phở Gà Nấu Dừa Miền Tây" (different protein + cooking style)
+- If recent: "Cháo Gà" → CREATE: "Cháo Tôm Cua Đồng" (different protein + regional specialty)
 
 CRITICAL NUTRITION ACCURACY RULES (FAILURE TO FOLLOW = INVALID RESPONSE):
 1. NUTRITION VALUES must be EXACTLY calculated based on ingredients

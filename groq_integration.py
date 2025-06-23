@@ -1662,15 +1662,19 @@ class GroqService:
             # Map meal_type to traditional dish categories
             meal_type_lower = meal_type.lower()
 
+            # 🔧 FIX: Cập nhật theo thói quen ăn uống Việt Nam thực tế
             if "sáng" in meal_type_lower:
                 target_meal_types = ["breakfast"]
-                preferred_categories = ["xôi", "bánh mì", "cháo", "bánh cuốn", "bánh bao"]
+                # Buổi sáng: Món ăn nhanh, tiện lợi
+                preferred_categories = ["bánh mì", "phở", "bún chả", "bún bò", "xôi", "cháo", "bánh cuốn", "bánh bao"]
             elif "trưa" in meal_type_lower:
                 target_meal_types = ["lunch", "dinner"]
-                preferred_categories = ["cơm", "bún", "phở", "mì quảng", "hủ tiếu"]
+                # Buổi trưa: Cơm + món chính + canh, hoặc cơm rang, hoặc món nước
+                preferred_categories = ["cơm", "canh", "thịt", "cá", "gà", "cơm rang", "bún", "phở", "mì quảng", "hủ tiếu"]
             else:  # dinner
                 target_meal_types = ["dinner", "lunch"]
-                preferred_categories = ["cơm", "canh", "lẩu", "thịt nướng", "cá kho"]
+                # Buổi tối: Tương tự buổi trưa - cơm + món chính + canh
+                preferred_categories = ["cơm", "canh", "thịt", "cá", "gà", "cơm rang", "lẩu", "thịt nướng", "cá kho"]
 
             # Filter suitable dishes from traditional database
             suitable_dishes = []
@@ -2244,21 +2248,30 @@ class GroqService:
             List[str]: Danh sách món ăn kết hợp
         """
         # 🔧 FIX: Định nghĩa các thành phần cơ bản với phân loại rõ ràng
-        # Phân loại món ăn để đảm bảo đa dạng
-        rice_based_foods = ["cơm"]  # Món cơm
-        noodle_soup_foods = ["phở", "bún", "hủ tiếu", "mì"]  # Món nước/nấu sắn
-        other_foods = ["cháo", "bánh mì", "xôi", "canh", "lẩu"]  # Món khác
+        # 🔧 FIX: Cập nhật theo thói quen ăn uống Việt Nam thực tế của user
+        # Buổi sáng: Món ăn nhanh như bánh mì thịt, bún chả, phở bò...
+        breakfast_foods = [
+            "bánh mì", "phở", "bún chả", "bún bò", "bún riêu",
+            "xôi", "cháo", "bánh cuốn", "hủ tiếu", "mì quảng"
+        ]
+
+        # Buổi trưa & tối: Cơm + món chính + canh, hoặc cơm rang, hoặc các món khác phù hợp
+        lunch_dinner_base = ["cơm"]  # Món cơm chính
+        lunch_dinner_noodles = ["phở", "bún", "hủ tiếu", "mì quảng"]  # Món nước
+        lunch_dinner_rice_dishes = ["cơm rang", "cơm chiên"]  # Cơm rang và biến thể
+        lunch_dinner_soups = ["canh"]  # Món canh
 
         base_foods = {
-            "breakfast": rice_based_foods + ["cháo", "bánh mì", "xôi"] + noodle_soup_foods[:2],  # Cân bằng
-            "lunch": rice_based_foods + noodle_soup_foods + ["canh"],  # Đa dạng nhất
-            "dinner": rice_based_foods + noodle_soup_foods[:3] + ["canh", "lẩu"]  # Cân bằng
+            "breakfast": breakfast_foods,  # Món ăn nhanh cho buổi sáng
+            "lunch": lunch_dinner_base + lunch_dinner_noodles + lunch_dinner_rice_dishes + lunch_dinner_soups,  # Đa dạng cho buổi trưa
+            "dinner": lunch_dinner_base + lunch_dinner_noodles + lunch_dinner_rice_dishes + lunch_dinner_soups + ["lẩu"]  # Thêm lẩu cho buổi tối
         }
 
+        # 🔧 FIX: Cập nhật proteins theo thói quen ăn uống Việt Nam
         proteins = {
-            "breakfast": ["trứng", "thịt", "gà", "chả", "giò"],
-            "lunch": ["thịt", "gà", "cá", "tôm", "bò", "heo", "chả cá"],
-            "dinner": ["thịt", "gà", "cá", "tôm", "bò", "canh chua", "lẩu"]
+            "breakfast": ["thịt", "trứng", "chả", "giò", "pate", "xíu mại"],  # Protein cho món ăn sáng nhanh
+            "lunch": ["thịt", "gà", "cá", "tôm", "bò", "heo", "chả cá", "đậu phụ", "sườn"],  # Đa dạng cho buổi trưa
+            "dinner": ["thịt", "gà", "cá", "tôm", "bò", "heo", "đậu phụ", "nấm", "sườn"]  # Protein cho buổi tối
         }
 
         vegetables = ["rau muống", "cải thảo", "bắp cải", "cà rót", "đậu bắp", "rau dền"]
@@ -2270,10 +2283,15 @@ class GroqService:
         # 🔧 FIX: Tạo các món ăn kết hợp chi tiết với cân bằng đa dạng
         combination_dishes = []
 
-        # Đảm bảo cân bằng giữa món cơm và món nước/nấu sắn
+        # Đảm bảo cân bằng giữa các loại món ăn
         rice_dishes = []
         noodle_soup_dishes = []
         other_dishes = []
+
+        # 🔧 FIX: Định nghĩa lại các loại món để sử dụng trong phân loại
+        rice_based_foods = ["cơm", "cơm rang"]
+        noodle_soup_foods = ["phở", "bún", "hủ tiếu", "mì quảng"]
+        quick_foods = ["bánh mì", "xôi", "cháo", "bánh cuốn"]
 
         # Tạo món chính với protein chi tiết
         for base in meal_bases:
@@ -2318,15 +2336,19 @@ class GroqService:
         # 🔧 FIX: Update diversity tracker
         self._update_meal_diversity_tracker(selected_rice, selected_noodle_soup, selected_other)
 
-        # Thêm món rau
+        # 🔧 FIX: Thêm món rau và canh theo thói quen ăn uống Việt Nam
         for veg in vegetables[:3]:
             combination_dishes.append(f"Rau {veg.title()}")
             combination_dishes.append(f"{veg.title()} Xào")
 
-        # Thêm canh/soup cho bữa tối
-        if meal_type.lower() == "dinner":
-            soups = ["Canh Chua", "Canh Rau", "Canh Thịt", "Canh Cá"]
-            combination_dishes.extend(soups)
+        # 🔧 FIX: Thêm canh cho cả bữa trưa và bữa tối (theo thói quen Việt Nam)
+        if meal_type.lower() in ["lunch", "trưa", "dinner", "tối"]:
+            soups = [
+                "Canh Chua", "Canh Rau", "Canh Thịt", "Canh Cá",
+                "Canh Bí Đỏ", "Canh Khổ Qua", "Canh Cải Thảo",
+                "Canh Mướp", "Canh Đậu Bắp", "Canh Rau Muống"
+            ]
+            combination_dishes.extend(soups[:4])  # Thêm 4 loại canh
 
         # Lọc theo preferences và allergies
         if preferences:
@@ -2554,8 +2576,37 @@ class GroqService:
         """
         combination_dishes_str = ", ".join(combination_dishes[:15])  # Lấy 15 món đầu
 
+        # 🔧 FIX: Cập nhật prompt theo thói quen ăn uống Việt Nam thực tế
+        meal_type_guidance = ""
+        if "sáng" in meal_type.lower() or "breakfast" in meal_type.lower():
+            meal_type_guidance = """
+        🌅 BUỔI SÁNG - Món ăn nhanh, tiện lợi:
+        - Bánh mì thịt, bánh mì pate, bánh mì chả cá
+        - Bún chả, bún bò Huế, bún riêu cua
+        - Phở bò, phở gà với rau thơm
+        - Xôi mặn, cháo gà, bánh cuốn
+        """
+        elif "trưa" in meal_type.lower() or "lunch" in meal_type.lower():
+            meal_type_guidance = """
+        🍽️ BUỔI TRƯA - Cơm + món chính + canh:
+        - Cơm trắng + thịt/cá/gà nướng/xào + canh rau
+        - Cơm rang dương châu, cơm chiên hải sản
+        - Bún bò Huế, phở bò, mì quảng
+        - Luôn có canh (canh chua, canh rau, canh thịt)
+        """
+        else:  # dinner/tối
+            meal_type_guidance = """
+        🌙 BUỔI TỐI - Cơm + món chính + canh:
+        - Cơm trắng + thịt/cá/gà + canh chua/canh rau
+        - Cơm rang, cơm chiên với rau củ
+        - Lẩu (lẩu thái, lẩu cá, lẩu riêu cua)
+        - Luôn có canh hoặc món nước
+        """
+
         prompt = f"""
-        Bạn là chuyên gia dinh dưỡng Việt Nam. Hãy tạo kế hoạch {meal_type} với các món ăn kết hợp THỰC TẾ và CỤ THỂ.
+        Bạn là chuyên gia dinh dưỡng Việt Nam. Hãy tạo kế hoạch {meal_type} theo THÓI QUEN ĂN UỐNG VIỆT NAM THỰC TẾ.
+
+        {meal_type_guidance}
 
         🌱 QUAN TRỌNG: Tạo tên món ăn CHI TIẾT và CỤ THỂ theo cách người Việt thường gọi:
         - "Cơm gạo lứt với đậu hũ nướng và rau luộc" thay vì "Cơm đậu hũ" (cho vegetarian)

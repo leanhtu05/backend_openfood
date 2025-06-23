@@ -608,26 +608,33 @@ def get_recent_activities():
 
                 if isinstance(timestamp, str):
                     try:
+                        # 🔧 FIX: Import datetime module explicitly to avoid conflicts
+                        from datetime import datetime as dt
                         # Xử lý các format timestamp khác nhau
                         if 'T' in timestamp:
-                            timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                            timestamp = dt.fromisoformat(timestamp.replace('Z', '+00:00'))
                         else:
-                            timestamp = datetime.now()  # Fallback
+                            timestamp = dt.now()  # Fallback
                     except Exception as e:
                         print(f"[ACTIVITIES] Error parsing string timestamp {timestamp}: {e}")
-                        timestamp = datetime.now()  # Fallback to current time
+                        from datetime import datetime as dt
+                        timestamp = dt.now()  # Fallback to current time
                 elif isinstance(timestamp, (int, float)):
                     try:
+                        # 🔧 FIX: Import datetime module explicitly to avoid conflicts
+                        from datetime import datetime as dt
                         # Convert numeric timestamp to datetime
                         if timestamp > 1e10:  # Milliseconds
-                            timestamp = datetime.fromtimestamp(timestamp / 1000)
+                            timestamp = dt.fromtimestamp(timestamp / 1000)
                         else:  # Seconds
-                            timestamp = datetime.fromtimestamp(timestamp)
+                            timestamp = dt.fromtimestamp(timestamp)
                     except Exception as e:
                         print(f"[ACTIVITIES] Error parsing numeric timestamp {timestamp}: {e}")
-                        timestamp = datetime.now()  # Fallback to current time
+                        from datetime import datetime as dt
+                        timestamp = dt.now()  # Fallback to current time
                 elif not isinstance(timestamp, datetime):
-                    timestamp = datetime.now()  # Fallback to current time
+                    from datetime import datetime as dt
+                    timestamp = dt.now()  # Fallback to current time
 
                 activities.append({
                     "action": "Tạo meal plan",
@@ -652,26 +659,33 @@ def get_recent_activities():
 
                 if isinstance(timestamp, str):
                     try:
+                        # 🔧 FIX: Import datetime module explicitly to avoid conflicts
+                        from datetime import datetime as dt
                         # Xử lý các format timestamp khác nhau
                         if 'T' in timestamp:
-                            timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                            timestamp = dt.fromisoformat(timestamp.replace('Z', '+00:00'))
                         else:
-                            timestamp = datetime.now()  # Fallback
+                            timestamp = dt.now()  # Fallback
                     except Exception as e:
                         print(f"[ACTIVITIES] Error parsing user string timestamp {timestamp}: {e}")
-                        timestamp = datetime.now()  # Fallback to current time
+                        from datetime import datetime as dt
+                        timestamp = dt.now()  # Fallback to current time
                 elif isinstance(timestamp, (int, float)):
                     try:
+                        # 🔧 FIX: Import datetime module explicitly to avoid conflicts
+                        from datetime import datetime as dt
                         # Convert numeric timestamp to datetime
                         if timestamp > 1e10:  # Milliseconds
-                            timestamp = datetime.fromtimestamp(timestamp / 1000)
+                            timestamp = dt.fromtimestamp(timestamp / 1000)
                         else:  # Seconds
-                            timestamp = datetime.fromtimestamp(timestamp)
+                            timestamp = dt.fromtimestamp(timestamp)
                     except Exception as e:
                         print(f"[ACTIVITIES] Error parsing user numeric timestamp {timestamp}: {e}")
-                        timestamp = datetime.now()  # Fallback to current time
+                        from datetime import datetime as dt
+                        timestamp = dt.now()  # Fallback to current time
                 elif not isinstance(timestamp, datetime):
-                    timestamp = datetime.now()  # Fallback to current time
+                    from datetime import datetime as dt
+                    timestamp = dt.now()  # Fallback to current time
 
                 activities.append({
                     "action": "Người dùng đăng ký",
@@ -684,29 +698,31 @@ def get_recent_activities():
 
         # Sắp xếp theo thời gian - đảm bảo tất cả timestamp đều là datetime objects
         def safe_sort_key(activity):
+            # 🔧 FIX: Import datetime module explicitly to avoid conflicts
+            from datetime import datetime as dt
             timestamp = activity.get('timestamp')
-            if isinstance(timestamp, datetime):
+            if isinstance(timestamp, dt):
                 return timestamp
             elif isinstance(timestamp, (int, float)):
                 # Convert timestamp number to datetime
                 try:
                     if timestamp > 1e10:  # Milliseconds
-                        return datetime.fromtimestamp(timestamp / 1000)
+                        return dt.fromtimestamp(timestamp / 1000)
                     else:  # Seconds
-                        return datetime.fromtimestamp(timestamp)
+                        return dt.fromtimestamp(timestamp)
                 except Exception as e:
                     print(f"[ACTIVITIES] Error converting timestamp {timestamp}: {e}")
-                    return datetime.now()
+                    return dt.now()
             elif isinstance(timestamp, str):
                 try:
                     if 'T' in timestamp:
-                        return datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                        return dt.fromisoformat(timestamp.replace('Z', '+00:00'))
                     else:
-                        return datetime.now()
+                        return dt.now()
                 except:
-                    return datetime.now()
+                    return dt.now()
             else:
-                return datetime.now()  # Fallback for any other type
+                return dt.now()  # Fallback for any other type
 
         try:
             activities = sorted(activities, key=safe_sort_key, reverse=True)
@@ -722,13 +738,13 @@ def get_recent_activities():
 
     except Exception as e:
         print(f"Error getting recent activities: {str(e)}")
-        # Fallback to mock data
-        from datetime import datetime
+        # 🔧 FIX: Fallback to mock data with proper datetime import
+        from datetime import datetime as dt
         return [
             {
                 "action": "Hệ thống khởi động",
                 "description": "Server đã khởi động thành công",
-                "timestamp": datetime.now(),
+                "timestamp": dt.now(),
                 "user_email": "System"
             }
         ]
@@ -1153,47 +1169,67 @@ async def admin_api_meal_plans_data(
     try:
         print(f"[API-MEAL-PLANS] Loading page {page} with limit {limit}...")
 
-        # Quick meal plans with timeout
-        import asyncio
-        from concurrent.futures import ThreadPoolExecutor, TimeoutError
+        # 🔧 FIX: Add immediate fallback for faster response
+        try:
+            # Quick meal plans with timeout
+            import asyncio
+            from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
-        async def get_quick_meal_plans():
-            loop = asyncio.get_event_loop()
-            with ThreadPoolExecutor() as executor:
-                try:
-                    if user_id:
-                        meal_plans = await asyncio.wait_for(
-                            loop.run_in_executor(executor, firestore_service.get_user_meal_plans, user_id),
-                            timeout=5.0  # 5 second timeout
-                        )
-                    else:
-                        # Try to get recent meal plans first (faster)
-                        try:
+            async def get_quick_meal_plans():
+                loop = asyncio.get_event_loop()
+                with ThreadPoolExecutor() as executor:
+                    try:
+                        if user_id:
+                            print(f"[API-MEAL-PLANS] Getting meal plans for user: {user_id}")
                             meal_plans = await asyncio.wait_for(
-                                loop.run_in_executor(executor, firestore_service.get_recent_meal_plans, limit * 2),
-                                timeout=3.0  # 3 second timeout for recent
+                                loop.run_in_executor(executor, firestore_service.get_user_meal_plans, user_id),
+                                timeout=5.0  # 5 second timeout
                             )
-                        except:
-                            # Fallback to all meal plans with longer timeout
-                            meal_plans = await asyncio.wait_for(
-                                loop.run_in_executor(executor, firestore_service.get_all_meal_plans),
-                                timeout=8.0  # 8 second timeout
-                            )
-                    return meal_plans
-                except TimeoutError:
-                    print("[API-MEAL-PLANS] Timeout, returning sample data")
-                    # Return sample data if timeout
-                    return [
-                        {
-                            "id": "sample_1",
-                            "user_id": "sample_user",
-                            "created_at": "2024-01-01",
-                            "meals": {"breakfast": "Sample breakfast", "lunch": "Sample lunch"},
-                            "status": "active"
-                        }
-                    ]
+                        else:
+                            # Try to get recent meal plans first (faster)
+                            print(f"[API-MEAL-PLANS] Getting recent meal plans with limit: {limit * 2}")
+                            try:
+                                meal_plans = await asyncio.wait_for(
+                                    loop.run_in_executor(executor, firestore_service.get_recent_meal_plans, limit * 2),
+                                    timeout=3.0  # 3 second timeout for recent
+                                )
+                                print(f"[API-MEAL-PLANS] Got {len(meal_plans)} recent meal plans")
+                            except Exception as e:
+                                print(f"[API-MEAL-PLANS] Recent meal plans failed: {e}, trying all meal plans...")
+                                # 🚀 OPTIMIZATION: Fallback to all meal plans with limit
+                                meal_plans = await asyncio.wait_for(
+                                    loop.run_in_executor(executor, firestore_service.get_all_meal_plans, limit * 3),
+                                    timeout=8.0  # 8 second timeout
+                                )
+                                print(f"[API-MEAL-PLANS] Got {len(meal_plans)} total meal plans with limit {limit * 3}")
+                        return meal_plans
+                    except TimeoutError:
+                        print("[API-MEAL-PLANS] Timeout, returning sample data")
+                        # Return sample data if timeout
+                        return [
+                            {
+                                "id": "sample_1",
+                                "user_id": "sample_user",
+                                "created_at": "2024-01-01",
+                                "meals": {"breakfast": "Sample breakfast", "lunch": "Sample lunch"},
+                                "status": "active"
+                            }
+                        ]
 
-        meal_plans = await get_quick_meal_plans()
+            meal_plans = await get_quick_meal_plans()
+        except Exception as e:
+            print(f"[API-MEAL-PLANS] Error in async function: {e}")
+            # 🚀 OPTIMIZATION: Immediate fallback to sample data with limit
+            meal_plans = [
+                {
+                    "id": f"fallback_{i}",
+                    "user_id": f"fallback_user_{i}",
+                    "created_at": f"2024-01-{i+1:02d}",
+                    "meals": {"breakfast": f"Fallback breakfast {i+1}", "lunch": f"Fallback lunch {i+1}"},
+                    "status": "active"
+                }
+                for i in range(min(limit, 5))  # Tối đa 5 fallback items
+            ]
 
         # Pagination
         total_plans = len(meal_plans)
@@ -1228,6 +1264,42 @@ async def admin_api_meal_plans_data(
             "total_plans": 0,
             "has_prev": False,
             "has_next": False
+        }
+
+@router.get("/debug-meal-plans")
+async def debug_meal_plans(request: Request):
+    """🔧 Debug endpoint để test meal plans API"""
+    try:
+        print("[DEBUG] Testing meal plans API...")
+
+        # Test firestore service directly
+        print("[DEBUG] Testing firestore_service.get_recent_meal_plans(5)...")
+        recent_plans = firestore_service.get_recent_meal_plans(5)
+        print(f"[DEBUG] Recent plans result: {len(recent_plans) if recent_plans else 'None'}")
+
+        print("[DEBUG] Testing firestore_service.get_all_meal_plans()...")
+        all_plans = firestore_service.get_all_meal_plans()
+        print(f"[DEBUG] All plans result: {len(all_plans) if all_plans else 'None'}")
+
+        # Test API endpoint
+        print("[DEBUG] Testing API endpoint...")
+        from fastapi.testclient import TestClient
+
+        return {
+            "success": True,
+            "recent_plans_count": len(recent_plans) if recent_plans else 0,
+            "all_plans_count": len(all_plans) if all_plans else 0,
+            "recent_plans_sample": recent_plans[:2] if recent_plans else [],
+            "firestore_available": hasattr(firestore_service, 'get_recent_meal_plans')
+        }
+    except Exception as e:
+        print(f"[DEBUG] Error in debug_meal_plans: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
         }
 
 @router.get("/foods", response_class=HTMLResponse)

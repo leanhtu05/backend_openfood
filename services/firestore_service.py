@@ -727,9 +727,12 @@ class FirestoreService:
             traceback.print_exc()
             return False
 
-    def get_all_meal_plans(self) -> List[Dict[str, Any]]:
+    def get_all_meal_plans(self, limit: int = 50) -> List[Dict[str, Any]]:
         """
-        Lấy danh sách tất cả kế hoạch bữa ăn
+        🚀 OPTIMIZED: Lấy kế hoạch bữa ăn với phân trang
+
+        Args:
+            limit: Số lượng tối đa kế hoạch bữa ăn cần lấy
 
         Returns:
             List[Dict[str, Any]]: Danh sách kế hoạch bữa ăn
@@ -737,8 +740,8 @@ class FirestoreService:
         try:
             meal_plans = []
 
-            # Lấy từ collection meal_plans
-            meal_plans_ref = self.db.collection('meal_plans')
+            # 🚀 OPTIMIZATION: Áp dụng limit cho meal_plans
+            meal_plans_ref = self.db.collection('meal_plans').limit(limit // 2)
             docs = meal_plans_ref.get()
 
             for doc in docs:
@@ -746,8 +749,8 @@ class FirestoreService:
                 plan_data['id'] = doc.id
                 meal_plans.append(plan_data)
 
-            # Lấy từ collection latest_meal_plans
-            latest_plans_ref = self.db.collection('latest_meal_plans')
+            # 🚀 OPTIMIZATION: Áp dụng limit cho latest_meal_plans
+            latest_plans_ref = self.db.collection('latest_meal_plans').limit(limit // 2)
             latest_docs = latest_plans_ref.get()
 
             for doc in latest_docs:
@@ -756,7 +759,8 @@ class FirestoreService:
                 plan_data['user_id'] = doc.id  # Document ID là user_id
                 meal_plans.append(plan_data)
 
-            return meal_plans
+            # 🚀 OPTIMIZATION: Giới hạn tổng số kết quả
+            return meal_plans[:limit]
         except Exception as e:
             print(f"Error getting all meal plans: {e}")
             traceback.print_exc()
@@ -840,12 +844,13 @@ class FirestoreService:
             except:
                 return []
 
-    def get_user_meal_plans(self, user_id: str) -> List[Dict[str, Any]]:
+    def get_user_meal_plans(self, user_id: str, limit: int = 20) -> List[Dict[str, Any]]:
         """
-        Lấy danh sách kế hoạch bữa ăn của một người dùng
+        🚀 OPTIMIZED: Lấy kế hoạch bữa ăn của người dùng với phân trang
 
         Args:
             user_id: ID của người dùng
+            limit: Số lượng tối đa kế hoạch bữa ăn cần lấy
 
         Returns:
             List[Dict[str, Any]]: Danh sách kế hoạch bữa ăn của người dùng
@@ -853,10 +858,11 @@ class FirestoreService:
         try:
             meal_plans = []
 
-            # Lấy từ collection meal_plans
+            # 🚀 OPTIMIZATION: Lấy từ collection meal_plans với limit
+            # INDEX REQUIRED: (user_id, ASC)
             meal_plans_ref = self.db.collection('meal_plans').where(
                 filter=FieldFilter('user_id', '==', user_id)
-            )
+            ).limit(limit - 1)  # Trừ 1 để dành chỗ cho latest_meal_plans
             docs = meal_plans_ref.get()
 
             for doc in docs:
@@ -864,17 +870,19 @@ class FirestoreService:
                 plan_data['id'] = doc.id
                 meal_plans.append(plan_data)
 
-            # Lấy từ collection latest_meal_plans
-            latest_plan_ref = self.db.collection('latest_meal_plans').document(user_id)
-            latest_doc = latest_plan_ref.get()
+            # Lấy từ collection latest_meal_plans (chỉ 1 document)
+            if len(meal_plans) < limit:
+                latest_plan_ref = self.db.collection('latest_meal_plans').document(user_id)
+                latest_doc = latest_plan_ref.get()
 
-            if latest_doc.exists:
-                plan_data = latest_doc.to_dict()
-                plan_data['id'] = latest_doc.id
-                plan_data['user_id'] = user_id
-                meal_plans.append(plan_data)
+                if latest_doc.exists:
+                    plan_data = latest_doc.to_dict()
+                    plan_data['id'] = latest_doc.id
+                    plan_data['user_id'] = user_id
+                    meal_plans.append(plan_data)
 
-            return meal_plans
+            # 🚀 OPTIMIZATION: Đảm bảo không vượt quá limit
+            return meal_plans[:limit]
         except Exception as e:
             print(f"Error getting user meal plans: {e}")
             traceback.print_exc()
@@ -903,31 +911,37 @@ class FirestoreService:
             
     def get_ai_suggestions(self, user_id: str, limit: int = 10) -> List[AISuggestion]:
         """
-        Lấy danh sách gợi ý của người dùng
-        
+        🚀 OPTIMIZED: Lấy danh sách gợi ý của người dùng với phân trang
+
         Args:
             user_id: ID của người dùng
             limit: Số lượng gợi ý tối đa
-            
+
         Returns:
             Danh sách AISuggestion
         """
         try:
             suggestions = []
+            # 🚀 OPTIMIZATION: Query với limit và order by
+            # INDEX REQUIRED: (userId, ASC) + (timestamp, DESCENDING)
             query = self.db.collection('ai_suggestions').where(
                 filter=FieldFilter('userId', '==', user_id)
             ).order_by(
                 'timestamp', direction=firestore.Query.DESCENDING
             ).limit(limit)
-            
+
             results = query.get()
-            
+
             for doc in results:
                 suggestions.append(AISuggestion.from_dict(doc.to_dict()))
-                
+
+            print(f"[FIRESTORE] Got {len(suggestions)} AI suggestions for user {user_id}")
             return suggestions
         except Exception as e:
             print(f"Error getting AI suggestions: {e}")
+            # 🚀 OPTIMIZATION: Log index requirement if needed
+            if "requires an index" in str(e):
+                print(f"[INDEX NEEDED] AI suggestions query requires index: {e}")
             traceback.print_exc()
             return []
             

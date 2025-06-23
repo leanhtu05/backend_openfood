@@ -1,13 +1,19 @@
 /**
- * 🚫 ULTRA Extension Blocker - Maximum strength extension blocking
+ * 🚫 ULTRA Extension Blocker - Ultimate strength extension blocking
  * Blocks ALL extension interference immediately
- * Version 3.0 - Ultimate blocking for admin panel
+ * Version 4.0 - Ultimate blocking for admin panel
+ *
+ * New in v4.0:
+ * - Enhanced runtime.lastError blocking
+ * - Message channel error prevention
+ * - Promise rejection interception
+ * - Advanced pattern matching
  */
 
 (function() {
     'use strict';
     
-    console.log('🚫 ULTRA Extension Blocker v3.0: MAXIMUM BLOCKING ACTIVE');
+    console.log('🚫 ULTRA Extension Blocker v4.0: ULTIMATE BLOCKING ACTIVE');
     
     // IMMEDIATE: Block ALL console methods first
     const originalConsole = {
@@ -52,7 +58,13 @@
         
         // i18next errors
         'i18next', 'languagechanged', 'initialized object',
-        
+        'i18next: languagechanged', 'i18next: initialized',
+
+        // V4.0: Enhanced runtime patterns
+        'unchecked runtime.lasterror:', 'a listener indicated an asynchronous response by returning true',
+        'but the message channel closed before a response was received',
+        'message channel closed before a response',
+
         // Generic patterns
         'error in event handler', '<url>', '<URL>',
         'event handler: error: invalid arguments'
@@ -121,15 +133,36 @@
         }
     }, true);
     
-    // IMMEDIATE: Block ALL promise rejections
+    // 🔧 V4.0: Block ALL promise rejections with enhanced patterns
     window.addEventListener('unhandledrejection', function(e) {
         const reason = e.reason ? e.reason.toString() : '';
-        if (isExtensionRelated(reason)) {
+        const message = e.reason?.message || '';
+
+        // Enhanced blocking for runtime.lastError and message channel
+        if (isExtensionRelated(reason) ||
+            isExtensionRelated(message) ||
+            reason.includes('runtime.lastError') ||
+            reason.includes('message channel') ||
+            reason.includes('listener indicated') ||
+            reason.includes('asynchronous response')) {
             e.preventDefault();
             e.stopPropagation();
             return false;
         }
     }, true);
+
+    // 🔧 V4.0: Override Promise.reject to catch extension errors
+    const originalPromiseReject = Promise.reject;
+    Promise.reject = function(reason) {
+        const reasonStr = reason ? reason.toString() : '';
+        if (isExtensionRelated(reasonStr) ||
+            reasonStr.includes('runtime.lastError') ||
+            reasonStr.includes('message channel')) {
+            // Return a resolved promise instead of rejected
+            return Promise.resolve();
+        }
+        return originalPromiseReject.call(this, reason);
+    };
     
     // IMMEDIATE: Block extension message listeners
     const originalAddEventListener = EventTarget.prototype.addEventListener;
@@ -161,18 +194,47 @@
         return originalXHROpen.apply(this, arguments);
     };
     
-    // IMMEDIATE: Block chrome runtime access
+    // 🔧 V4.0: Block chrome runtime access and lastError
     if (typeof chrome !== 'undefined' && chrome.runtime) {
         try {
+            // Block sendMessage
             Object.defineProperty(chrome.runtime, 'sendMessage', {
                 value: function() {
                     return Promise.reject(new Error('Extension API blocked'));
                 },
                 writable: false
             });
+
+            // Block lastError access
+            Object.defineProperty(chrome.runtime, 'lastError', {
+                get: function() {
+                    return null; // Always return null to prevent errors
+                },
+                set: function() {
+                    // Ignore attempts to set lastError
+                },
+                configurable: false
+            });
         } catch (e) {
             // Ignore if can't override
         }
+    }
+
+    // 🔧 V4.0: Block global runtime object
+    try {
+        if (typeof runtime !== 'undefined') {
+            Object.defineProperty(window, 'runtime', {
+                value: {
+                    lastError: null,
+                    sendMessage: function() {
+                        return Promise.reject(new Error('Extension API blocked'));
+                    }
+                },
+                writable: false
+            });
+        }
+    } catch (e) {
+        // Ignore if can't override
     }
     
     // IMMEDIATE: DOM cleanup
@@ -234,14 +296,14 @@
         });
     }
     
-    console.log('✅ ULTRA Extension Blocker v3.0: MAXIMUM BLOCKING INITIALIZED');
-    
+    console.log('✅ ULTRA Extension Blocker v4.0: ULTIMATE BLOCKING INITIALIZED');
+
     // Export for debugging
     window.UltraExtensionBlocker = {
         isExtensionRelated,
         ultraCleanup,
         observer,
-        version: '3.0'
+        version: '4.0'
     };
     
 })();

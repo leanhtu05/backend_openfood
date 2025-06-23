@@ -9,21 +9,30 @@ import csv
 import io
 import secrets
 import time
-try:
-    from openpyxl import Workbook
-    from openpyxl.styles import Font, PatternFill, Alignment
-    from openpyxl.utils.dataframe import dataframe_to_rows
-    EXCEL_AVAILABLE = True
-except ImportError:
-    EXCEL_AVAILABLE = False
+# Optional dependencies for export features - disabled for now
+EXCEL_AVAILABLE = False
+WORD_AVAILABLE = False
 
-try:
-    from docx import Document
-    from docx.shared import Inches
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
-    WORD_AVAILABLE = True
-except ImportError:
-    WORD_AVAILABLE = False
+# TODO: Install these packages if needed:
+# pip install openpyxl python-docx
+
+# try:
+#     import openpyxl
+#     from openpyxl import Workbook
+#     from openpyxl.styles import Font, PatternFill, Alignment
+#     from openpyxl.utils.dataframe import dataframe_to_rows
+#     EXCEL_AVAILABLE = True
+# except ImportError:
+#     print("📝 openpyxl not available - Excel export disabled")
+
+# try:
+#     import docx
+#     from docx import Document
+#     from docx.shared import Inches
+#     from docx.enum.text import WD_ALIGN_PARAGRAPH
+#     WORD_AVAILABLE = True
+# except ImportError:
+#     print("📝 python-docx not available - Word export disabled")
 
 # Temporary tokens for download (in-memory storage)
 download_tokens = {}
@@ -72,11 +81,11 @@ async def admin_fast_login_page(
     templates: Jinja2Templates = Depends(get_templates)
 ):
     """🚀 Trang đăng nhập admin tối ưu hóa"""
-    # Nếu đã đăng nhập rồi thì redirect về fast dashboard
+    # Nếu đã đăng nhập rồi thì redirect về dashboard
     if get_current_admin(request):
-        return RedirectResponse(url="/admin/fast-dashboard", status_code=302)
+        return RedirectResponse(url="/admin/", status_code=302)
 
-    return templates.TemplateResponse("admin/fast_login.html", {
+    return templates.TemplateResponse("admin/simple_login.html", {
         "request": request,
         "error": error,
         "success": success
@@ -93,8 +102,8 @@ async def admin_login(request: Request, username: str = Form(...), password: str
             session_token = create_admin_session(username)
             print(f"[AUTH] Admin login successful: {username}")
 
-            # 🚀 Redirect về fast dashboard với session cookie
-            response = RedirectResponse(url="/admin/fast-dashboard", status_code=302)
+            # 🚀 Redirect về dashboard đơn giản với session cookie
+            response = RedirectResponse(url="/admin/", status_code=302)
             response.set_cookie(
                 key="admin_session",
                 value=session_token,
@@ -107,13 +116,13 @@ async def admin_login(request: Request, username: str = Form(...), password: str
         else:
             print(f"[AUTH] Admin login failed: {username}")
             return RedirectResponse(
-                url="/admin/fast-login?error=Tên đăng nhập hoặc mật khẩu không đúng",
+                url="/admin/login?error=Tên đăng nhập hoặc mật khẩu không đúng",
                 status_code=302
             )
     except Exception as e:
         print(f"[AUTH] Admin login error: {str(e)}")
         return RedirectResponse(
-            url="/admin/fast-login?error=Có lỗi xảy ra khi đăng nhập",
+            url="/admin/login?error=Có lỗi xảy ra khi đăng nhập",
             status_code=302
         )
 
@@ -128,8 +137,8 @@ async def admin_fast_login(request: Request, username: str = Form(...), password
             session_token = create_admin_session(username)
             print(f"[FAST-AUTH] Admin login successful: {username}")
 
-            # Redirect về fast dashboard với session cookie
-            response = RedirectResponse(url="/admin/fast-dashboard", status_code=302)
+            # Redirect về dashboard đơn giản với session cookie
+            response = RedirectResponse(url="/admin/", status_code=302)
             response.set_cookie(
                 key="admin_session",
                 value=session_token,
@@ -151,6 +160,43 @@ async def admin_fast_login(request: Request, username: str = Form(...), password
             url="/admin/fast-login?error=Có lỗi xảy ra khi đăng nhập",
             status_code=302
         )
+
+@router.get("/test", response_class=HTMLResponse)
+async def admin_test(request: Request):
+    """Trang test admin system"""
+    templates = get_templates()
+    return templates.TemplateResponse("admin/test.html", {
+        "request": request
+    })
+
+@router.get("/clean", response_class=HTMLResponse)
+async def admin_clean(request: Request):
+    """Trang admin sạch không có extension interference"""
+    admin_username = get_current_admin(request)
+    if not admin_username:
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    try:
+        # Lấy dữ liệu thống kê
+        stats = get_system_stats()
+        recent_activities = get_recent_activities()
+
+        templates = get_templates()
+        return templates.TemplateResponse("admin/clean.html", {
+            "request": request,
+            "stats": stats,
+            "recent_activities": recent_activities,
+            "last_update": datetime.now().strftime("%d/%m/%Y %H:%M")
+        })
+    except Exception as e:
+        print(f"❌ Lỗi khi tải clean dashboard: {e}")
+        templates = get_templates()
+        return templates.TemplateResponse("admin/clean.html", {
+            "request": request,
+            "stats": {"total_users": 0, "total_foods": 0, "total_meal_plans": 0, "today_activities": 0},
+            "recent_activities": [],
+            "last_update": datetime.now().strftime("%d/%m/%Y %H:%M")
+        })
 
 @router.get("/logout")
 async def admin_logout(request: Request):
@@ -348,34 +394,21 @@ async def admin_dashboard(
         # Lấy dữ liệu thống kê
         stats = get_system_stats()
         recent_activities = get_recent_activities()
-        recent_foods = get_recent_foods()
-        chart_data = get_chart_data()
-        system_status = get_system_status()
         
-        return templates.TemplateResponse("admin/dashboard.html", {
+        return templates.TemplateResponse("admin/dashboard_simple.html", {
             "request": request,
             "stats": stats,
             "recent_activities": recent_activities,
-            "recent_foods": recent_foods,
-            "activity_chart_labels": chart_data["activity_labels"],
-            "activity_chart_data": chart_data["activity_data"],
-            "food_type_labels": chart_data["food_type_labels"],
-            "food_type_data": chart_data["food_type_data"],
-            "system_status": system_status
+            "last_update": datetime.now().strftime("%d/%m/%Y %H:%M")
         })
     except Exception as e:
         print(f"Error in admin dashboard: {str(e)}")
         # Trả về trang với dữ liệu mặc định
-        return templates.TemplateResponse("admin/dashboard.html", {
+        return templates.TemplateResponse("admin/dashboard_simple.html", {
             "request": request,
-            "stats": {"total_foods": 0, "active_users": 0, "total_meal_plans": 0, "api_calls_today": 0},
+            "stats": {"total_users": 0, "total_foods": 0, "total_meal_plans": 0, "today_activities": 0},
             "recent_activities": [],
-            "recent_foods": [],
-            "activity_chart_labels": [],
-            "activity_chart_data": [],
-            "food_type_labels": [],
-            "food_type_data": [],
-            "system_status": {"ai_available": False, "ai_type": None, "firebase_connected": False}
+            "last_update": datetime.now().strftime("%d/%m/%Y %H:%M")
         })
 
 @router.get("/fast-dashboard", response_class=HTMLResponse)
@@ -1426,9 +1459,9 @@ async def export_report(
                 headers={"Content-Disposition": f"attachment; filename=admin_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"}
             )
 
-        elif format.lower() == "excel" and EXCEL_AVAILABLE:
-            # Xuất Excel
-            wb = Workbook()
+        elif format.lower() == "excel":
+            # Excel export not available - fallback to CSV
+            format = "csv"
 
             # Xóa sheet mặc định
             wb.remove(wb.active)

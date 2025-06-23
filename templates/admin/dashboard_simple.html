@@ -1,0 +1,214 @@
+{% extends "../base.html" %}
+
+{% block title %}Admin Dashboard - OpenFood{% endblock %}
+
+{% block page_title %}Dashboard{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group" role="group">
+    <button type="button" class="btn btn-outline-primary" onclick="location.reload()">
+        <i class="fas fa-sync-alt"></i> Làm mới
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-uppercase mb-1">Tổng người dùng</div>
+                        <div class="h5 mb-0 font-weight-bold">{{ stats.total_users or 0 }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-users fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card-success">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-uppercase mb-1">Tổng món ăn</div>
+                        <div class="h5 mb-0 font-weight-bold">{{ stats.total_foods or 0 }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-utensils fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card-warning">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-uppercase mb-1">Kế hoạch ăn</div>
+                        <div class="h5 mb-0 font-weight-bold">{{ stats.total_meal_plans or 0 }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-calendar-alt fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card-info">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-uppercase mb-1">Hoạt động hôm nay</div>
+                        <div class="h5 mb-0 font-weight-bold">{{ stats.today_activities or 0 }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-chart-line fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-primary">Thao tác nhanh</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <a href="/admin/users" class="btn btn-outline-primary btn-block">
+                            <i class="fas fa-users fa-2x d-block mb-2"></i>
+                            Quản lý người dùng
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="/admin/foods" class="btn btn-outline-success btn-block">
+                            <i class="fas fa-utensils fa-2x d-block mb-2"></i>
+                            Quản lý món ăn
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="/admin/meal-plans" class="btn btn-outline-warning btn-block">
+                            <i class="fas fa-calendar-alt fa-2x d-block mb-2"></i>
+                            Kế hoạch bữa ăn
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="/admin/reports" class="btn btn-outline-info btn-block">
+                            <i class="fas fa-chart-bar fa-2x d-block mb-2"></i>
+                            Báo cáo & Thống kê
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- System Info and Recent Activities -->
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-primary">Thông tin hệ thống</h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <small class="text-muted">Phiên bản</small>
+                    <div class="font-weight-bold">OpenFood v1.0.0</div>
+                </div>
+                <div class="mb-3">
+                    <small class="text-muted">Cập nhật cuối</small>
+                    <div class="font-weight-bold">{{ last_update or 'N/A' }}</div>
+                </div>
+                <div class="mb-3">
+                    <small class="text-muted">Trạng thái</small>
+                    <div>
+                        <span class="badge bg-success">Hoạt động bình thường</span>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <small class="text-muted">Database</small>
+                    <div>
+                        <span class="badge bg-success">
+                            <i class="fas fa-circle"></i> Kết nối thành công
+                        </span>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <small class="text-muted">Firebase</small>
+                    <div>
+                        <span class="badge bg-success">
+                            <i class="fas fa-circle"></i> Hoạt động bình thường
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-primary">Hoạt động gần đây</h6>
+            </div>
+            <div class="card-body">
+                {% if recent_activities %}
+                    {% for activity in recent_activities[:5] %}
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="me-3">
+                            <i class="fas fa-circle text-primary" style="font-size: 0.5rem;"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="small font-weight-bold">{{ activity.action or 'N/A' }}</div>
+                            <div class="small text-muted">{{ activity.user_email or 'N/A' }}</div>
+                        </div>
+                        <div class="small text-muted">
+                            {{ activity.timestamp.strftime('%H:%M') if activity.timestamp else 'N/A' }}
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-info-circle fa-2x mb-2"></i>
+                        <p>Chưa có hoạt động nào được ghi nhận.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .btn-block {
+        width: 100%;
+        padding: 20px;
+        text-align: center;
+        border-radius: 10px;
+        transition: all 0.3s ease;
+    }
+    .btn-block:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .badge {
+        font-size: 0.8rem;
+    }
+</style>
+{% endblock %}

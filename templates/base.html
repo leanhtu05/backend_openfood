@@ -3,20 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; object-src 'none';">
     <title>{% block title %}OpenFood Management{% endblock %}</title>
 
-    <!-- 🚀 PERFORMANCE OPTIMIZATION -->
-    <!-- Preload critical resources -->
-    <link rel="preload" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"></noscript>
-
-    <!-- Load FontAwesome asynchronously -->
-    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
-
-    <!-- Critical CSS inline for faster rendering -->
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
     {% block extra_css %}{% endblock %}
     <style>
+        /* Hide extension elements */
+        [id*="extension"], [class*="extension"],
+        [id*="chrome-extension"], [class*="chrome-extension"],
+        iframe[src*="chrome-extension"],
+        div[style*="z-index: 2147483647"] {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+        }
         .sidebar {
             min-height: 100vh;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -96,13 +101,13 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if '/admin/users' in request.url.path %}active{% endif %}" href="/admin/users" onclick="console.log('🔗 Users link clicked')">
+                            <a class="nav-link {% if '/admin/users' in request.url.path %}active{% endif %}" href="/admin/users">
                                 <i class="fas fa-users"></i>
                                 Quản lý người dùng
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if '/admin/meal-plans' in request.url.path %}active{% endif %}" href="/admin/meal-plans" onclick="console.log('🔗 Meal plans link clicked')">
+                            <a class="nav-link {% if '/admin/meal-plans' in request.url.path %}active{% endif %}" href="/admin/meal-plans">
                                 <i class="fas fa-calendar-alt"></i>
                                 Kế hoạch bữa ăn
                             </a>
@@ -120,12 +125,6 @@
                             </a>
                         </li>
                         <hr class="text-white-50">
-                        <li class="nav-item">
-                            <button class="nav-link text-warning btn btn-link" onclick="testNavigation()" style="text-align: left; width: 100%;">
-                                <i class="fas fa-bug"></i>
-                                🔧 Test Navigation
-                            </button>
-                        </li>
                         <li class="nav-item">
                             <a class="nav-link" href="/">
                                 <i class="fas fa-home"></i>
@@ -156,77 +155,50 @@
         </div>
     </div>
 
-    <!-- 🚀 Load JavaScript asynchronously -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" defer></script>
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- 🚀 Optimized loading with error handling -->
+    <!-- Simple admin script -->
     <script>
-        // Fast page transitions
+        // Block extension interference
+        (function() {
+            'use strict';
+
+            // Suppress extension errors
+            window.addEventListener('error', function(e) {
+                if (e.filename && e.filename.includes('chrome-extension://')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
+                }
+            }, true);
+
+            // Suppress unhandled promise rejections from extensions
+            window.addEventListener('unhandledrejection', function(e) {
+                if (e.reason && e.reason.message &&
+                    (e.reason.message.includes('extension') ||
+                     e.reason.message.includes('chrome-extension'))) {
+                    e.preventDefault();
+                    return false;
+                }
+            });
+
+            // Override console.error for extension errors
+            const originalConsoleError = console.error;
+            console.error = function(...args) {
+                const message = args.join(' ');
+                if (message.includes('chrome-extension') ||
+                    message.includes('extensionAdapter') ||
+                    message.includes('runtime.lastError')) {
+                    return; // Suppress extension errors
+                }
+                originalConsoleError.apply(console, args);
+            };
+        })();
+
         document.addEventListener('DOMContentLoaded', function() {
-            // Add loading states to all links
-            const links = document.querySelectorAll('a[href^="/admin"]');
-            console.log('🔗 Found admin links:', links.length);
-            links.forEach(link => {
-                console.log('🔗 Adding click handler to:', link.href);
-                link.addEventListener('click', function(e) {
-                    console.log('🔗 Link clicked:', this.href);
-                    if (!this.target || this.target === '_self') {
-                        // Show loading indicator
-                        const loader = document.createElement('div');
-                        loader.innerHTML = `
-                            <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); z-index: 9999; display: flex; align-items: center; justify-content: center;">
-                                <div style="text-align: center;">
-                                    <div class="spinner-border text-primary" role="status"></div>
-                                    <div class="mt-2">Đang tải...</div>
-                                </div>
-                            </div>
-                        `;
-                        document.body.appendChild(loader);
-
-                        // Remove loader after 5 seconds (fallback)
-                        setTimeout(() => {
-                            if (document.body.contains(loader)) {
-                                document.body.removeChild(loader);
-                            }
-                        }, 5000);
-                    }
-                });
-            });
-
-            // Auto-refresh stats every 30 seconds (only on dashboard)
-            if (window.location.pathname.includes('/admin') && !window.location.pathname.includes('/admin/')) {
-                setInterval(() => {
-                    if (typeof refreshStats === 'function') {
-                        refreshStats();
-                    }
-                }, 30000);
-            }
+            console.log('✅ Admin page loaded successfully');
         });
-
-        // Performance monitoring
-        window.addEventListener('load', function() {
-            const loadTime = performance.now();
-            console.log(`🚀 Page loaded in ${Math.round(loadTime)}ms`);
-        });
-
-        // 🔧 Test navigation function
-        function testNavigation() {
-            console.log('🔧 Testing navigation...');
-            console.log('🔧 Current URL:', window.location.href);
-            console.log('🔧 Current path:', window.location.pathname);
-
-            // Test direct navigation
-            const testUrls = ['/admin/users', '/admin/meal-plans', '/admin/foods'];
-
-            testUrls.forEach((url, index) => {
-                setTimeout(() => {
-                    console.log(`🔧 Testing URL ${index + 1}: ${url}`);
-                    if (confirm(`Test navigation to ${url}?`)) {
-                        window.location.href = url;
-                    }
-                }, index * 1000);
-            });
-        }
     </script>
 
     {% block extra_js %}{% endblock %}

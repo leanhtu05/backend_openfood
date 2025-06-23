@@ -248,13 +248,62 @@ function displayMealPlans(data) {
     const html = data.meal_plans.map(plan => {
         const planId = plan.id || plan.plan_id || 'Unknown';
         const userId = plan.user_id || 'Unknown';
-        const createdAt = plan.created_at || 'Unknown';
-        const meals = plan.meals || {};
-        
+        const createdAt = plan.created_at || plan.timestamp || 'Unknown';
+
+        console.log(`🔧 DEBUG: Processing plan ${planId}:`, plan);
+
+        // 🔧 FIX: Handle multiple meal data formats
+        let meals = {};
+
+        // Format 1: plan.meals object
+        if (plan.meals && typeof plan.meals === 'object') {
+            meals = plan.meals;
+            console.log(`🔧 DEBUG: Found meals object:`, meals);
+        }
+        // Format 2: plan.days array (weekly meal plan)
+        else if (plan.days && Array.isArray(plan.days) && plan.days.length > 0) {
+            const firstDay = plan.days[0];
+            meals = {
+                breakfast: firstDay.breakfast?.dishes?.[0]?.name || firstDay.breakfast || 'Breakfast',
+                lunch: firstDay.lunch?.dishes?.[0]?.name || firstDay.lunch || 'Lunch',
+                dinner: firstDay.dinner?.dishes?.[0]?.name || firstDay.dinner || 'Dinner'
+            };
+            console.log(`🔧 DEBUG: Extracted from days array:`, meals);
+        }
+        // Format 3: Direct meal properties
+        else if (plan.breakfast || plan.lunch || plan.dinner) {
+            meals = {
+                breakfast: plan.breakfast || '',
+                lunch: plan.lunch || '',
+                dinner: plan.dinner || ''
+            };
+            console.log(`🔧 DEBUG: Found direct meal properties:`, meals);
+        }
+        // Format 4: Check for any meal-related keys
+        else {
+            const mealKeys = Object.keys(plan).filter(key =>
+                key.includes('meal') || key.includes('breakfast') ||
+                key.includes('lunch') || key.includes('dinner')
+            );
+            if (mealKeys.length > 0) {
+                mealKeys.forEach(key => {
+                    meals[key] = plan[key];
+                });
+                console.log(`🔧 DEBUG: Found meal keys:`, meals);
+            }
+        }
+
         const mealsHtml = Object.entries(meals).map(([mealType, mealData]) => {
-            const mealName = typeof mealData === 'string' ? mealData : (mealData?.name || 'Unknown meal');
-            const mealDesc = typeof mealData === 'object' ? (mealData?.description || '') : '';
-            
+            let mealName = 'Unknown meal';
+            let mealDesc = '';
+
+            if (typeof mealData === 'string') {
+                mealName = mealData;
+            } else if (typeof mealData === 'object' && mealData) {
+                mealName = mealData.name || mealData.description || 'Unknown meal';
+                mealDesc = mealData.description || '';
+            }
+
             return `
                 <div class="meal-item">
                     <div class="meal-name">${mealType.charAt(0).toUpperCase() + mealType.slice(1)}</div>
@@ -274,7 +323,15 @@ function displayMealPlans(data) {
                     <div class="meal-plan-date">📅 ${createdAt}</div>
                 </div>
                 <div class="meals-grid">
-                    ${mealsHtml || '<div class="meal-item"><div class="meal-name">No meals data</div></div>'}
+                    ${mealsHtml || `
+                        <div class="meal-item">
+                            <div class="meal-name">📋 Plan Info</div>
+                            <div class="meal-description">
+                                ${Object.keys(plan).length} properties available<br>
+                                <small>Keys: ${Object.keys(plan).slice(0, 5).join(', ')}${Object.keys(plan).length > 5 ? '...' : ''}</small>
+                            </div>
+                        </div>
+                    `}
                 </div>
             </div>
         `;
@@ -357,16 +414,32 @@ function loadSampleData() {
                 id: "sample_2",
                 user_id: "sample_user_2",
                 created_at: "2024-01-14",
-                meals: {
-                    breakfast: "Bánh mì thịt",
-                    lunch: "Cơm tấm sườn",
-                    dinner: "Phở gà"
-                }
+                days: [
+                    {
+                        breakfast: { dishes: [{ name: "Bánh mì thịt" }] },
+                        lunch: { dishes: [{ name: "Cơm tấm sườn" }] },
+                        dinner: { dishes: [{ name: "Phở gà" }] }
+                    }
+                ]
+            },
+            {
+                id: "sample_3",
+                user_id: "sample_user_3",
+                created_at: "2024-01-13",
+                breakfast: "Cháo gà",
+                lunch: "Bún bò Huế",
+                dinner: "Cơm chiên dương châu"
+            },
+            {
+                id: "sample_4",
+                user_id: "sample_user_4",
+                created_at: "2024-01-12",
+                // No meals data - test fallback
             }
         ],
         current_page: 1,
         total_pages: 1,
-        total_plans: 2,
+        total_plans: 4,
         has_prev: false,
         has_next: false
     };

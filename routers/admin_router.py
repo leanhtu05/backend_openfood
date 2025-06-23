@@ -1242,6 +1242,14 @@ async def admin_api_meal_plans_data(
         has_prev = page > 1
         has_next = page < total_pages
 
+        print(f"[API-MEAL-PLANS] Returning {len(plans_page)} meal plans")
+
+        # 🔧 DEBUG: Log sample meal plan structure
+        if plans_page:
+            sample_plan = plans_page[0]
+            print(f"[API-MEAL-PLANS] Sample plan structure: {list(sample_plan.keys())}")
+            print(f"[API-MEAL-PLANS] Sample plan data: {str(sample_plan)[:300]}...")
+
         return {
             "success": True,
             "meal_plans": plans_page,
@@ -1278,18 +1286,30 @@ async def debug_meal_plans(request: Request):
         print(f"[DEBUG] Recent plans result: {len(recent_plans) if recent_plans else 'None'}")
 
         print("[DEBUG] Testing firestore_service.get_all_meal_plans()...")
-        all_plans = firestore_service.get_all_meal_plans()
+        all_plans = firestore_service.get_all_meal_plans(10)
         print(f"[DEBUG] All plans result: {len(all_plans) if all_plans else 'None'}")
 
-        # Test API endpoint
-        print("[DEBUG] Testing API endpoint...")
-        from fastapi.testclient import TestClient
+        # 🔧 DEBUG: Detailed structure analysis
+        sample_plans = []
+        if all_plans:
+            for i, plan in enumerate(all_plans[:3]):
+                sample_plans.append({
+                    "index": i,
+                    "keys": list(plan.keys()),
+                    "id": plan.get('id', 'No ID'),
+                    "user_id": plan.get('user_id', 'No user_id'),
+                    "has_meals": 'meals' in plan,
+                    "has_days": 'days' in plan,
+                    "meals_data": plan.get('meals', 'No meals'),
+                    "days_data": plan.get('days', 'No days')[:1] if plan.get('days') else 'No days',
+                    "raw_sample": str(plan)[:200] + "..." if len(str(plan)) > 200 else str(plan)
+                })
 
         return {
             "success": True,
             "recent_plans_count": len(recent_plans) if recent_plans else 0,
             "all_plans_count": len(all_plans) if all_plans else 0,
-            "recent_plans_sample": recent_plans[:2] if recent_plans else [],
+            "sample_plans_detailed": sample_plans,
             "firestore_available": hasattr(firestore_service, 'get_recent_meal_plans')
         }
     except Exception as e:

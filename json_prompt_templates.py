@@ -89,6 +89,19 @@ REFERENCE DISHES FOR INSPIRATION:
 USER PREFERENCES: {preferences}
 ALLERGIES TO AVOID: {allergies}
 
+🌱 VEGETARIAN/DIETARY RESTRICTIONS RULES:
+- If preferences include "vegetarian" or "chay": ONLY create vegetarian dishes (NO meat, fish, seafood)
+- Use plant-based proteins: đậu hũ, đậu phụ, nấm, rau củ, hạt, đậu
+- Vegetarian dishes should be: "Cơm chay", "Phở chay", "Bún chay", "Bánh mì chay"
+- Replace meat with: đậu hũ nướng, nấm xào, rau củ luộc, chả chay
+
+⚖️ WEIGHT LOSS OPTIMIZATION:
+- Keep calories MODERATE (breakfast: 250-300, lunch: 350-400, dinner: 300-350)
+- Prioritize HIGH FIBER vegetables and lean proteins
+- Use MINIMAL oil and healthy cooking methods (hấp, luộc, nướng)
+- Include plenty of fresh vegetables and herbs
+- Avoid high-calorie ingredients like coconut milk, fried foods
+
 AUTHENTIC INNOVATION EXAMPLES:
 - "Phở Gà Nấu Dừa Miền Tây" (Western-style Coconut Chicken Pho)
 - "Cháo Tôm Cua Đồng Cà Mau" (Ca Mau Field Crab and Shrimp Porridge)
@@ -224,15 +237,30 @@ Return ONLY the corrected JSON array:"""
 
     return prompt
 
-def get_fallback_prompt(meal_type: str) -> str:
+def get_fallback_prompt(meal_type: str, preferences: str = "", calories_target: int = 300) -> str:
     """
     Prompt đơn giản khi các prompt phức tạp thất bại
     """
-    
+
+    # 🔧 FIX: Điều chỉnh calories và dish type theo preferences
+    is_vegetarian = "vegetarian" in preferences.lower() or "chay" in preferences.lower()
+
+    if "breakfast" in meal_type.lower() or "sáng" in meal_type.lower():
+        target_calories = min(calories_target, 250)  # Giảm calories cho bữa sáng
+    elif "lunch" in meal_type.lower() or "trưa" in meal_type.lower():
+        target_calories = min(calories_target, 350)  # Giảm calories cho bữa trưa
+    else:  # dinner
+        target_calories = min(calories_target, 300)  # Giảm calories cho bữa tối
+
+    dish_example = "Cơm chay với đậu hũ nướng" if is_vegetarian else "Vietnamese dish name"
+
     prompt = f"""Create 1 simple Vietnamese {meal_type} dish in JSON format.
 
+🌱 IMPORTANT: {"Create ONLY vegetarian dish (no meat/fish/seafood)" if is_vegetarian else "Create healthy dish"}
+⚖️ CALORIES: Keep around {target_calories} calories for weight management
+
 Template:
-[{{"name": "Vietnamese dish name", "description": "Brief description", "ingredients": [{{"name": "ingredient", "amount": "100g"}}], "preparation": ["step 1", "step 2"], "nutrition": {{"calories": 300, "protein": 20, "fat": 10, "carbs": 40}}, "preparation_time": "30 phút", "health_benefits": "Nutritious and healthy"}}]
+[{{"name": "{dish_example}", "description": "Brief description", "ingredients": [{{"name": "ingredient", "amount": "100g"}}], "preparation": ["step 1", "step 2"], "nutrition": {{"calories": {target_calories}, "protein": 15, "fat": 8, "carbs": 35}}, "preparation_time": "25 phút", "health_benefits": "Nutritious and healthy"}}]
 
 Return only JSON:"""
 

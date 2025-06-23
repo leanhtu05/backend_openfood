@@ -159,6 +159,13 @@ class GroqService:
         self.max_recent_dishes = 100  # Tăng lên 100 để track nhiều món hơn
         self.force_diversity = True  # Force diversity mode
 
+        # 🔧 FIX: Track diversity để cân bằng món ăn
+        self.meal_type_tracker = {
+            'rice_based': 0,      # Món cơm
+            'noodle_soup': 0,     # Món nước/nấu sắn
+            'other': 0            # Món khác
+        }
+
         # Thêm biến để theo dõi trạng thái quota
         self.quota_exceeded = False
         self.quota_reset_time = None
@@ -324,6 +331,16 @@ class GroqService:
             print(f"Rate limit reached. Using fallback data. Try again in {wait_time} seconds.")
             return self._fallback_meal_suggestions(meal_type)
         
+        # 🔧 FIX: Tự động áp dụng chế độ ăn chay từ user_data
+        if user_data and user_data.get('diet_restrictions'):
+            diet_restrictions = user_data.get('diet_restrictions', [])
+            if 'vegetarian' in diet_restrictions:
+                if not preferences:
+                    preferences = []
+                if 'vegetarian' not in preferences and 'chay' not in preferences:
+                    preferences.append('vegetarian')
+                    print("🌱 Auto-applied vegetarian preference from user profile")
+
         # Tạo prompt cho LLaMA
         preferences_str = ", ".join(preferences) if preferences else "không có"
         allergies_str = ", ".join(allergies) if allergies else "không có"
@@ -348,7 +365,7 @@ class GroqService:
             ("One-shot Example Prompt", get_one_shot_example_prompt(
                 meal_type, calories_target, protein_target, fat_target, carbs_target
             )),
-            ("Fallback Simple Prompt", get_fallback_prompt(meal_type))
+            ("Fallback Simple Prompt", get_fallback_prompt(meal_type, preferences_str, calories_target))
         ]
 
         # Prompt strategies sẽ được sử dụng trong retry loop
@@ -622,37 +639,47 @@ class GroqService:
             for dish_list in vietnamese_dishes.values():
                 dishes.extend(dish_list)
 
-        # Filter theo preferences
+        # 🔧 FIX: Enhanced filter theo preferences với ưu tiên chế độ ăn chay
         if preferences:
             filtered_dishes = []
+            preferences_lower = [p.lower() for p in preferences]
+
+            # Kiểm tra chế độ ăn chay trước tiên
+            is_vegetarian = any(pref in preferences_lower for pref in ["vegetarian", "chay"])
+
             for dish in dishes:
                 dish_lower = dish.lower()
+                should_include = False
 
-                # Healthy preference
-                if "healthy" in [p.lower() for p in preferences]:
-                    if any(keyword in dish_lower for keyword in ["cháo", "súp", "chay", "gà", "cá"]):
-                        filtered_dishes.append(dish)
-
-                # High protein preference
-                elif "high-protein" in [p.lower() for p in preferences]:
-                    if any(keyword in dish_lower for keyword in ["bò", "gà", "cá", "tôm", "thịt", "trứng"]):
-                        filtered_dishes.append(dish)
-
-                # Vegetarian preference
-                elif "vegetarian" in [p.lower() for p in preferences] or "chay" in [p.lower() for p in preferences]:
+                # Nếu là chế độ ăn chay, chỉ chọn món chay
+                if is_vegetarian:
                     if "chay" in dish_lower:
-                        filtered_dishes.append(dish)
-
-                # Low carb preference
-                elif "low-carb" in [p.lower() for p in preferences]:
-                    if not any(keyword in dish_lower for keyword in ["cơm", "xôi", "bánh", "bún", "phở", "mì"]):
-                        filtered_dishes.append(dish)
-
+                        should_include = True
+                    # Nếu không có từ "chay" nhưng không chứa thịt/hải sản
+                    elif not any(meat in dish_lower for meat in ["thịt", "bò", "heo", "gà", "cá", "tôm", "cua", "mực", "hến", "trai", "sườn", "chả"]):
+                        # Kiểm tra thêm các món có thể ăn chay
+                        if any(veg_food in dish_lower for veg_food in ["cháo", "súp", "rau", "đậu", "nấm", "bánh", "xôi"]):
+                            should_include = True
                 else:
+                    # Không phải chế độ ăn chay, áp dụng filter khác
+                    if "healthy" in preferences_lower:
+                        if any(keyword in dish_lower for keyword in ["cháo", "súp", "chay", "gà", "cá"]):
+                            should_include = True
+                    elif "high-protein" in preferences_lower:
+                        if any(keyword in dish_lower for keyword in ["bò", "gà", "cá", "tôm", "thịt", "trứng"]):
+                            should_include = True
+                    elif "low-carb" in preferences_lower:
+                        if not any(keyword in dish_lower for keyword in ["cơm", "xôi", "bánh", "bún", "phở", "mì"]):
+                            should_include = True
+                    else:
+                        should_include = True
+
+                if should_include:
                     filtered_dishes.append(dish)
 
             if filtered_dishes:
                 dishes = filtered_dishes
+                print(f"🌱 Filtered to {len(dishes)} dishes based on preferences (vegetarian: {is_vegetarian})")
 
         # Filter theo allergies
         if allergies:
@@ -2216,11 +2243,16 @@ class GroqService:
         Returns:
             List[str]: Danh sách món ăn kết hợp
         """
-        # Định nghĩa các thành phần cơ bản
+        # 🔧 FIX: Định nghĩa các thành phần cơ bản với phân loại rõ ràng
+        # Phân loại món ăn để đảm bảo đa dạng
+        rice_based_foods = ["cơm"]  # Món cơm
+        noodle_soup_foods = ["phở", "bún", "hủ tiếu", "mì"]  # Món nước/nấu sắn
+        other_foods = ["cháo", "bánh mì", "xôi", "canh", "lẩu"]  # Món khác
+
         base_foods = {
-            "breakfast": ["cơm", "cháo", "bánh mì", "xôi", "phở"],
-            "lunch": ["cơm", "bún", "mì", "hủ tiếu", "phở"],
-            "dinner": ["cơm", "bún", "mì", "canh", "lẩu"]
+            "breakfast": rice_based_foods + ["cháo", "bánh mì", "xôi"] + noodle_soup_foods[:2],  # Cân bằng
+            "lunch": rice_based_foods + noodle_soup_foods + ["canh"],  # Đa dạng nhất
+            "dinner": rice_based_foods + noodle_soup_foods[:3] + ["canh", "lẩu"]  # Cân bằng
         }
 
         proteins = {
@@ -2235,14 +2267,56 @@ class GroqService:
         meal_bases = base_foods.get(meal_type.lower(), base_foods["lunch"])
         meal_proteins = proteins.get(meal_type.lower(), proteins["lunch"])
 
-        # Tạo các món ăn kết hợp chi tiết
+        # 🔧 FIX: Tạo các món ăn kết hợp chi tiết với cân bằng đa dạng
         combination_dishes = []
 
+        # Đảm bảo cân bằng giữa món cơm và món nước/nấu sắn
+        rice_dishes = []
+        noodle_soup_dishes = []
+        other_dishes = []
+
         # Tạo món chính với protein chi tiết
-        for base in meal_bases[:3]:  # Lấy 3 base foods phổ biến nhất
-            for protein in meal_proteins[:4]:  # Lấy 4 proteins phổ biến nhất
+        for base in meal_bases:
+            for protein in meal_proteins[:3]:  # Giảm từ 4 xuống 3 để tránh quá nhiều
                 detailed_dish_name = self._create_detailed_dish_name(base, protein, meal_type)
-                combination_dishes.append(detailed_dish_name)
+
+                # Phân loại món ăn
+                if base in rice_based_foods:
+                    rice_dishes.append(detailed_dish_name)
+                elif base in noodle_soup_foods:
+                    noodle_soup_dishes.append(detailed_dish_name)
+                else:
+                    other_dishes.append(detailed_dish_name)
+
+        # 🔧 FIX: Cân bằng tỷ lệ món ăn dựa trên diversity preference
+        import random
+
+        diversity_pref = self._get_diversity_preference()
+
+        if diversity_pref == 'prefer_noodle_soup':
+            # Ưu tiên món nước/nấu sắn
+            selected_noodle_soup = random.sample(noodle_soup_dishes, min(4, len(noodle_soup_dishes))) if noodle_soup_dishes else []
+            selected_rice = random.sample(rice_dishes, min(2, len(rice_dishes))) if rice_dishes else []
+            selected_other = random.sample(other_dishes, min(1, len(other_dishes))) if other_dishes else []
+        elif diversity_pref == 'prefer_rice':
+            # Ưu tiên món cơm
+            selected_rice = random.sample(rice_dishes, min(4, len(rice_dishes))) if rice_dishes else []
+            selected_noodle_soup = random.sample(noodle_soup_dishes, min(2, len(noodle_soup_dishes))) if noodle_soup_dishes else []
+            selected_other = random.sample(other_dishes, min(1, len(other_dishes))) if other_dishes else []
+        else:
+            # Cân bằng (50% cơm, 40% nước/nấu sắn, 10% khác)
+            selected_rice = random.sample(rice_dishes, min(3, len(rice_dishes))) if rice_dishes else []
+            selected_noodle_soup = random.sample(noodle_soup_dishes, min(3, len(noodle_soup_dishes))) if noodle_soup_dishes else []
+            selected_other = random.sample(other_dishes, min(1, len(other_dishes))) if other_dishes else []
+
+        # Kết hợp với thứ tự ngẫu nhiên để tạo đa dạng
+        combination_dishes = selected_rice + selected_noodle_soup + selected_other
+        random.shuffle(combination_dishes)
+
+        print(f"🍽️ Tạo món ăn đa dạng: {len(selected_rice)} món cơm, {len(selected_noodle_soup)} món nước/nấu sắn, {len(selected_other)} món khác")
+
+        # 🔧 FIX: Update diversity tracker
+        self._update_meal_diversity_tracker(selected_rice, selected_noodle_soup, selected_other)
 
         # Thêm món rau
         for veg in vegetables[:3]:
@@ -2286,35 +2360,42 @@ class GroqService:
         """
         import random
 
-        # Các biến thể chi tiết cho thực phẩm cơ bản
+        # 🔧 FIX: Các biến thể chi tiết cho thực phẩm cơ bản với đặc trưng riêng
         base_food_details = {
+            # Món cơm - đặc trưng với cơm và thịt/cá
             "cơm": [
                 "Cơm trắng", "Cơm gạo lứt", "Cơm tấm", "Cơm dẻo",
                 "Cơm niêu", "Cơm gạo thơm", "Cơm gạo tám", "Cơm gạo ST25"
             ],
+            # Món nước/nấu sắn - đặc trưng với nước dùng
             "bún": [
-                "Bún tươi", "Bún khô", "Bún tàu", "Bún gạo",
-                "Bún mềm", "Bún dai", "Bún tròn"
+                "Bún bò Huế", "Bún riêu cua", "Bún chả", "Bún thịt nướng",
+                "Bún mắm", "Bún măng vịt", "Bún cá", "Bún tươi"
             ],
             "phở": [
-                "Phở tươi", "Phở khô", "Phở bánh dày",
-                "Phở bánh mỏng", "Phở Hà Nội", "Phở Nam Định"
+                "Phở bò tái", "Phở bò chín", "Phở gà", "Phở cá",
+                "Phở chay", "Phở Nam Định", "Phở Hà Nội", "Phở đặc biệt"
             ],
             "mì": [
-                "Mì tươi", "Mì khô", "Mì trứng", "Mì gạo",
-                "Mì vàng", "Mì sợi nhỏ", "Mì Ý"
+                "Mì Quảng", "Mì bò viên", "Mì gà", "Mì tôm cua",
+                "Mì xào", "Mì trứng", "Mì vịt tiềm", "Mì căn"
             ],
+            "hủ tiếu": [
+                "Hủ tiếu Nam Vang", "Hủ tiếu Mỹ Tho", "Hủ tiếu khô",
+                "Hủ tiếu tôm cua", "Hủ tiếu chay", "Hủ tiếu xào"
+            ],
+            # Món khác
             "bánh mì": [
-                "Bánh mì Việt Nam", "Bánh mì giòn", "Bánh mì tươi",
-                "Bánh mì nướng", "Bánh mì Sài Gòn", "Bánh mì que"
+                "Bánh mì thịt", "Bánh mì pate", "Bánh mì chả cá",
+                "Bánh mì xíu mại", "Bánh mì trứng", "Bánh mì chay"
             ],
             "xôi": [
-                "Xôi nếp", "Xôi dẻo", "Xôi trắng", "Xôi thơm",
-                "Xôi nước cốt dừa", "Xôi lá dứa"
+                "Xôi gà", "Xôi thịt", "Xôi chay", "Xôi đậu xanh",
+                "Xôi lạc", "Xôi nước cốt dừa", "Xôi lá dứa"
             ],
             "cháo": [
-                "Cháo trắng", "Cháo gạo tẻ", "Cháo sánh",
-                "Cháo loãng", "Cháo dinh dưỡng", "Cháo hến"
+                "Cháo gà", "Cháo cá", "Cháo thịt", "Cháo tôm",
+                "Cháo hến", "Cháo chay", "Cháo dinh dưỡng"
             ]
         }
 
@@ -2367,32 +2448,92 @@ class GroqService:
             ]
         }
 
-        # Chọn biến thể ngẫu nhiên
+        # 🔧 FIX: Logic tạo tên món phù hợp với từng loại base food
         base_options = base_food_details.get(base_food.lower(), [base_food.title()])
-        protein_options = protein_cooking_methods.get(protein_type.lower(), [protein_type])
-        side_options = side_dishes_by_meal.get(meal_type.lower(), side_dishes_by_meal["lunch"])
 
-        selected_base = random.choice(base_options)
-        selected_protein = random.choice(protein_options)
+        # Kiểm tra xem base food thuộc loại nào
+        if base_food.lower() in ["bún", "phở", "mì", "hủ tiếu"]:
+            # Món nước/nấu sắn - sử dụng tên đặc trưng có sẵn
+            selected_base = random.choice(base_options)
 
-        # Tạo tên món chi tiết
-        dish_name = f"{selected_base} với {selected_protein}"
+            # Với món nước, tên đã bao gồm protein, chỉ cần thêm chi tiết
+            dish_name = selected_base
 
-        # Thêm món phụ (80% cơ hội)
-        if random.random() < 0.8:
-            selected_side = random.choice(side_options)
-            dish_name += f" và {selected_side}"
+            # Thêm chi tiết đặc trưng cho món nước (50% cơ hội)
+            if random.random() < 0.5:
+                noodle_extras = [
+                    "nước dùng đậm đà", "có rau thơm", "ăn kèm chanh",
+                    "nước dùng trong", "thơm ngon", "đặc biệt"
+                ]
+                selected_extra = random.choice(noodle_extras)
+                dish_name += f" ({selected_extra})"
 
-        # Thêm chi tiết bổ sung cho một số món (30% cơ hội)
-        if random.random() < 0.3:
-            extras = [
-                "chấm nước mắm", "ăn kèm dưa chua", "có bánh tráng",
-                "nước dùng trong", "gia vị đậm đà", "thơm ngon"
-            ]
-            selected_extra = random.choice(extras)
-            dish_name += f" ({selected_extra})"
+        else:
+            # Món cơm và món khác - sử dụng logic cũ
+            protein_options = protein_cooking_methods.get(protein_type.lower(), [protein_type])
+            side_options = side_dishes_by_meal.get(meal_type.lower(), side_dishes_by_meal["lunch"])
+
+            selected_base = random.choice(base_options)
+            selected_protein = random.choice(protein_options)
+
+            # Tạo tên món chi tiết
+            dish_name = f"{selected_base} với {selected_protein}"
+
+            # Thêm món phụ (70% cơ hội - giảm từ 80%)
+            if random.random() < 0.7:
+                selected_side = random.choice(side_options)
+                dish_name += f" và {selected_side}"
+
+            # Thêm chi tiết bổ sung (20% cơ hội - giảm từ 30%)
+            if random.random() < 0.2:
+                rice_extras = [
+                    "chấm nước mắm", "ăn kèm dưa chua", "có bánh tráng",
+                    "gia vị đậm đà", "thơm ngon"
+                ]
+                selected_extra = random.choice(rice_extras)
+                dish_name += f" ({selected_extra})"
 
         return dish_name
+
+    def _update_meal_diversity_tracker(self, rice_dishes: List[str], noodle_soup_dishes: List[str], other_dishes: List[str]):
+        """
+        🔧 FIX: Cập nhật diversity tracker để theo dõi tỷ lệ món ăn
+        """
+        self.meal_type_tracker['rice_based'] += len(rice_dishes)
+        self.meal_type_tracker['noodle_soup'] += len(noodle_soup_dishes)
+        self.meal_type_tracker['other'] += len(other_dishes)
+
+        total_meals = sum(self.meal_type_tracker.values())
+        if total_meals > 0:
+            rice_ratio = self.meal_type_tracker['rice_based'] / total_meals * 100
+            noodle_ratio = self.meal_type_tracker['noodle_soup'] / total_meals * 100
+            other_ratio = self.meal_type_tracker['other'] / total_meals * 100
+
+            print(f"📊 Diversity tracker: Cơm {rice_ratio:.1f}%, Nước/Nấu sắn {noodle_ratio:.1f}%, Khác {other_ratio:.1f}%")
+
+    def _get_diversity_preference(self) -> str:
+        """
+        🔧 FIX: Xác định loại món nào cần ưu tiên để cân bằng
+        """
+        total_meals = sum(self.meal_type_tracker.values())
+        if total_meals < 5:  # Chưa đủ dữ liệu để phân tích
+            return 'balanced'
+
+        rice_ratio = self.meal_type_tracker['rice_based'] / total_meals
+        noodle_ratio = self.meal_type_tracker['noodle_soup'] / total_meals
+
+        # Nếu món cơm quá nhiều (>60%), ưu tiên món nước/nấu sắn
+        if rice_ratio > 0.6:
+            print("🍜 Ưu tiên món nước/nấu sắn để cân bằng")
+            return 'prefer_noodle_soup'
+
+        # Nếu món nước/nấu sắn quá nhiều (>60%), ưu tiên món cơm
+        if noodle_ratio > 0.6:
+            print("🍚 Ưu tiên món cơm để cân bằng")
+            return 'prefer_rice'
+
+        # Cân bằng tốt
+        return 'balanced'
 
     def _get_combination_dishes_prompt(self, meal_type: str, calories_target: int, protein_target: int,
                                      fat_target: int, carbs_target: int, preferences_str: str,
@@ -2416,12 +2557,14 @@ class GroqService:
         prompt = f"""
         Bạn là chuyên gia dinh dưỡng Việt Nam. Hãy tạo kế hoạch {meal_type} với các món ăn kết hợp THỰC TẾ và CỤ THỂ.
 
-        QUAN TRỌNG: Tạo tên món ăn CHI TIẾT và CỤ THỂ theo cách người Việt thường gọi:
-        - "Cơm gạo lứt với thịt heo nướng và rau luộc" thay vì "Cơm thịt"
-        - "Bún tươi với gà nướng mật ong và rau thơm" thay vì "Bún gà"
-        - "Phở tươi với thịt bò tái và rau sống" thay vì "Phở bò"
-        - "Cháo trắng với cá hấp và rau muống luộc" thay vì "Cháo cá"
-        - "Mì trứng xào với tôm và cải thảo" thay vì "Mì tôm"
+        🌱 QUAN TRỌNG: Tạo tên món ăn CHI TIẾT và CỤ THỂ theo cách người Việt thường gọi:
+        - "Cơm gạo lứt với đậu hũ nướng và rau luộc" thay vì "Cơm đậu hũ" (cho vegetarian)
+        - "Bún tươi với nấm xào và rau thơm" thay vì "Bún nấm" (cho vegetarian)
+        - "Phở chay với đậu phụ và rau sống" thay vì "Phở chay" (cho vegetarian)
+        - "Cháo trắng với nấm hương và rau muống luộc" thay vì "Cháo nấm" (cho vegetarian)
+        - "Mì trứng xào với rau củ và cải thảo" thay vì "Mì rau" (cho vegetarian)
+
+        ⚖️ Lưu ý giảm cân: Giữ calories vừa phải (250-350 kcal), nhiều rau xanh, ít dầu mỡ
 
         Gợi ý món ăn kết hợp phù hợp: {combination_dishes_str}
 
@@ -2483,9 +2626,9 @@ class GroqService:
             # Tạo món ăn kết hợp thực tế
             combination_dishes = self._generate_realistic_combination_dishes(meal_type, [], [])
 
-            # Chọn ngẫu nhiên 2-3 món từ danh sách
+            # 🔧 FIX: Chỉ chọn 1-2 món để phù hợp với mục tiêu và chế độ ăn chay
             import random
-            selected_count = min(3, len(combination_dishes))
+            selected_count = min(2, len(combination_dishes))  # Giảm từ 3 xuống 2
             selected_dishes = random.sample(combination_dishes, selected_count)
 
             fallback_meals = []
@@ -2523,8 +2666,14 @@ class GroqService:
             # Tạo preparation steps
             preparation = self._create_combination_preparation(base_food, protein_type)
 
-            # Tính toán nutrition
-            calories_target = 400 if meal_type.lower() == "breakfast" else 500
+            # 🔧 FIX: Giảm calories target để phù hợp với mục tiêu giảm cân và chế độ ăn chay
+            if "breakfast" in meal_type.lower() or "sáng" in meal_type.lower():
+                calories_target = 250  # Giảm từ 400 xuống 250 cho bữa sáng
+            elif "lunch" in meal_type.lower() or "trưa" in meal_type.lower():
+                calories_target = 350  # Giảm từ 500 xuống 350 cho bữa trưa
+            else:  # dinner
+                calories_target = 300  # Giảm từ 500 xuống 300 cho bữa tối
+
             nutrition = self._calculate_combination_nutrition(base_food, protein_type, calories_target)
 
             # Tạo description
@@ -2645,22 +2794,28 @@ class GroqService:
             "amount": base_amounts.get(base_food.lower(), "100g")
         })
 
-        # Thêm protein
+        # 🌱 FIX: Thêm protein với ưu tiên chế độ ăn chay
         protein_amounts = {
-            "thịt": "100g",
-            "thịt heo": "100g",
-            "thịt bò": "100g",
-            "gà": "120g",
-            "cá": "100g",
-            "tôm": "80g",
-            "trứng": "2 quả",
+            # Protein chay (ưu tiên)
             "đậu hũ": "100g",
-            "chả cá": "80g",
-            "nem": "3 viên",
-            "xíu mại": "4 viên",
+            "đậu phụ": "100g",
+            "nấm": "120g",
+            "nấm hương": "100g",
+            "trứng": "2 quả",
+            "rau": "100g",
             "muống": "100g",
             "cải": "100g",
-            "xanh": "100g"
+            "xanh": "100g",
+            # Protein động vật (chỉ khi không phải vegetarian)
+            "thịt": "80g",  # Giảm portion size
+            "thịt heo": "80g",
+            "thịt bò": "80g",
+            "gà": "100g",
+            "cá": "80g",
+            "tôm": "60g",
+            "chả cá": "60g",
+            "nem": "2 viên",  # Giảm số lượng
+            "xíu mại": "3 viên"
         }
 
         ingredients.append({
@@ -2752,8 +2907,9 @@ class GroqService:
             # Random selection để tránh lặp lại
             random.shuffle(fallback_meals)
 
-            # Trả về 1-2 món ngẫu nhiên thay vì luôn cùng món
-            num_meals = min(2, len(fallback_meals))
+            # 🔧 FIX: Ưu tiên 1 món, chỉ 2 món khi thực sự cần thiết
+            # Với chế độ ăn chay và mục tiêu giảm cân, 1 món thường đủ
+            num_meals = 1 if len(fallback_meals) >= 1 else len(fallback_meals)
             selected_meals = fallback_meals[:num_meals]
 
             print(f"🔧 Selected {len(selected_meals)} traditional fallback meals for {meal_type}")
@@ -2810,6 +2966,14 @@ class GroqService:
         self.cache = {}
         print("🗑️ Clearing recent dishes to allow dish repetition")
         self.recent_dishes = []
+
+        # 🔧 FIX: Reset diversity tracker
+        print("🗑️ Resetting meal diversity tracker")
+        self.meal_type_tracker = {
+            'rice_based': 0,
+            'noodle_soup': 0,
+            'other': 0
+        }
 
         # 🔧 FIX: Enhanced diversity enforcement
         import time

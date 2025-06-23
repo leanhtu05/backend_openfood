@@ -260,7 +260,7 @@ def format_user_context(user_profile, meal_plan, food_logs, exercise_history=Non
             elif log.get('items'):
                 for item in log.get('items', []):
                     eaten_calories += item.get('calories', 0)
-        
+
         # Thu thập tên các món ăn
         eaten_dishes = []
         for log in food_logs:
@@ -269,22 +269,33 @@ def format_user_context(user_profile, meal_plan, food_logs, exercise_history=Non
                 for food in log.get('recognized_foods', []):
                     if food.get('food_name'):
                         eaten_dishes.append(food.get('food_name'))
-            
+
             # Cách 2: Từ items (cấu trúc mới)
             elif log.get('items'):
                 for item in log.get('items', []):
                     if item.get('name'):
                         eaten_dishes.append(item.get('name'))
-            
+
             # Cách 3: Từ description (cấu trúc mới)
             elif log.get('description'):
                 eaten_dishes.append(log.get('description'))
-        
+
+        # 🔧 FIX: Đếm số bữa ăn thực tế thay vì số food log entries
+        # Phân tích meal_type để đếm số bữa ăn khác nhau
+        unique_meals = set()
+        for log in food_logs:
+            meal_type = log.get('meal_type', 'unknown')
+            if meal_type and meal_type != 'unknown':
+                unique_meals.add(meal_type)
+
+        # Nếu không có meal_type, fallback về số lượng food logs
+        actual_meal_count = len(unique_meals) if unique_meals else len(food_logs)
+
         if eaten_dishes:
-            context_parts.append(f"- Nhật ký đã ăn {time_label}: Đã ăn {len(food_logs)} bữa với các món: {', '.join(eaten_dishes)}. "
+            context_parts.append(f"- Nhật ký đã ăn {time_label}: Đã ăn {actual_meal_count} bữa với các món: {', '.join(eaten_dishes)}. "
                               f"Tổng calo đã nạp: {eaten_calories} kcal.")
         else:
-            context_parts.append(f"- Nhật ký đã ăn {time_label}: Đã ghi nhận {len(food_logs)} bữa ăn nhưng không có thông tin chi tiết.")
+            context_parts.append(f"- Nhật ký đã ăn {time_label}: Đã ghi nhận {actual_meal_count} bữa ăn nhưng không có thông tin chi tiết.")
     else:
         context_parts.append(f"- Nhật ký đã ăn {time_label}: Chưa ghi nhận bữa nào.")
     

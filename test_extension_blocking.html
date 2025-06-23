@@ -97,8 +97,8 @@
         </div>
     </div>
 
-    <!-- Load extension blocker first -->
-    <script src="/static/js/extension-blocker.js"></script>
+    <!-- Load ULTRA extension blocker first -->
+    <script src="/static/js/ultra-extension-blocker.js"></script>
     
     <script>
         let testResults = [];
@@ -146,13 +146,16 @@
         function runAllTests() {
             log('🚀 Starting comprehensive extension blocking tests...');
             
-            // Test 1: Check if extension blocker is loaded
-            if (typeof window.ExtensionBlocker !== 'undefined') {
-                addResult('Extension Blocker script loaded successfully');
-                log('✅ Extension Blocker detected');
+            // Test 1: Check if ULTRA extension blocker is loaded
+            if (typeof window.UltraExtensionBlocker !== 'undefined') {
+                addResult('ULTRA Extension Blocker v3.0 loaded successfully');
+                log('✅ ULTRA Extension Blocker detected');
+            } else if (typeof window.ExtensionBlocker !== 'undefined') {
+                addResult('Standard Extension Blocker loaded (fallback)');
+                log('⚠️ Standard Extension Blocker detected (fallback)');
             } else {
-                addResult('Extension Blocker script not found', false);
-                log('❌ Extension Blocker not detected', 'error');
+                addResult('No Extension Blocker script found', false);
+                log('❌ No Extension Blocker detected', 'error');
             }
             
             // Test 2: Check extension element blocking
@@ -181,10 +184,14 @@
             
             const extensionErrors = [
                 'Unchecked runtime.lastError: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received',
+                'Unchecked runtime.lastError: The page keeping the extension port is moved into back/forward cache, so the message channel is closed.',
                 'Error from chrome-extension://test',
                 'extensionAdapter.sendMessageToTab error',
                 'You do not have a background page',
-                'Invalid arguments to extensionAdapter'
+                'Invalid arguments to extensionAdapter',
+                'i18next: languageChanged vi',
+                'i18next: initialized Object',
+                'Error in event handler: Error: invalid arguments to extensionAdapter.sendMessageToTab'
             ];
             
             extensionErrors.forEach((errorMsg, index) => {

@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🚀 Ultra Fast Admin - OpenFood</title>
+
+    <!-- 🚫 MINIMAL Extension Blocker for SPEED -->
+    <!-- Skip heavy scripts for ultra-fast loading -->
+
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -153,11 +157,12 @@
         <div class="header">
             <h1>🚀 Ultra Fast Admin Dashboard</h1>
             <div class="nav">
+                <a href="/admin/ultra-fast">⚡ Ultra Fast</a>
                 <a href="/admin/">📊 Dashboard</a>
                 <a href="/admin/users">👥 Users</a>
                 <a href="/admin/foods">🍽️ Foods</a>
-                <a href="/admin/clean">🧹 Clean View</a>
-                <a href="/admin/extension-test">🔧 Extension Test</a>
+                <a href="/admin/reports">📈 Reports</a>
+                <a href="/admin/lightning-login">⚡ Lightning Login</a>
                 <a href="/admin/logout">🚪 Logout</a>
             </div>
         </div>
@@ -296,12 +301,14 @@
             document.getElementById('extStatus').textContent = 'Blocked Successfully';
         }
 
-        // Comprehensive extension blocking
-        (function() {
+        // Load ULTRA extension blocker if not already loaded
+        if (typeof window.UltraExtensionBlocker === 'undefined') {
+            // Fallback inline blocking
             const EXTENSION_KEYWORDS = [
                 'chrome-extension://', 'moz-extension://', 'runtime.lastError',
                 'message channel closed', 'listener indicated an asynchronous response',
-                'background page', 'extensionAdapter', 'sendMessageToTab'
+                'background page', 'extensionAdapter', 'sendMessageToTab',
+                'back/forward cache', 'extension port', 'contentScript.js', 'i18next'
             ];
 
             function isExtensionRelated(message) {
@@ -334,7 +341,7 @@
                 if (isExtensionRelated(message)) return;
                 return originalError.apply(console, args);
             };
-        })();
+        }
 
         console.log('🚀 Ultra Fast Admin Dashboard loaded in', performance.now().toFixed(2), 'ms');
     </script>

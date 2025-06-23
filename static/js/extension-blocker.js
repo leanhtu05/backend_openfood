@@ -1,27 +1,49 @@
 /**
- * 🚫 Extension Blocker - Comprehensive browser extension interference blocking
+ * 🚫 ULTRA Extension Blocker - Comprehensive browser extension interference blocking
  * Blocks all extension errors, warnings, and DOM manipulation
+ * Version 2.0 - Enhanced blocking for admin panel
  */
 
 (function() {
     'use strict';
+
+    console.log('🚫 ULTRA Extension Blocker v2.0: Initializing comprehensive blocking...');
     
-    console.log('🚫 Extension Blocker: Initializing comprehensive blocking...');
-    
-    // List of extension-related keywords to block
+    // List of extension-related keywords to block (enhanced v2)
     const EXTENSION_KEYWORDS = [
         'chrome-extension://',
         'moz-extension://',
         'safari-extension://',
         'runtime.lastError',
+        'runtime.lasterror',
         'message channel closed',
         'listener indicated an asynchronous response',
+        'listener indicated',
         'background page',
         'extensionAdapter',
+        'extensionadapter',
         'sendMessageToTab',
+        'sendmessagetotab',
         'inlineForm.html',
+        'inlineform.html',
         'invalid arguments to extensionAdapter',
-        'You do not have a background page'
+        'invalid arguments to extensionadapter',
+        'You do not have a background page',
+        'you do not have a background page',
+        'Error in event handler: Error: invalid arguments',
+        'error in event handler',
+        'Unchecked runtime.lastError',
+        'unchecked runtime.lasterror',
+        'The page keeping the extension port is moved into back/forward cache',
+        'back/forward cache',
+        'extension port',
+        'contentScript.js',
+        'contentscript.js',
+        'i18next: languageChanged',
+        'i18next: initialized',
+        'i18next',
+        '<URL>',
+        '<url>'
     ];
     
     // Check if message contains extension keywords
@@ -31,13 +53,22 @@
         return EXTENSION_KEYWORDS.some(keyword => msgStr.includes(keyword.toLowerCase()));
     }
     
+    // Stats tracking
+    let stats = {
+        blockedErrors: 0,
+        blockedPromises: 0,
+        blockedRequests: 0,
+        removedElements: 0
+    };
+
     // 1. Block window errors
     window.addEventListener('error', function(e) {
         const message = e.message || '';
         const filename = e.filename || '';
-        
+
         if (isExtensionRelated(message) || isExtensionRelated(filename)) {
-            console.log('🚫 Blocked extension error:', message);
+            stats.blockedErrors++;
+            console.log('🚫 Blocked extension error #' + stats.blockedErrors + ':', message);
             e.preventDefault();
             e.stopPropagation();
             e.stopImmediatePropagation();
@@ -48,9 +79,10 @@
     // 2. Block unhandled promise rejections
     window.addEventListener('unhandledrejection', function(e) {
         const reason = e.reason ? e.reason.toString() : '';
-        
+
         if (isExtensionRelated(reason)) {
-            console.log('🚫 Blocked extension promise rejection:', reason);
+            stats.blockedPromises++;
+            console.log('🚫 Blocked extension promise rejection #' + stats.blockedPromises + ':', reason);
             e.preventDefault();
             e.stopPropagation();
             return false;
@@ -220,10 +252,15 @@
         isExtensionRelated,
         cleanupExtensionElements,
         observer: domObserver,
-        stats: {
-            blockedErrors: 0,
-            blockedRequests: 0,
-            removedElements: 0
+        stats: stats,
+        getStats: function() {
+            return {
+                blockedErrors: stats.blockedErrors,
+                blockedPromises: stats.blockedPromises,
+                blockedRequests: stats.blockedRequests,
+                removedElements: stats.removedElements,
+                totalBlocked: stats.blockedErrors + stats.blockedPromises + stats.blockedRequests + stats.removedElements
+            };
         }
     };
     

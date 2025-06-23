@@ -60,12 +60,23 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 # ==================== AUTHENTICATION ROUTES ====================
 
 @router.get("/login", response_class=HTMLResponse)
-async def admin_login_page(request: Request, error: str = None, success: str = None):
-    """Hiển thị trang đăng nhập admin"""
+async def admin_login_page(request: Request, error: str = None, success: str = None, old: str = None):
+    """🚀 Hiển thị trang đăng nhập admin - Redirect to Lightning Login for speed"""
     # Nếu đã đăng nhập rồi thì redirect về dashboard
     if get_current_admin(request):
-        return RedirectResponse(url="/admin/", status_code=302)
+        return RedirectResponse(url="/admin/ultra-fast", status_code=302)
 
+    # 🚀 SPEED OPTIMIZATION: Default redirect to Lightning Login
+    if old != "1":
+        # Redirect to lightning login for better performance
+        redirect_url = f"/admin/lightning-login"
+        if error:
+            redirect_url += f"?error={error}"
+        if success:
+            redirect_url += f"{'&' if error else '?'}success={success}"
+        return RedirectResponse(url=redirect_url, status_code=302)
+
+    # Use old login only if explicitly requested with ?old=1
     templates = get_templates()
     return templates.TemplateResponse("admin/login.html", {
         "request": request,
@@ -91,6 +102,20 @@ async def admin_fast_login_page(
         "success": success
     })
 
+@router.get("/lightning-login", response_class=HTMLResponse)
+async def admin_lightning_login_page(
+    request: Request,
+    error: Optional[str] = Query(None),
+    success: Optional[str] = Query(None),
+    templates: Jinja2Templates = Depends(get_templates)
+):
+    """⚡ Trang đăng nhập siêu nhanh"""
+    return templates.TemplateResponse("admin/lightning_login.html", {
+        "request": request,
+        "error": error,
+        "success": success
+    })
+
 @router.post("/login")
 async def admin_login(request: Request, username: str = Form(...), password: str = Form(...)):
     """Xử lý đăng nhập admin"""
@@ -102,8 +127,8 @@ async def admin_login(request: Request, username: str = Form(...), password: str
             session_token = create_admin_session(username)
             print(f"[AUTH] Admin login successful: {username}")
 
-            # 🚀 Redirect về dashboard đơn giản với session cookie
-            response = RedirectResponse(url="/admin/", status_code=302)
+            # 🚀 FAST REDIRECT: Redirect về ultra-fast dashboard thay vì dashboard chậm
+            response = RedirectResponse(url="/admin/ultra-fast", status_code=302)
             response.set_cookie(
                 key="admin_session",
                 value=session_token,
@@ -209,6 +234,74 @@ async def admin_clean(request: Request):
             "recent_activities": [],
             "last_update": datetime.now().strftime("%d/%m/%Y %H:%M")
         })
+
+@router.get("/debug-activities")
+async def debug_activities(request: Request):
+    """🔧 Debug endpoint để test get_recent_activities"""
+    try:
+        print("[DEBUG] Testing get_recent_activities...")
+        activities = get_recent_activities()
+        return {
+            "success": True,
+            "activities_count": len(activities),
+            "activities": activities,
+            "sample_activity": activities[0] if activities else None
+        }
+    except Exception as e:
+        print(f"[DEBUG] Error in get_recent_activities: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+@router.get("/debug-reports")
+async def debug_reports(request: Request):
+    """🔧 Debug endpoint để test báo cáo"""
+    try:
+        print("[DEBUG] Testing reports functions...")
+
+        # Test get_report_metrics
+        start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        end_date = datetime.now().strftime("%Y-%m-%d")
+
+        print(f"[DEBUG] Testing get_report_metrics({start_date}, {end_date})")
+        metrics = get_report_metrics(start_date, end_date)
+        print(f"[DEBUG] Metrics result: {metrics}")
+
+        print(f"[DEBUG] Testing get_report_chart_data({start_date}, {end_date})")
+        chart_data = get_report_chart_data(start_date, end_date)
+        print(f"[DEBUG] Chart data keys: {list(chart_data.keys())}")
+
+        print(f"[DEBUG] Testing get_top_active_users()")
+        top_users = get_top_active_users()
+        print(f"[DEBUG] Top users count: {len(top_users)}")
+
+        print(f"[DEBUG] Testing get_recent_errors()")
+        recent_errors = get_recent_errors()
+        print(f"[DEBUG] Recent errors count: {len(recent_errors)}")
+
+        return {
+            "success": True,
+            "start_date": start_date,
+            "end_date": end_date,
+            "metrics": metrics,
+            "chart_data_keys": list(chart_data.keys()),
+            "top_users_count": len(top_users),
+            "recent_errors_count": len(recent_errors),
+            "sample_top_user": top_users[0] if top_users else None
+        }
+    except Exception as e:
+        print(f"[DEBUG] Error in debug_reports: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
 
 @router.get("/ultra-fast", response_class=HTMLResponse)
 async def admin_ultra_fast(request: Request):
@@ -510,20 +603,30 @@ def get_recent_activities():
                 recent_meal_plans = all_plans[:3] if all_plans else []
 
             for plan in recent_meal_plans:
-                # 🔧 FIX: Xử lý timestamp đúng cách
+                # 🔧 FIX: Xử lý timestamp đúng cách - đảm bảo luôn trả về datetime
                 timestamp = plan.get('created_at', None)
+
                 if isinstance(timestamp, str):
                     try:
-                        from datetime import datetime
                         # Xử lý các format timestamp khác nhau
                         if 'T' in timestamp:
                             timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
                         else:
                             timestamp = datetime.now()  # Fallback
                     except Exception as e:
-                        print(f"[ACTIVITIES] Error parsing timestamp {timestamp}: {e}")
+                        print(f"[ACTIVITIES] Error parsing string timestamp {timestamp}: {e}")
                         timestamp = datetime.now()  # Fallback to current time
-                elif timestamp is None:
+                elif isinstance(timestamp, (int, float)):
+                    try:
+                        # Convert numeric timestamp to datetime
+                        if timestamp > 1e10:  # Milliseconds
+                            timestamp = datetime.fromtimestamp(timestamp / 1000)
+                        else:  # Seconds
+                            timestamp = datetime.fromtimestamp(timestamp)
+                    except Exception as e:
+                        print(f"[ACTIVITIES] Error parsing numeric timestamp {timestamp}: {e}")
+                        timestamp = datetime.now()  # Fallback to current time
+                elif not isinstance(timestamp, datetime):
                     timestamp = datetime.now()  # Fallback to current time
 
                 activities.append({
@@ -544,20 +647,30 @@ def get_recent_activities():
                 recent_users = all_users[:3] if all_users else []
 
             for user in recent_users:
-                # 🔧 FIX: Xử lý timestamp đúng cách
+                # 🔧 FIX: Xử lý timestamp đúng cách - đảm bảo luôn trả về datetime
                 timestamp = user.get('updated_at', user.get('created_at', None))
+
                 if isinstance(timestamp, str):
                     try:
-                        from datetime import datetime
                         # Xử lý các format timestamp khác nhau
                         if 'T' in timestamp:
                             timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
                         else:
                             timestamp = datetime.now()  # Fallback
                     except Exception as e:
-                        print(f"[ACTIVITIES] Error parsing user timestamp {timestamp}: {e}")
+                        print(f"[ACTIVITIES] Error parsing user string timestamp {timestamp}: {e}")
                         timestamp = datetime.now()  # Fallback to current time
-                elif timestamp is None:
+                elif isinstance(timestamp, (int, float)):
+                    try:
+                        # Convert numeric timestamp to datetime
+                        if timestamp > 1e10:  # Milliseconds
+                            timestamp = datetime.fromtimestamp(timestamp / 1000)
+                        else:  # Seconds
+                            timestamp = datetime.fromtimestamp(timestamp)
+                    except Exception as e:
+                        print(f"[ACTIVITIES] Error parsing user numeric timestamp {timestamp}: {e}")
+                        timestamp = datetime.now()  # Fallback to current time
+                elif not isinstance(timestamp, datetime):
                     timestamp = datetime.now()  # Fallback to current time
 
                 activities.append({
@@ -569,8 +682,39 @@ def get_recent_activities():
         except Exception as e:
             print(f"[ACTIVITIES] Error getting users: {e}")
 
-        # Sắp xếp theo thời gian - tất cả timestamp đều là datetime objects
-        activities = sorted(activities, key=lambda x: x['timestamp'], reverse=True)
+        # Sắp xếp theo thời gian - đảm bảo tất cả timestamp đều là datetime objects
+        def safe_sort_key(activity):
+            timestamp = activity.get('timestamp')
+            if isinstance(timestamp, datetime):
+                return timestamp
+            elif isinstance(timestamp, (int, float)):
+                # Convert timestamp number to datetime
+                try:
+                    if timestamp > 1e10:  # Milliseconds
+                        return datetime.fromtimestamp(timestamp / 1000)
+                    else:  # Seconds
+                        return datetime.fromtimestamp(timestamp)
+                except Exception as e:
+                    print(f"[ACTIVITIES] Error converting timestamp {timestamp}: {e}")
+                    return datetime.now()
+            elif isinstance(timestamp, str):
+                try:
+                    if 'T' in timestamp:
+                        return datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                    else:
+                        return datetime.now()
+                except:
+                    return datetime.now()
+            else:
+                return datetime.now()  # Fallback for any other type
+
+        try:
+            activities = sorted(activities, key=safe_sort_key, reverse=True)
+            print(f"[ACTIVITIES] Successfully sorted {len(activities)} activities")
+        except Exception as e:
+            print(f"[ACTIVITIES] Error sorting activities: {e}")
+            # Fallback: return unsorted activities
+            pass
         result = activities[:5]  # Trả về 5 hoạt động gần nhất
 
         print(f"[ACTIVITIES] Got {len(result)} activities")
@@ -989,6 +1133,75 @@ async def admin_foods(
             "has_next": False,
             "search": search or "",
             "error": f"Lỗi khi tải dữ liệu món ăn: {str(e)}"
+        })
+
+@router.get("/test-reports", response_class=HTMLResponse)
+async def test_reports(
+    request: Request,
+    templates: Jinja2Templates = Depends(get_templates)
+):
+    """🔧 Test báo cáo không cần authentication"""
+    try:
+        print("[TEST] Loading test reports...")
+
+        start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        end_date = datetime.now().strftime("%Y-%m-%d")
+
+        # Lấy dữ liệu metrics
+        metrics = get_report_metrics(start_date, end_date)
+        print(f"[TEST] Metrics: {metrics}")
+
+        # Lấy dữ liệu biểu đồ
+        chart_data = get_report_chart_data(start_date, end_date)
+        print(f"[TEST] Chart data keys: {list(chart_data.keys())}")
+
+        # Lấy top users
+        top_users = get_top_active_users()
+        print(f"[TEST] Top users: {len(top_users)}")
+
+        # Lấy lỗi gần đây
+        recent_errors = get_recent_errors()
+        print(f"[TEST] Recent errors: {len(recent_errors)}")
+
+        return templates.TemplateResponse("admin/reports.html", {
+            "request": request,
+            "start_date": start_date,
+            "end_date": end_date,
+            "metrics": metrics,
+            "activity_labels": chart_data["activity_labels"],
+            "activity_data": chart_data["activity_data"],
+            "api_calls_data": chart_data["api_calls_data"],
+            "device_labels": chart_data["device_labels"],
+            "device_data": chart_data["device_data"],
+            "popular_foods_labels": chart_data["popular_foods_labels"],
+            "popular_foods_data": chart_data["popular_foods_data"],
+            "feature_labels": chart_data["feature_labels"],
+            "feature_data": chart_data["feature_data"],
+            "top_users": top_users,
+            "recent_errors": recent_errors
+        })
+    except Exception as e:
+        print(f"[TEST] Error in test reports: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        # Trả về trang với dữ liệu mặc định
+        return templates.TemplateResponse("admin/reports.html", {
+            "request": request,
+            "start_date": start_date or datetime.now().strftime("%Y-%m-%d"),
+            "end_date": end_date or datetime.now().strftime("%Y-%m-%d"),
+            "metrics": {"total_api_calls": 0, "new_users": 0, "meal_plans_created": 0, "activity_rate": 0},
+            "activity_labels": [],
+            "activity_data": [],
+            "api_calls_data": [],
+            "device_labels": [],
+            "device_data": [],
+            "popular_foods_labels": [],
+            "popular_foods_data": [],
+            "feature_labels": [],
+            "feature_data": [],
+            "top_users": [],
+            "recent_errors": [],
+            "error": f"Lỗi khi tải báo cáo: {str(e)}"
         })
 
 @router.get("/reports", response_class=HTMLResponse)

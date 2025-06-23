@@ -3,7 +3,106 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; object-src 'none'; frame-src 'none';">
+    <meta name="referrer" content="no-referrer">
     <title>Đăng nhập Admin - Food AI</title>
+
+    <!-- 🚫 MINIMAL Extension Blocking for FAST LOGIN -->
+    <!-- Skip heavy scripts for faster login -->
+    <script>
+        // BACKUP extension blocking - runs before any other scripts
+        (function() {
+            'use strict';
+            console.log('🚫 BACKUP Extension Blocker: Active');
+
+            // Block errors immediately
+            window.addEventListener('error', function(e) {
+                const msg = (e.message || '').toLowerCase();
+                const file = (e.filename || '').toLowerCase();
+
+                if (file.includes('chrome-extension') ||
+                    file.includes('moz-extension') ||
+                    file.includes('<url>') ||
+                    file.includes('contentscript.js') ||
+                    msg.includes('runtime.lasterror') ||
+                    msg.includes('message channel closed') ||
+                    msg.includes('listener indicated') ||
+                    msg.includes('background page') ||
+                    msg.includes('extensionadapter') ||
+                    msg.includes('sendmessagetotab') ||
+                    msg.includes('invalid arguments') ||
+                    msg.includes('back/forward cache') ||
+                    msg.includes('extension port') ||
+                    msg.includes('i18next')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    return false;
+                }
+            }, true);
+
+            // Block promise rejections immediately
+            window.addEventListener('unhandledrejection', function(e) {
+                const reason = (e.reason ? e.reason.toString() : '').toLowerCase();
+                if (reason.includes('runtime.lasterror') ||
+                    reason.includes('message channel closed') ||
+                    reason.includes('listener indicated') ||
+                    reason.includes('chrome-extension') ||
+                    reason.includes('extensionadapter')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
+                }
+            }, true);
+
+            // Override console immediately
+            const origError = console.error;
+            const origWarn = console.warn;
+            const origLog = console.log;
+
+            console.error = function(...args) {
+                const msg = args.join(' ').toLowerCase();
+                if (msg.includes('runtime.lasterror') ||
+                    msg.includes('unchecked runtime.lasterror') ||
+                    msg.includes('chrome-extension') ||
+                    msg.includes('extensionadapter') ||
+                    msg.includes('sendmessagetotab') ||
+                    msg.includes('background page') ||
+                    msg.includes('invalid arguments') ||
+                    msg.includes('message channel closed') ||
+                    msg.includes('listener indicated') ||
+                    msg.includes('back/forward cache') ||
+                    msg.includes('extension port') ||
+                    msg.includes('contentscript.js') ||
+                    msg.includes('inlineform.html')) {
+                    return; // Block completely
+                }
+                return origError.apply(console, args);
+            };
+
+            console.warn = function(...args) {
+                const msg = args.join(' ').toLowerCase();
+                if (msg.includes('runtime.lasterror') ||
+                    msg.includes('chrome-extension') ||
+                    msg.includes('extensionadapter') ||
+                    msg.includes('i18next')) {
+                    return; // Block completely
+                }
+                return origWarn.apply(console, args);
+            };
+
+            console.log = function(...args) {
+                const msg = args.join(' ').toLowerCase();
+                if (msg.includes('i18next') ||
+                    msg.includes('languagechanged') ||
+                    msg.includes('initialized object')) {
+                    return; // Block extension logs
+                }
+                return origLog.apply(console, args);
+            };
+        })();
+    </script>
+
     <!-- 🚀 Preload critical resources -->
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"></noscript>
@@ -12,6 +111,21 @@
     <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"></noscript>
     <style>
+        /* 🚫 Hide extension elements immediately */
+        [id*="extension"], [class*="extension"],
+        [id*="chrome-extension"], [class*="chrome-extension"],
+        iframe[src*="chrome-extension"], iframe[src*="moz-extension"],
+        div[style*="z-index: 2147483647"], div[style*="z-index: 2147483646"],
+        [data-extension], [id*="inlineForm"], [class*="inlineForm"] {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            position: absolute !important;
+            left: -9999px !important;
+            top: -9999px !important;
+        }
+
         body {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
@@ -146,23 +260,32 @@
     <!-- 🚀 Load JS asynchronously -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" defer></script>
     <script>
-        // 🔧 FIX: Comprehensive browser extension blocking
+        // 🔧 FIX: ULTRA Comprehensive browser extension blocking
         (function() {
             'use strict';
 
-            // Block ALL extension errors and runtime errors
+            console.log('🚫 ULTRA Extension Blocker: Starting comprehensive blocking...');
+
+            // IMMEDIATE: Block ALL extension errors and runtime errors
             window.addEventListener('error', function(e) {
                 const message = e.message || '';
                 const filename = e.filename || '';
+                const source = e.source || '';
 
                 if (filename.includes('chrome-extension://') ||
                     filename.includes('moz-extension://') ||
+                    filename.includes('<URL>') ||
                     message.includes('runtime.lastError') ||
                     message.includes('message channel closed') ||
                     message.includes('listener indicated an asynchronous response') ||
                     message.includes('background page') ||
                     message.includes('extensionAdapter') ||
-                    message.includes('sendMessageToTab')) {
+                    message.includes('sendMessageToTab') ||
+                    message.includes('invalid arguments to extensionAdapter') ||
+                    message.includes('You do not have a background page') ||
+                    source.includes('chrome-extension://')) {
+
+                    console.log('🚫 BLOCKED Extension Error:', message);
                     e.preventDefault();
                     e.stopPropagation();
                     e.stopImmediatePropagation();
@@ -170,33 +293,44 @@
                 }
             }, true);
 
-            // Block unhandled promise rejections from extensions
+            // IMMEDIATE: Block unhandled promise rejections from extensions
             window.addEventListener('unhandledrejection', function(e) {
                 const reason = e.reason ? e.reason.toString() : '';
                 if (reason.includes('runtime.lastError') ||
                     reason.includes('message channel closed') ||
                     reason.includes('listener indicated an asynchronous response') ||
                     reason.includes('chrome-extension://') ||
-                    reason.includes('extensionAdapter')) {
+                    reason.includes('moz-extension://') ||
+                    reason.includes('extensionAdapter') ||
+                    reason.includes('sendMessageToTab') ||
+                    reason.includes('background page') ||
+                    reason.includes('invalid arguments')) {
+
+                    console.log('🚫 BLOCKED Extension Promise Rejection:', reason);
                     e.preventDefault();
                     e.stopPropagation();
                     return false;
                 }
             }, true);
 
-            // Override console methods to suppress extension logs
+            // IMMEDIATE: Override console methods BEFORE any extension code runs
             const originalConsoleError = console.error;
             const originalConsoleWarn = console.warn;
+            const originalConsoleLog = console.log;
 
             console.error = function(...args) {
                 const message = args.join(' ');
                 if (message.includes('runtime.lastError') ||
                     message.includes('chrome-extension://') ||
+                    message.includes('moz-extension://') ||
                     message.includes('extensionAdapter') ||
                     message.includes('sendMessageToTab') ||
                     message.includes('message channel closed') ||
-                    message.includes('background page')) {
-                    return; // Suppress extension errors
+                    message.includes('background page') ||
+                    message.includes('invalid arguments') ||
+                    message.includes('listener indicated an asynchronous response') ||
+                    message.includes('You do not have a background page')) {
+                    return; // Completely suppress extension errors
                 }
                 return originalConsoleError.apply(console, args);
             };

@@ -318,23 +318,51 @@
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<!-- 🔧 FIX: Define chart data variables safely in separate script -->
+<script type="application/json" id="chartDataJson">{
+    "activityLabels": {% if activity_labels %}{{ activity_labels | tojson | safe }}{% else %}[]{% endif %},
+    "activityData": {% if activity_data %}{{ activity_data | tojson | safe }}{% else %}[]{% endif %},
+    "apiCallsData": {% if api_calls_data %}{{ api_calls_data | tojson | safe }}{% else %}[]{% endif %},
+    "deviceLabels": {% if device_labels %}{{ device_labels | tojson | safe }}{% else %}[]{% endif %},
+    "deviceData": {% if device_data %}{{ device_data | tojson | safe }}{% else %}[]{% endif %},
+    "popularFoodsLabels": {% if popular_foods_labels %}{{ popular_foods_labels | tojson | safe }}{% else %}[]{% endif %},
+    "popularFoodsData": {% if popular_foods_data %}{{ popular_foods_data | tojson | safe }}{% else %}[]{% endif %},
+    "featureLabels": {% if feature_labels %}{{ feature_labels | tojson | safe }}{% else %}[]{% endif %},
+    "featureData": {% if feature_data %}{{ feature_data | tojson | safe }}{% else %}[]{% endif %}
+}</script>
+
 <script>
+// 🔧 FIX: Load chart data from JSON script
+const chartDataElement = document.getElementById('chartDataJson');
+const chartData = chartDataElement ? JSON.parse(chartDataElement.textContent) : {
+    activityLabels: [],
+    activityData: [],
+    apiCallsData: [],
+    deviceLabels: [],
+    deviceData: [],
+    popularFoodsLabels: [],
+    popularFoodsData: [],
+    featureLabels: [],
+    featureData: []
+};
+
 // User Activity Chart
 const userActivityCtx = document.getElementById('userActivityChart').getContext('2d');
 let userActivityChart = new Chart(userActivityCtx, {
     type: 'line',
     data: {
-        labels: {{ activity_labels | tojson }},
+        labels: chartData.activityLabels,
         datasets: [{
             label: 'Người dùng hoạt động',
-            data: {{ activity_data | tojson }},
+            data: chartData.activityData,
             borderColor: 'rgb(75, 192, 192)',
             backgroundColor: 'rgba(75, 192, 192, 0.2)',
             tension: 0.1,
             fill: true
         }, {
             label: 'API Calls',
-            data: {{ api_calls_data | tojson }},
+            data: chartData.apiCallsData,
             borderColor: 'rgb(255, 99, 132)',
             backgroundColor: 'rgba(255, 99, 132, 0.2)',
             tension: 0.1,
@@ -366,9 +394,9 @@ const deviceCtx = document.getElementById('deviceChart').getContext('2d');
 const deviceChart = new Chart(deviceCtx, {
     type: 'doughnut',
     data: {
-        labels: {{ device_labels | tojson }},
+        labels: chartData.deviceLabels,
         datasets: [{
-            data: {{ device_data | tojson }},
+            data: chartData.deviceData,
             backgroundColor: [
                 '#4e73df',
                 '#1cc88a',
@@ -394,10 +422,10 @@ const popularFoodsCtx = document.getElementById('popularFoodsChart').getContext(
 const popularFoodsChart = new Chart(popularFoodsCtx, {
     type: 'bar',
     data: {
-        labels: {{ popular_foods_labels | tojson }},
+        labels: chartData.popularFoodsLabels,
         datasets: [{
             label: 'Số lần được chọn',
-            data: {{ popular_foods_data | tojson }},
+            data: chartData.popularFoodsData,
             backgroundColor: 'rgba(54, 162, 235, 0.8)',
             borderColor: 'rgba(54, 162, 235, 1)',
             borderWidth: 1
@@ -419,9 +447,9 @@ const featureUsageCtx = document.getElementById('featureUsageChart').getContext(
 const featureUsageChart = new Chart(featureUsageCtx, {
     type: 'doughnut',
     data: {
-        labels: {{ feature_labels | tojson }},
+        labels: chartData.featureLabels,
         datasets: [{
-            data: {{ feature_data | tojson }},
+            data: chartData.featureData,
             backgroundColor: [
                 '#ff6384',
                 '#36a2eb',

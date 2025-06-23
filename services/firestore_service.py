@@ -293,6 +293,125 @@ class FirestoreService:
             traceback.print_exc()
             return []
 
+    # 🚀 OPTIMIZATION METHODS
+
+    def count_users(self) -> Optional[int]:
+        """
+        Đếm số lượng users mà không cần lấy toàn bộ dữ liệu
+
+        Returns:
+            int: Số lượng users hoặc None nếu lỗi
+        """
+        try:
+            # Firestore không có count() trực tiếp, nhưng có thể dùng aggregation query
+            # Tạm thời dùng cách lấy tất cả và đếm (sẽ optimize sau)
+            users_ref = self.db.collection('users')
+            docs = users_ref.get()
+            return len(docs)
+        except Exception as e:
+            print(f"Error counting users: {e}")
+            return None
+
+    def get_users_sample(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Lấy sample users để estimate
+
+        Args:
+            limit: Số lượng users cần lấy
+
+        Returns:
+            List[Dict[str, Any]]: Danh sách users
+        """
+        try:
+            users = []
+            users_ref = self.db.collection('users').limit(limit)
+            docs = users_ref.get()
+
+            for doc in docs:
+                user_data = doc.to_dict()
+                user_data['uid'] = doc.id
+                users.append(user_data)
+
+            return users
+        except Exception as e:
+            print(f"Error getting users sample: {e}")
+            return []
+
+    def get_users_paginated(self, page: int = 1, limit: int = 20, search: Optional[str] = None) -> Optional[Dict]:
+        """
+        Lấy users với pagination
+
+        Args:
+            page: Trang hiện tại
+            limit: Số lượng items per page
+            search: Từ khóa tìm kiếm
+
+        Returns:
+            Dict chứa users và total count
+        """
+        try:
+            # Tạm thời fallback về get_all và phân trang thủ công
+            # Trong tương lai có thể optimize với Firestore pagination
+            all_users = self.get_all_users()
+
+            # Filter theo search
+            if search:
+                search = search.lower()
+                all_users = [
+                    user for user in all_users
+                    if search in user.get('email', '').lower() or
+                       search in user.get('name', '').lower()
+                ]
+
+            # Pagination
+            total = len(all_users)
+            start_idx = (page - 1) * limit
+            end_idx = start_idx + limit
+            users_page = all_users[start_idx:end_idx]
+
+            return {
+                'users': users_page,
+                'total': total,
+                'page': page,
+                'limit': limit
+            }
+        except Exception as e:
+            print(f"Error getting paginated users: {e}")
+            return None
+
+    def get_recent_users(self, limit: int = 5) -> List[Dict[str, Any]]:
+        """
+        Lấy users gần đây nhất
+
+        Args:
+            limit: Số lượng users cần lấy
+
+        Returns:
+            List[Dict[str, Any]]: Danh sách users gần đây
+        """
+        try:
+            users = []
+            # Sắp xếp theo updated_at hoặc created_at
+            users_ref = self.db.collection('users').order_by('updated_at', direction=firestore.Query.DESCENDING).limit(limit)
+            docs = users_ref.get()
+
+            for doc in docs:
+                user_data = doc.to_dict()
+                user_data['uid'] = doc.id
+                users.append(user_data)
+
+            return users
+        except Exception as e:
+            print(f"Error getting recent users: {e}")
+            # Fallback: lấy từ get_all_users
+            try:
+                all_users = self.get_all_users()
+                # Sắp xếp theo updated_at
+                sorted_users = sorted(all_users, key=lambda x: x.get('updated_at', ''), reverse=True)
+                return sorted_users[:limit]
+            except:
+                return []
+
     def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
         """
         Lấy thông tin người dùng theo ID
@@ -642,6 +761,84 @@ class FirestoreService:
             print(f"Error getting all meal plans: {e}")
             traceback.print_exc()
             return []
+
+    # 🚀 OPTIMIZATION METHODS FOR MEAL PLANS
+
+    def count_meal_plans(self) -> Optional[int]:
+        """
+        Đếm số lượng meal plans
+
+        Returns:
+            int: Số lượng meal plans hoặc None nếu lỗi
+        """
+        try:
+            count = 0
+            # Đếm từ collection meal_plans
+            meal_plans_ref = self.db.collection('meal_plans')
+            docs = meal_plans_ref.get()
+            count += len(docs)
+
+            # Đếm từ collection latest_meal_plans
+            latest_plans_ref = self.db.collection('latest_meal_plans')
+            latest_docs = latest_plans_ref.get()
+            count += len(latest_docs)
+
+            return count
+        except Exception as e:
+            print(f"Error counting meal plans: {e}")
+            return None
+
+    def get_recent_meal_plans(self, limit: int = 5) -> List[Dict[str, Any]]:
+        """
+        Lấy meal plans gần đây nhất
+
+        Args:
+            limit: Số lượng meal plans cần lấy
+
+        Returns:
+            List[Dict[str, Any]]: Danh sách meal plans gần đây
+        """
+        try:
+            meal_plans = []
+
+            # Lấy từ collection meal_plans với order by created_at
+            try:
+                meal_plans_ref = self.db.collection('meal_plans').order_by('created_at', direction=firestore.Query.DESCENDING).limit(limit)
+                docs = meal_plans_ref.get()
+
+                for doc in docs:
+                    plan_data = doc.to_dict()
+                    plan_data['id'] = doc.id
+                    meal_plans.append(plan_data)
+            except Exception as e:
+                print(f"Error getting recent meal plans from meal_plans: {e}")
+
+            # Nếu chưa đủ, lấy thêm từ latest_meal_plans
+            if len(meal_plans) < limit:
+                try:
+                    remaining = limit - len(meal_plans)
+                    latest_plans_ref = self.db.collection('latest_meal_plans').limit(remaining)
+                    latest_docs = latest_plans_ref.get()
+
+                    for doc in latest_docs:
+                        plan_data = doc.to_dict()
+                        plan_data['id'] = doc.id
+                        plan_data['user_id'] = doc.id  # Document ID là user_id
+                        meal_plans.append(plan_data)
+                except Exception as e:
+                    print(f"Error getting recent meal plans from latest_meal_plans: {e}")
+
+            return meal_plans[:limit]
+        except Exception as e:
+            print(f"Error getting recent meal plans: {e}")
+            # Fallback: lấy từ get_all_meal_plans
+            try:
+                all_plans = self.get_all_meal_plans()
+                # Sắp xếp theo created_at
+                sorted_plans = sorted(all_plans, key=lambda x: x.get('created_at', ''), reverse=True)
+                return sorted_plans[:limit]
+            except:
+                return []
 
     def get_user_meal_plans(self, user_id: str) -> List[Dict[str, Any]]:
         """
@@ -1890,6 +2087,98 @@ class FirestoreService:
         except Exception as e:
             print(f"Error getting all food records: {e}")
             return []
+
+    # 🚀 OPTIMIZATION METHODS FOR FOODS
+
+    def count_foods(self) -> Optional[int]:
+        """
+        Đếm số lượng food records
+
+        Returns:
+            int: Số lượng food records hoặc None nếu lỗi
+        """
+        try:
+            food_records_ref = self.db.collection('food_records')
+            docs = food_records_ref.get()
+            return len(docs)
+        except Exception as e:
+            print(f"Error counting food records: {e}")
+            return None
+
+    def get_foods_sample(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Lấy sample food records để estimate
+
+        Args:
+            limit: Số lượng food records cần lấy
+
+        Returns:
+            List[Dict[str, Any]]: Danh sách food records
+        """
+        try:
+            foods = []
+            query = self.db.collection('food_records').limit(limit)
+            results = query.get()
+
+            for doc in results:
+                food_record = doc.to_dict()
+                food_data = {
+                    'id': doc.id,
+                    'name': food_record.get('description', 'Không có tên'),
+                    'description': food_record.get('description', ''),
+                    'calories': food_record.get('calories', 0),
+                    'created_at': food_record.get('created_at', ''),
+                    'user_id': food_record.get('user_id', ''),
+                    'mealType': food_record.get('mealType', ''),
+                }
+                foods.append(food_data)
+
+            return foods
+        except Exception as e:
+            print(f"Error getting foods sample: {e}")
+            return []
+
+    def get_foods_paginated(self, page: int = 1, limit: int = 20, search: Optional[str] = None) -> Optional[Dict]:
+        """
+        Lấy foods với pagination
+
+        Args:
+            page: Trang hiện tại
+            limit: Số lượng items per page
+            search: Từ khóa tìm kiếm
+
+        Returns:
+            Dict chứa foods và total count
+        """
+        try:
+            # Tạm thời fallback về get_all và phân trang thủ công
+            # Trong tương lai có thể optimize với Firestore pagination
+            all_foods = self.get_all_foods(limit=1000)  # Giới hạn để tránh quá tải
+
+            # Filter theo search
+            if search:
+                search = search.lower()
+                all_foods = [
+                    food for food in all_foods
+                    if search in food.get('name', '').lower() or
+                       search in food.get('description', '').lower()
+                ]
+
+            # Pagination
+            total = len(all_foods)
+            start_idx = (page - 1) * limit
+            end_idx = start_idx + limit
+            foods_page = all_foods[start_idx:end_idx]
+
+            return {
+                'foods': foods_page,
+                'total': total,
+                'page': page,
+                'limit': limit
+            }
+        except Exception as e:
+            print(f"Error getting paginated foods: {e}")
+            return None
 
     def get_food_record(self, food_id: str) -> Optional[Dict[str, Any]]:
         """

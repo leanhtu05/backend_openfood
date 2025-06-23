@@ -39,6 +39,13 @@ from middleware.auth import (
 )
 from auth_utils import get_current_user, TokenPayload
 
+# ==================== TEMPLATE SETUP ====================
+
+# Template instance - định nghĩa sớm để sử dụng trong Depends
+def get_templates():
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return Jinja2Templates(directory=os.path.join(base_dir, "templates"))
+
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
 # ==================== AUTHENTICATION ROUTES ====================
@@ -157,11 +164,6 @@ async def admin_logout(request: Request):
     return response
 
 # ==================== ADMIN PAGES ====================
-
-# Template instance
-def get_templates():
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    return Jinja2Templates(directory=os.path.join(base_dir, "templates"))
 
 # Import food_items from openfood_router (fallback)
 try:

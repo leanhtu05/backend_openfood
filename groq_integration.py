@@ -329,17 +329,21 @@ class GroqService:
         allergies_str = ", ".join(allergies) if allergies else "không có"
         cuisine_style_str = cuisine_style if cuisine_style else "không có yêu cầu cụ thể"
 
-        # DIVERSE VIETNAMESE DISH DATABASE
-        diverse_dishes = self._get_diverse_dish_suggestions(meal_type, preferences, allergies)
+        # ENHANCED: Tạo món ăn kết hợp thực tế
+        combination_dishes = self._generate_realistic_combination_dishes(meal_type, preferences, allergies)
 
         # ANTI-DUPLICATION: Exclude recent dishes
         recent_dishes_str = ", ".join(self.recent_dishes[-10:]) if self.recent_dishes else "không có"
 
-        # ENHANCED PROMPT GENERATION với multiple strategies
+        # ENHANCED PROMPT GENERATION với combination dishes
         prompt_strategies = [
+            ("Combination Dishes Prompt", self._get_combination_dishes_prompt(
+                meal_type, calories_target, protein_target, fat_target, carbs_target,
+                preferences_str, allergies_str, combination_dishes, recent_dishes_str
+            )),
             ("Strict JSON Prompt", get_strict_json_prompt(
                 meal_type, calories_target, protein_target, fat_target, carbs_target,
-                preferences_str, allergies_str, diverse_dishes, recent_dishes_str
+                preferences_str, allergies_str, combination_dishes, recent_dishes_str
             )),
             ("One-shot Example Prompt", get_one_shot_example_prompt(
                 meal_type, calories_target, protein_target, fat_target, carbs_target
@@ -897,18 +901,24 @@ class GroqService:
     def _get_official_nutrition(self, dish_name: str, ingredients: List[Dict]) -> Dict:
         """
         Lấy thông tin dinh dưỡng chính thức từ database Việt Nam
+        Hỗ trợ phân tích tên món chi tiết như "Cơm gạo lứt với cá hấp và rau luộc"
 
         Args:
-            dish_name: Tên món ăn
+            dish_name: Tên món ăn (có thể chi tiết)
             ingredients: Danh sách nguyên liệu
 
         Returns:
-            Dict chứa thông tin dinh dưỡng chính thức hoặc None
+            Dict chứa thông tin dinh dưỡng chính thức
         """
         try:
-            # Thử tìm món ăn hoàn chỉnh trong database
-            dish_nutrition = get_dish_nutrition(dish_name)
+            print(f"🔍 Getting nutrition for: {dish_name}")
+
+            # Bước 1: Thử tìm món ăn hoàn chỉnh trong database (tên đơn giản)
+            simple_dish_name = self._extract_simple_dish_name(dish_name)
+            dish_nutrition = get_dish_nutrition(simple_dish_name)
+
             if dish_nutrition:
+                print(f"✅ Found exact match in database: {simple_dish_name}")
                 return {
                     "calories": dish_nutrition["calories"],
                     "protein": dish_nutrition["protein"],
@@ -920,33 +930,22 @@ class GroqService:
                     "serving_size": dish_nutrition["serving_size"]
                 }
 
-            # Nếu không có món hoàn chỉnh, tính từ nguyên liệu
-            if ingredients and len(ingredients) > 0:
-                calculated_nutrition = calculate_dish_nutrition_from_ingredients(ingredients)
+            # Bước 2: Phân tích tên món chi tiết và tính từ thành phần
+            detailed_ingredients = self._parse_detailed_dish_components(dish_name)
+            if detailed_ingredients:
+                print(f"🔧 Parsing detailed dish components: {len(detailed_ingredients)} items")
+                calculated_nutrition = calculate_dish_nutrition_from_ingredients(detailed_ingredients)
+
                 if calculated_nutrition and calculated_nutrition["calories"] > 0:
-                    # 🔧 FIX: Đảm bảo calories tối thiểu hợp lý cho bữa ăn
-                    min_calories = 250 if "sáng" in dish_name.lower() else 350
+                    return self._adjust_calculated_nutrition(calculated_nutrition, dish_name)
 
-                    if calculated_nutrition["calories"] < min_calories:
-                        print(f"⚠️ Calculated calories too low ({calculated_nutrition['calories']:.1f}), adjusting to minimum {min_calories}")
-                        # Scale up nutrition proportionally
-                        scale_factor = min_calories / calculated_nutrition["calories"]
-                        calculated_nutrition["calories"] *= scale_factor
-                        calculated_nutrition["protein"] *= scale_factor
-                        calculated_nutrition["fat"] *= scale_factor
-                        calculated_nutrition["carbs"] *= scale_factor
-                        calculated_nutrition["fiber"] *= scale_factor
+            # Bước 3: Nếu có ingredients được cung cấp, tính từ đó
+            if ingredients and len(ingredients) > 0:
+                print(f"🔧 Calculating from provided ingredients: {len(ingredients)} items")
+                calculated_nutrition = calculate_dish_nutrition_from_ingredients(ingredients)
 
-                    return {
-                        "calories": round(calculated_nutrition["calories"], 1),
-                        "protein": round(calculated_nutrition["protein"], 1),
-                        "fat": round(calculated_nutrition["fat"], 1),
-                        "carbs": round(calculated_nutrition["carbs"], 1),
-                        "fiber": round(calculated_nutrition["fiber"], 1),
-                        "source": "Calculated from official Vietnamese ingredients",
-                        "sources": calculated_nutrition["sources"],
-                        "calculated_from_ingredients": True
-                    }
+                if calculated_nutrition and calculated_nutrition["calories"] > 0:
+                    return self._adjust_calculated_nutrition(calculated_nutrition, dish_name)
 
             # 🔧 FIX: Fallback nutrition dựa trên loại món ăn
             print(f"⚠️ No official nutrition found for {dish_name}, using meal-type based fallback")
@@ -995,6 +994,150 @@ class GroqService:
                 "source": "Emergency fallback nutrition",
                 "calculated_from_ingredients": False
             }
+
+    def _extract_simple_dish_name(self, detailed_dish_name: str) -> str:
+        """
+        Trích xuất tên món đơn giản từ tên món chi tiết
+
+        Args:
+            detailed_dish_name: Tên món chi tiết như "Cơm gạo lứt với cá hấp và rau luộc"
+
+        Returns:
+            str: Tên món đơn giản như "cơm cá"
+        """
+        dish_lower = detailed_dish_name.lower()
+
+        # Mapping các từ khóa chính
+        base_foods = ["cơm", "bún", "phở", "mì", "bánh mì", "xôi", "cháo", "hủ tiếu"]
+        proteins = ["bò", "gà", "heo", "thịt", "cá", "tôm", "trứng", "chả"]
+
+        # Tìm base food
+        found_base = None
+        for base in base_foods:
+            if base in dish_lower:
+                found_base = base
+                break
+
+        # Tìm protein
+        found_protein = None
+        for protein in proteins:
+            if protein in dish_lower:
+                found_protein = protein
+                break
+
+        # Tạo tên đơn giản
+        if found_base and found_protein:
+            return f"{found_base} {found_protein}"
+        elif found_base:
+            return found_base
+        else:
+            # Fallback: lấy 2 từ đầu
+            words = dish_lower.split()
+            return " ".join(words[:2]) if len(words) >= 2 else dish_lower
+
+    def _parse_detailed_dish_components(self, detailed_dish_name: str) -> List[Dict]:
+        """
+        Phân tích tên món chi tiết thành danh sách nguyên liệu
+
+        Args:
+            detailed_dish_name: Tên món chi tiết
+
+        Returns:
+            List[Dict]: Danh sách nguyên liệu với amount
+        """
+        dish_lower = detailed_dish_name.lower()
+        ingredients = []
+
+        # Mapping nguyên liệu và khối lượng ước tính
+        ingredient_mapping = {
+            # Base foods
+            "cơm": {"name": "gạo tẻ", "amount": "150g"},
+            "gạo lứt": {"name": "gạo tẻ", "amount": "150g"},  # Tương tự gạo tẻ
+            "gạo st25": {"name": "gạo tẻ", "amount": "150g"},
+            "bún": {"name": "bún tươi", "amount": "100g"},
+            "phở": {"name": "bánh phở", "amount": "100g"},
+            "mì": {"name": "bún tươi", "amount": "100g"},  # Tương tự bún
+            "bánh mì": {"name": "bánh mì", "amount": "1 ổ"},
+            "xôi": {"name": "gạo nếp", "amount": "120g"},
+            "cháo": {"name": "gạo tẻ", "amount": "50g"},  # Ít hơn vì nấu cháo
+
+            # Proteins
+            "thịt bò": {"name": "thịt bò", "amount": "100g"},
+            "thịt heo": {"name": "thịt heo", "amount": "100g"},
+            "thịt gà": {"name": "thịt gà", "amount": "120g"},
+            "gà": {"name": "thịt gà", "amount": "120g"},
+            "cá": {"name": "cá lóc", "amount": "100g"},
+            "tôm": {"name": "tôm sú", "amount": "80g"},
+            "trứng": {"name": "trứng gà", "amount": "2 quả"},
+            "đậu hũ": {"name": "đậu phụ", "amount": "100g"},
+
+            # Vegetables
+            "rau muống": {"name": "rau muống", "amount": "100g"},
+            "cải thảo": {"name": "cải bắp", "amount": "100g"},
+            "bắp cải": {"name": "cải bắp", "amount": "100g"},
+            "rau": {"name": "rau muống", "amount": "80g"},  # Default rau
+
+            # Seasonings
+            "nước mắm": {"name": "nước mắm", "amount": "1 tbsp"},
+            "dầu ăn": {"name": "dầu ăn", "amount": "1 tbsp"}
+        }
+
+        # Tìm các nguyên liệu trong tên món
+        for keyword, ingredient_info in ingredient_mapping.items():
+            if keyword in dish_lower:
+                ingredients.append({
+                    "name": ingredient_info["name"],
+                    "amount": ingredient_info["amount"]
+                })
+
+        # Thêm gia vị cơ bản nếu chưa có
+        has_seasoning = any("nước mắm" in ing["name"] or "dầu" in ing["name"] for ing in ingredients)
+        if not has_seasoning:
+            ingredients.extend([
+                {"name": "nước mắm", "amount": "1 tbsp"},
+                {"name": "dầu ăn", "amount": "1 tbsp"}
+            ])
+
+        print(f"🔧 Parsed {len(ingredients)} ingredients from detailed dish name")
+        for ing in ingredients:
+            print(f"   - {ing['name']}: {ing['amount']}")
+
+        return ingredients
+
+    def _adjust_calculated_nutrition(self, calculated_nutrition: Dict, dish_name: str) -> Dict:
+        """
+        Điều chỉnh nutrition đã tính toán để đảm bảo hợp lý
+
+        Args:
+            calculated_nutrition: Nutrition đã tính từ nguyên liệu
+            dish_name: Tên món ăn
+
+        Returns:
+            Dict: Nutrition đã điều chỉnh
+        """
+        # Đảm bảo calories tối thiểu hợp lý cho bữa ăn
+        min_calories = 250 if "sáng" in dish_name.lower() else 350
+
+        if calculated_nutrition["calories"] < min_calories:
+            print(f"⚠️ Calculated calories too low ({calculated_nutrition['calories']:.1f}), adjusting to minimum {min_calories}")
+            # Scale up nutrition proportionally
+            scale_factor = min_calories / calculated_nutrition["calories"]
+            calculated_nutrition["calories"] *= scale_factor
+            calculated_nutrition["protein"] *= scale_factor
+            calculated_nutrition["fat"] *= scale_factor
+            calculated_nutrition["carbs"] *= scale_factor
+            calculated_nutrition["fiber"] *= scale_factor
+
+        return {
+            "calories": round(calculated_nutrition["calories"], 1),
+            "protein": round(calculated_nutrition["protein"], 1),
+            "fat": round(calculated_nutrition["fat"], 1),
+            "carbs": round(calculated_nutrition["carbs"], 1),
+            "fiber": round(calculated_nutrition["fiber"], 1),
+            "source": "Calculated from official Vietnamese ingredients database",
+            "sources": calculated_nutrition.get("sources", []),
+            "calculated_from_ingredients": True
+        }
 
     def _generate_detailed_health_benefits(self, dish_name: str, ingredients: List[Dict], nutrition: Dict) -> str:
         """
@@ -2060,38 +2203,607 @@ class GroqService:
 
         print(f"🔧 Found {len(meals)} fallback meals for {meal_type}")
         return meals
-    
-    def _fallback_meal_suggestions(self, meal_type: str) -> List[Dict]:
+
+    def _generate_realistic_combination_dishes(self, meal_type: str, preferences: List[str], allergies: List[str]) -> List[str]:
         """
-        🔧 FIX: Trả về dữ liệu dự phòng đa dạng cho loại bữa ăn
+        Tạo danh sách món ăn kết hợp thực tế theo meal_type
 
         Args:
             meal_type: Loại bữa ăn
+            preferences: Sở thích
+            allergies: Dị ứng
 
         Returns:
-            Danh sách các món ăn dự phòng (random selection)
+            List[str]: Danh sách món ăn kết hợp
+        """
+        # Định nghĩa các thành phần cơ bản
+        base_foods = {
+            "breakfast": ["cơm", "cháo", "bánh mì", "xôi", "phở"],
+            "lunch": ["cơm", "bún", "mì", "hủ tiếu", "phở"],
+            "dinner": ["cơm", "bún", "mì", "canh", "lẩu"]
+        }
+
+        proteins = {
+            "breakfast": ["trứng", "thịt", "gà", "chả", "giò"],
+            "lunch": ["thịt", "gà", "cá", "tôm", "bò", "heo", "chả cá"],
+            "dinner": ["thịt", "gà", "cá", "tôm", "bò", "canh chua", "lẩu"]
+        }
+
+        vegetables = ["rau muống", "cải thảo", "bắp cải", "cà rót", "đậu bắp", "rau dền"]
+
+        # Lấy thành phần theo meal_type
+        meal_bases = base_foods.get(meal_type.lower(), base_foods["lunch"])
+        meal_proteins = proteins.get(meal_type.lower(), proteins["lunch"])
+
+        # Tạo các món ăn kết hợp chi tiết
+        combination_dishes = []
+
+        # Tạo món chính với protein chi tiết
+        for base in meal_bases[:3]:  # Lấy 3 base foods phổ biến nhất
+            for protein in meal_proteins[:4]:  # Lấy 4 proteins phổ biến nhất
+                detailed_dish_name = self._create_detailed_dish_name(base, protein, meal_type)
+                combination_dishes.append(detailed_dish_name)
+
+        # Thêm món rau
+        for veg in vegetables[:3]:
+            combination_dishes.append(f"Rau {veg.title()}")
+            combination_dishes.append(f"{veg.title()} Xào")
+
+        # Thêm canh/soup cho bữa tối
+        if meal_type.lower() == "dinner":
+            soups = ["Canh Chua", "Canh Rau", "Canh Thịt", "Canh Cá"]
+            combination_dishes.extend(soups)
+
+        # Lọc theo preferences và allergies
+        if preferences:
+            # Ưu tiên các món có chứa preferences
+            preferred_dishes = [dish for dish in combination_dishes
+                             if any(pref.lower() in dish.lower() for pref in preferences)]
+            if preferred_dishes:
+                combination_dishes = preferred_dishes + combination_dishes
+
+        if allergies:
+            # Loại bỏ các món có chứa allergies
+            combination_dishes = [dish for dish in combination_dishes
+                                if not any(allergy.lower() in dish.lower() for allergy in allergies)]
+
+        # Loại bỏ trùng lặp và giới hạn số lượng
+        combination_dishes = list(dict.fromkeys(combination_dishes))[:20]
+
+        return combination_dishes
+
+    def _create_detailed_dish_name(self, base_food: str, protein_type: str, meal_type: str) -> str:
+        """
+        Tạo tên món ăn chi tiết và cụ thể như "Cơm gạo lứt với cá hấp và rau luộc"
+
+        Args:
+            base_food: Thực phẩm cơ bản
+            protein_type: Loại protein
+            meal_type: Loại bữa ăn
+
+        Returns:
+            str: Tên món ăn chi tiết
         """
         import random
 
-        fallback_meals = self._get_fallback_meals(meal_type)
+        # Các biến thể chi tiết cho thực phẩm cơ bản
+        base_food_details = {
+            "cơm": [
+                "Cơm trắng", "Cơm gạo lứt", "Cơm tấm", "Cơm dẻo",
+                "Cơm niêu", "Cơm gạo thơm", "Cơm gạo tám", "Cơm gạo ST25"
+            ],
+            "bún": [
+                "Bún tươi", "Bún khô", "Bún tàu", "Bún gạo",
+                "Bún mềm", "Bún dai", "Bún tròn"
+            ],
+            "phở": [
+                "Phở tươi", "Phở khô", "Phở bánh dày",
+                "Phở bánh mỏng", "Phở Hà Nội", "Phở Nam Định"
+            ],
+            "mì": [
+                "Mì tươi", "Mì khô", "Mì trứng", "Mì gạo",
+                "Mì vàng", "Mì sợi nhỏ", "Mì Ý"
+            ],
+            "bánh mì": [
+                "Bánh mì Việt Nam", "Bánh mì giòn", "Bánh mì tươi",
+                "Bánh mì nướng", "Bánh mì Sài Gòn", "Bánh mì que"
+            ],
+            "xôi": [
+                "Xôi nếp", "Xôi dẻo", "Xôi trắng", "Xôi thơm",
+                "Xôi nước cốt dừa", "Xôi lá dứa"
+            ],
+            "cháo": [
+                "Cháo trắng", "Cháo gạo tẻ", "Cháo sánh",
+                "Cháo loãng", "Cháo dinh dưỡng", "Cháo hến"
+            ]
+        }
 
-        if not fallback_meals:
+        # Các cách chế biến protein chi tiết
+        protein_cooking_methods = {
+            "thịt": [
+                "thịt nướng than", "thịt luộc", "thịt xào lăn", "thịt rim mặn",
+                "thịt áp chảo", "thịt chiên giòn", "thịt nướng mật ong"
+            ],
+            "thịt heo": [
+                "thịt heo nướng", "thịt heo luộc", "thịt heo quay",
+                "thịt heo xào", "thịt heo rim", "thịt heo áp chảo"
+            ],
+            "thịt bò": [
+                "thịt bò nướng lá lốt", "thịt bò xào", "thịt bò lúc lắc",
+                "thịt bò áp chảo", "thịt bò tái", "thịt bò nướng mỡ chài"
+            ],
+            "gà": [
+                "gà nướng", "gà luộc", "gà chiên giòn", "gà quay",
+                "gà hấp", "gà xào sả ớt", "gà nướng mật ong"
+            ],
+            "cá": [
+                "cá hấp", "cá nướng", "cá chiên", "cá kho tộ",
+                "cá áp chảo", "cá sốt cà chua", "cá nướng lá chuối"
+            ],
+            "tôm": [
+                "tôm hấp", "tôm nướng", "tôm chiên", "tôm xào",
+                "tôm luộc", "tôm rang me", "tôm nướng muối ớt"
+            ],
+            "trứng": [
+                "trứng chiên", "trứng luộc", "trứng ốp la",
+                "trứng hấp", "trứng xào", "trứng cuộn"
+            ]
+        }
+
+        # Các loại rau/món phụ chi tiết
+        side_dishes_by_meal = {
+            "breakfast": [
+                "rau sống", "dưa chua", "cà chua", "dưa leo"
+            ],
+            "lunch": [
+                "rau luộc", "rau xào tỏi", "canh rau", "súp rau",
+                "rau muống xào", "cải thảo luộc", "bắp cải xào",
+                "đậu bắp xào", "mướp xào", "bí đỏ hầm"
+            ],
+            "dinner": [
+                "canh chua", "canh rau", "rau luộc chấm mắm",
+                "salad rau thơm", "rau muống luộc", "cải thảo cuộn",
+                "súp bí đỏ", "canh khổ qua"
+            ]
+        }
+
+        # Chọn biến thể ngẫu nhiên
+        base_options = base_food_details.get(base_food.lower(), [base_food.title()])
+        protein_options = protein_cooking_methods.get(protein_type.lower(), [protein_type])
+        side_options = side_dishes_by_meal.get(meal_type.lower(), side_dishes_by_meal["lunch"])
+
+        selected_base = random.choice(base_options)
+        selected_protein = random.choice(protein_options)
+
+        # Tạo tên món chi tiết
+        dish_name = f"{selected_base} với {selected_protein}"
+
+        # Thêm món phụ (80% cơ hội)
+        if random.random() < 0.8:
+            selected_side = random.choice(side_options)
+            dish_name += f" và {selected_side}"
+
+        # Thêm chi tiết bổ sung cho một số món (30% cơ hội)
+        if random.random() < 0.3:
+            extras = [
+                "chấm nước mắm", "ăn kèm dưa chua", "có bánh tráng",
+                "nước dùng trong", "gia vị đậm đà", "thơm ngon"
+            ]
+            selected_extra = random.choice(extras)
+            dish_name += f" ({selected_extra})"
+
+        return dish_name
+
+    def _get_combination_dishes_prompt(self, meal_type: str, calories_target: int, protein_target: int,
+                                     fat_target: int, carbs_target: int, preferences_str: str,
+                                     allergies_str: str, combination_dishes: List[str], recent_dishes_str: str) -> str:
+        """
+        Tạo prompt cho việc tạo món ăn kết hợp thực tế
+
+        Args:
+            meal_type: Loại bữa ăn
+            calories_target, protein_target, fat_target, carbs_target: Mục tiêu dinh dưỡng
+            preferences_str: Sở thích
+            allergies_str: Dị ứng
+            combination_dishes: Danh sách món ăn kết hợp
+            recent_dishes_str: Món ăn gần đây
+
+        Returns:
+            str: Prompt cho AI
+        """
+        combination_dishes_str = ", ".join(combination_dishes[:15])  # Lấy 15 món đầu
+
+        prompt = f"""
+        Bạn là chuyên gia dinh dưỡng Việt Nam. Hãy tạo kế hoạch {meal_type} với các món ăn kết hợp THỰC TẾ và CỤ THỂ.
+
+        QUAN TRỌNG: Tạo tên món ăn CHI TIẾT và CỤ THỂ theo cách người Việt thường gọi:
+        - "Cơm gạo lứt với thịt heo nướng và rau luộc" thay vì "Cơm thịt"
+        - "Bún tươi với gà nướng mật ong và rau thơm" thay vì "Bún gà"
+        - "Phở tươi với thịt bò tái và rau sống" thay vì "Phở bò"
+        - "Cháo trắng với cá hấp và rau muống luộc" thay vì "Cháo cá"
+        - "Mì trứng xào với tôm và cải thảo" thay vì "Mì tôm"
+
+        Gợi ý món ăn kết hợp phù hợp: {combination_dishes_str}
+
+        Mục tiêu dinh dưỡng:
+        - Calories: {calories_target} kcal
+        - Protein: {protein_target}g
+        - Fat: {fat_target}g
+        - Carbs: {carbs_target}g
+
+        Sở thích: {preferences_str}
+        Dị ứng: {allergies_str}
+        Tránh lặp lại: {recent_dishes_str}
+
+        Hãy trả về JSON với format chính xác:
+        [
+            {{
+                "name": "Cơm gạo lứt với thịt heo nướng và rau luộc",
+                "description": "Cơm gạo lứt thơm ngon ăn kèm thịt heo nướng vàng ươm, rau luộc tươi xanh và nước mắm chấm",
+                "ingredients": [
+                    {{"name": "Cơm trắng", "amount": "150g"}},
+                    {{"name": "Thịt heo nướng", "amount": "100g"}},
+                    {{"name": "Rau sống", "amount": "30g"}},
+                    {{"name": "Nước mắm", "amount": "1 tbsp"}}
+                ],
+                "preparation": [
+                    "Nướng thịt heo với gia vị đến vàng ươm",
+                    "Chuẩn bị cơm trắng và rau sống",
+                    "Pha nước mắm chấm",
+                    "Trình bày đẹp mắt"
+                ],
+                "nutrition": {{
+                    "calories": 450,
+                    "protein": 28,
+                    "fat": 15,
+                    "carbs": 52
+                }},
+                "preparation_time": "25 phút",
+                "health_benefits": "Cung cấp protein chất lượng cao từ thịt, carbohydrate từ cơm, vitamin từ rau sống"
+            }}
+        ]
+
+        Lưu ý:
+        - Tạo 2-3 món ăn đa dạng
+        - Tên món phải cụ thể và thực tế
+        - Bao gồm cả món chính và món phụ (rau, canh)
+        - Dinh dưỡng phải chính xác và cân bằng
+        - Nguyên liệu và cách chế biến phải chi tiết
+        """
+
+        return prompt
+
+    def _fallback_meal_suggestions(self, meal_type: str) -> List[Dict]:
+        """
+        🔧 ENHANCED: Fallback với món ăn kết hợp thực tế
+        """
+        try:
+            print(f"🔧 Creating realistic combination fallback meals for {meal_type}...")
+
+            # Tạo món ăn kết hợp thực tế
+            combination_dishes = self._generate_realistic_combination_dishes(meal_type, [], [])
+
+            # Chọn ngẫu nhiên 2-3 món từ danh sách
+            import random
+            selected_count = min(3, len(combination_dishes))
+            selected_dishes = random.sample(combination_dishes, selected_count)
+
+            fallback_meals = []
+            for dish_name in selected_dishes:
+                # Tạo meal object từ tên món kết hợp
+                meal = self._create_realistic_combination_meal(dish_name, meal_type)
+                fallback_meals.append(meal)
+
+            print(f"✅ Created {len(fallback_meals)} realistic combination fallback meals")
+            return fallback_meals
+
+        except Exception as e:
+            print(f"❌ Realistic combination fallback failed: {e}")
+            # Emergency fallback to traditional method
+            return self._traditional_fallback_meal_suggestions(meal_type)
+
+    def _create_realistic_combination_meal(self, dish_name: str, meal_type: str) -> Dict:
+        """
+        Tạo meal object từ tên món ăn kết hợp thực tế
+
+        Args:
+            dish_name: Tên món ăn kết hợp (ví dụ: "Cơm Thịt Nướng")
+            meal_type: Loại bữa ăn
+
+        Returns:
+            Dict: Meal object hoàn chỉnh
+        """
+        try:
+            # Phân tích tên món để xác định thành phần
+            base_food, protein_type = self._parse_combination_dish_name(dish_name)
+
+            # Tạo ingredients
+            ingredients = self._create_combination_ingredients(base_food, protein_type, [])
+
+            # Tạo preparation steps
+            preparation = self._create_combination_preparation(base_food, protein_type)
+
+            # Tính toán nutrition
+            calories_target = 400 if meal_type.lower() == "breakfast" else 500
+            nutrition = self._calculate_combination_nutrition(base_food, protein_type, calories_target)
+
+            # Tạo description
+            description = self._create_combination_description(base_food, protein_type)
+
+            # Tạo health benefits
+            health_benefits = self._create_combination_health_benefits(base_food, protein_type)
+
+            meal = {
+                "name": dish_name,
+                "description": description,
+                "ingredients": ingredients,
+                "preparation": preparation,
+                "nutrition": nutrition,
+                "preparation_time": "25 phút",
+                "health_benefits": health_benefits,
+                "dish_type": "combination",
+                "source": "realistic_combination"
+            }
+
+            return meal
+
+        except Exception as e:
+            print(f"❌ Error creating realistic combination meal: {e}")
+            # Fallback to simple meal
+            return self._create_simple_fallback_meal(dish_name, meal_type, 400)
+
+    def _parse_combination_dish_name(self, dish_name: str) -> Tuple[str, str]:
+        """
+        Phân tích tên món ăn kết hợp để xác định base food và protein
+
+        Args:
+            dish_name: Tên món ăn (ví dụ: "Cơm Thịt Nướng")
+
+        Returns:
+            Tuple[str, str]: (base_food, protein_type)
+        """
+        dish_lower = dish_name.lower()
+
+        # Xác định base food
+        if dish_lower.startswith("cơm"):
+            base_food = "cơm"
+        elif dish_lower.startswith("bún"):
+            base_food = "bún"
+        elif dish_lower.startswith("phở"):
+            base_food = "phở"
+        elif dish_lower.startswith("mì"):
+            base_food = "mì"
+        elif dish_lower.startswith("bánh mì"):
+            base_food = "bánh mì"
+        elif dish_lower.startswith("xôi"):
+            base_food = "xôi"
+        elif dish_lower.startswith("cháo"):
+            base_food = "cháo"
+        elif dish_lower.startswith("rau"):
+            base_food = "rau"
+            # Đối với món rau, protein_type là loại rau
+            if "muống" in dish_lower:
+                return "rau", "muống"
+            elif "cải" in dish_lower:
+                return "rau", "cải"
+            else:
+                return "rau", "xanh"
+        else:
+            base_food = "cơm"  # Default
+
+        # Xác định protein type
+        if "thịt" in dish_lower:
+            protein_type = "thịt"
+        elif "gà" in dish_lower:
+            protein_type = "gà"
+        elif "cá" in dish_lower:
+            protein_type = "cá"
+        elif "tôm" in dish_lower:
+            protein_type = "tôm"
+        elif "trứng" in dish_lower:
+            protein_type = "trứng"
+        elif "bò" in dish_lower:
+            protein_type = "thịt bò"
+        elif "heo" in dish_lower:
+            protein_type = "thịt heo"
+        elif "chả" in dish_lower:
+            protein_type = "chả cá"
+        else:
+            protein_type = "thịt"  # Default
+
+        return base_food, protein_type
+
+    def _create_combination_ingredients(self, base_food: str, protein_type: str, additional_components: List[str] = None) -> List[Dict]:
+        """
+        Tạo danh sách nguyên liệu cho món ăn kết hợp
+
+        Args:
+            base_food: Thực phẩm cơ bản
+            protein_type: Loại protein
+            additional_components: Thành phần bổ sung
+
+        Returns:
+            List[Dict]: Danh sách nguyên liệu
+        """
+        ingredients = []
+
+        # Thêm thực phẩm cơ bản
+        base_amounts = {
+            "cơm": "150g",
+            "bún": "100g",
+            "phở": "100g",
+            "mì": "100g",
+            "bánh mì": "1 ổ",
+            "xôi": "120g",
+            "cháo": "1 tô",
+            "hủ tiếu": "100g",
+            "rau": "100g"
+        }
+
+        ingredients.append({
+            "name": base_food.title(),
+            "amount": base_amounts.get(base_food.lower(), "100g")
+        })
+
+        # Thêm protein
+        protein_amounts = {
+            "thịt": "100g",
+            "thịt heo": "100g",
+            "thịt bò": "100g",
+            "gà": "120g",
+            "cá": "100g",
+            "tôm": "80g",
+            "trứng": "2 quả",
+            "đậu hũ": "100g",
+            "chả cá": "80g",
+            "nem": "3 viên",
+            "xíu mại": "4 viên",
+            "muống": "100g",
+            "cải": "100g",
+            "xanh": "100g"
+        }
+
+        ingredients.append({
+            "name": protein_type.title(),
+            "amount": protein_amounts.get(protein_type.lower(), "100g")
+        })
+
+        # Thêm gia vị cơ bản
+        basic_seasonings = [
+            {"name": "Nước mắm", "amount": "1 tbsp"},
+            {"name": "Dầu ăn", "amount": "1 tbsp"}
+        ]
+        ingredients.extend(basic_seasonings)
+
+        return ingredients
+
+    def _create_combination_preparation(self, base_food: str, protein_type: str) -> List[str]:
+        """
+        Tạo các bước chế biến cho món ăn kết hợp
+
+        Args:
+            base_food: Thực phẩm cơ bản
+            protein_type: Loại protein
+
+        Returns:
+            List[str]: Các bước chế biến
+        """
+        preparation_steps = []
+
+        # Bước 1: Chuẩn bị nguyên liệu
+        preparation_steps.append("Chuẩn bị và làm sạch tất cả nguyên liệu")
+
+        # Bước 2: Chế biến protein
+        protein_cooking = {
+            "thịt": "Thái thịt thành miếng vừa ăn, ướp gia vị 15 phút rồi nướng/chiên",
+            "thịt heo": "Thái thịt heo thành lát mỏng, ướp gia vị rồi nướng",
+            "thịt bò": "Thái thịt bò thành miếng, ướp gia vị rồi xào nhanh",
+            "gà": "Thái thịt gà thành miếng, ướp gia vị rồi chiên/nướng",
+            "cá": "Làm sạch cá, ướp gia vị rồi chiên/nướng",
+            "tôm": "Bóc vỏ tôm, ướp gia vị rồi xào",
+            "trứng": "Đập trứng, đánh đều rồi chiên thành trứng ốp la hoặc trứng chiên",
+            "đậu hũ": "Cắt đậu hũ thành miếng, chiên vàng",
+            "chả cá": "Cắt chả cá thành lát, chiên qua",
+            "muống": "Nhặt rau muống, rửa sạch rồi xào với tỏi",
+            "cải": "Rửa sạch cải, cắt khúc rồi xào",
+            "xanh": "Rửa sạch rau, cắt khúc rồi xào"
+        }
+
+        preparation_steps.append(protein_cooking.get(protein_type.lower(), f"Chế biến {protein_type} theo cách truyền thống"))
+
+        # Bước 3: Chuẩn bị thực phẩm cơ bản
+        base_preparation = {
+            "cơm": "Nấu cơm chín tơi, để nguội",
+            "bún": "Luộc bún trong nước sôi 2-3 phút, vớt ra để ráo",
+            "phở": "Luộc bánh phở trong nước sôi, vớt ra bát",
+            "mì": "Luộc mì trong nước sôi cho đến khi mềm",
+            "bánh mì": "Nướng bánh mì cho giòn",
+            "xôi": "Nấu xôi chín mềm",
+            "cháo": "Nấu cháo sánh mịn",
+            "hủ tiếu": "Luộc hủ tiếu trong nước sôi",
+            "rau": "Chuẩn bị rau sạch"
+        }
+
+        preparation_steps.append(base_preparation.get(base_food.lower(), f"Chuẩn bị {base_food}"))
+
+        # Bước 4: Trình bày
+        if base_food.lower() in ["phở", "bún", "hủ tiếu"]:
+            preparation_steps.append(f"Cho {base_food} vào tô, xếp {protein_type} lên trên")
+            preparation_steps.append("Rắc hành lá, ngò gai và ăn kèm rau sống")
+        else:
+            preparation_steps.append(f"Xếp {protein_type} lên {base_food}")
+            preparation_steps.append("Trang trí với rau thơm và ăn kèm nước chấm")
+
+        return preparation_steps
+
+    def _traditional_fallback_meal_suggestions(self, meal_type: str) -> List[Dict]:
+        """
+        Traditional fallback khi realistic combination thất bại
+        """
+        try:
+            print(f"🔧 Using traditional fallback for {meal_type}...")
+            import random
+
+            fallback_meals = self._get_fallback_meals(meal_type)
+
+            if not fallback_meals:
+                return []
+
+            # Random selection để tránh lặp lại
+            random.shuffle(fallback_meals)
+
+            # Trả về 1-2 món ngẫu nhiên thay vì luôn cùng món
+            num_meals = min(2, len(fallback_meals))
+            selected_meals = fallback_meals[:num_meals]
+
+            print(f"🔧 Selected {len(selected_meals)} traditional fallback meals for {meal_type}")
+            for meal in selected_meals:
+                print(f"   - {meal.get('name', 'Unknown')}")
+
+            return selected_meals
+
+        except Exception as e:
+            print(f"❌ Traditional fallback failed: {e}")
             return []
 
-        # 🔧 FIX: Random selection để tránh lặp lại
-        # Shuffle để có thứ tự ngẫu nhiên
-        random.shuffle(fallback_meals)
+    def _create_simple_fallback_meal(self, dish_name: str, meal_type: str, calories_target: int) -> Dict:
+        """
+        Tạo meal object đơn giản khi các phương thức khác thất bại
 
-        # Trả về 1-2 món ngẫu nhiên thay vì luôn cùng món
-        num_meals = min(2, len(fallback_meals))
-        selected_meals = fallback_meals[:num_meals]
+        Args:
+            dish_name: Tên món ăn
+            meal_type: Loại bữa ăn
+            calories_target: Mục tiêu calories
 
-        print(f"🔧 Selected {len(selected_meals)} random fallback meals for {meal_type}")
-        for meal in selected_meals:
-            print(f"   - {meal.get('name', 'Unknown')}")
+        Returns:
+            Dict: Meal object đơn giản
+        """
+        return {
+            "name": dish_name,
+            "description": f"Món {dish_name} đơn giản và ngon miệng",
+            "ingredients": [
+                {"name": "Nguyên liệu chính", "amount": "100g"},
+                {"name": "Gia vị", "amount": "vừa đủ"},
+                {"name": "Rau thơm", "amount": "20g"}
+            ],
+            "preparation": [
+                f"Chuẩn bị nguyên liệu cho {dish_name}",
+                "Chế biến theo phương pháp truyền thống",
+                "Nêm nướng vừa ăn",
+                "Trình bày đẹp mắt"
+            ],
+            "nutrition": {
+                "calories": calories_target,
+                "protein": calories_target * 0.15 / 4,  # 15% from protein
+                "fat": calories_target * 0.25 / 9,      # 25% from fat
+                "carbs": calories_target * 0.60 / 4     # 60% from carbs
+            },
+            "preparation_time": "25 phút",
+            "health_benefits": f"Món {dish_name} cung cấp dinh dưỡng cân bằng cho cơ thể",
+            "dish_type": "simple",
+            "source": "simple_fallback"
+        }
 
-        return selected_meals
-    
     def clear_cache(self):
         """Xóa cache và recent dishes để buộc tạo mới dữ liệu hoàn toàn"""
         print("🗑️ Clearing Groq service cache")

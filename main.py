@@ -961,11 +961,23 @@ def format_user_context(user_profile: dict, meal_plan: dict, food_logs: list, ex
             elif log.get('description'):
                 eaten_dishes.append(log.get('description'))
 
+        # 🔧 FIX: Đếm số bữa ăn thực tế thay vì số records
+        unique_meals = set()
+        for log in food_logs:
+            # Lấy meal_type để đếm số bữa ăn thực tế
+            meal_type = log.get('meal_type', 'unknown')
+            print(f"[DEBUG] Food log meal_type: {meal_type}, log keys: {list(log.keys())}")
+            if meal_type and meal_type != 'unknown':
+                unique_meals.add(meal_type)
+
+        actual_meal_count = len(unique_meals) if unique_meals else len(food_logs)
+        print(f"[DEBUG] Unique meals found: {unique_meals}, actual meal count: {actual_meal_count}, total records: {len(food_logs)}")
+
         if eaten_dishes:
-            context_parts.append(f"- Nhật ký đã ăn hôm nay: Đã ăn {len(food_logs)} bữa với các món: {', '.join(eaten_dishes)}. "
+            context_parts.append(f"- Nhật ký đã ăn hôm nay: Đã ăn {actual_meal_count} bữa với các món: {', '.join(eaten_dishes)}. "
                              f"Tổng calo đã nạp: {eaten_calories} kcal.")
         else:
-            context_parts.append(f"- Nhật ký đã ăn hôm nay: Đã ghi nhận {len(food_logs)} bữa ăn nhưng không có thông tin chi tiết.")
+            context_parts.append(f"- Nhật ký đã ăn hôm nay: Đã ghi nhận {actual_meal_count} bữa ăn nhưng không có thông tin chi tiết.")
     else:
         context_parts.append("- Nhật ký đã ăn hôm nay: Chưa ghi nhận bữa nào.")
 

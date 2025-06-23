@@ -272,7 +272,14 @@ async def admin_extension_test(request: Request):
     if not admin_username:
         return RedirectResponse(url="/admin/login", status_code=302)
 
-    return HTMLResponse(content="""
+    # Serve the test file
+    try:
+        with open("test_extension_blocking.html", "r", encoding="utf-8") as f:
+            content = f.read()
+        return HTMLResponse(content=content, status_code=200)
+    except FileNotFoundError:
+        # Fallback to inline HTML
+        return HTMLResponse(content="""
 <!DOCTYPE html>
 <html>
 <head>
@@ -508,9 +515,16 @@ def get_recent_activities():
                 if isinstance(timestamp, str):
                     try:
                         from datetime import datetime
-                        timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                    except:
-                        timestamp = None
+                        # Xử lý các format timestamp khác nhau
+                        if 'T' in timestamp:
+                            timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                        else:
+                            timestamp = datetime.now()  # Fallback
+                    except Exception as e:
+                        print(f"[ACTIVITIES] Error parsing timestamp {timestamp}: {e}")
+                        timestamp = datetime.now()  # Fallback to current time
+                elif timestamp is None:
+                    timestamp = datetime.now()  # Fallback to current time
 
                 activities.append({
                     "action": "Tạo meal plan",
@@ -535,9 +549,16 @@ def get_recent_activities():
                 if isinstance(timestamp, str):
                     try:
                         from datetime import datetime
-                        timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                    except:
-                        timestamp = None
+                        # Xử lý các format timestamp khác nhau
+                        if 'T' in timestamp:
+                            timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                        else:
+                            timestamp = datetime.now()  # Fallback
+                    except Exception as e:
+                        print(f"[ACTIVITIES] Error parsing user timestamp {timestamp}: {e}")
+                        timestamp = datetime.now()  # Fallback to current time
+                elif timestamp is None:
+                    timestamp = datetime.now()  # Fallback to current time
 
                 activities.append({
                     "action": "Người dùng đăng ký",
@@ -548,8 +569,8 @@ def get_recent_activities():
         except Exception as e:
             print(f"[ACTIVITIES] Error getting users: {e}")
 
-        # Sắp xếp theo thời gian (nếu có)
-        activities = sorted(activities, key=lambda x: x['timestamp'] if x['timestamp'] else datetime.min, reverse=True)
+        # Sắp xếp theo thời gian - tất cả timestamp đều là datetime objects
+        activities = sorted(activities, key=lambda x: x['timestamp'], reverse=True)
         result = activities[:5]  # Trả về 5 hoạt động gần nhất
 
         print(f"[ACTIVITIES] Got {len(result)} activities")

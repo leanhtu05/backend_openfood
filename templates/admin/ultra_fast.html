@@ -296,13 +296,45 @@
             document.getElementById('extStatus').textContent = 'Blocked Successfully';
         }
 
-        // Block extension errors
-        window.addEventListener('error', function(e) {
-            if (e.filename && e.filename.includes('chrome-extension://')) {
-                e.preventDefault();
-                return false;
+        // Comprehensive extension blocking
+        (function() {
+            const EXTENSION_KEYWORDS = [
+                'chrome-extension://', 'moz-extension://', 'runtime.lastError',
+                'message channel closed', 'listener indicated an asynchronous response',
+                'background page', 'extensionAdapter', 'sendMessageToTab'
+            ];
+
+            function isExtensionRelated(message) {
+                if (!message) return false;
+                const msgStr = message.toString().toLowerCase();
+                return EXTENSION_KEYWORDS.some(keyword => msgStr.includes(keyword.toLowerCase()));
             }
-        }, true);
+
+            // Block errors
+            window.addEventListener('error', function(e) {
+                if (isExtensionRelated(e.message) || isExtensionRelated(e.filename)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
+                }
+            }, true);
+
+            // Block promise rejections
+            window.addEventListener('unhandledrejection', function(e) {
+                if (isExtensionRelated(e.reason)) {
+                    e.preventDefault();
+                    return false;
+                }
+            }, true);
+
+            // Override console
+            const originalError = console.error;
+            console.error = function(...args) {
+                const message = args.join(' ');
+                if (isExtensionRelated(message)) return;
+                return originalError.apply(console, args);
+            };
+        })();
 
         console.log('🚀 Ultra Fast Admin Dashboard loaded in', performance.now().toFixed(2), 'ms');
     </script>

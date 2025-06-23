@@ -13,20 +13,42 @@
     
     {% block extra_css %}{% endblock %}
     <style>
-        /* Hide extension elements */
+        /* Hide extension elements - Comprehensive blocking */
         [id*="extension"], [class*="extension"],
         [id*="chrome-extension"], [class*="chrome-extension"],
+        [id*="moz-extension"], [class*="moz-extension"],
         iframe[src*="chrome-extension"],
         iframe[src*="moz-extension"],
+        iframe[src*="safari-extension"],
         div[style*="z-index: 2147483647"],
         div[style*="z-index: 2147483646"],
+        div[style*="z-index: 2147483645"],
         [data-extension], [data-chrome-extension],
         .extension-overlay, .extension-popup,
-        [id*="inlineForm"], [class*="inlineForm"] {
+        [id*="inlineForm"], [class*="inlineForm"],
+        [id*="extensionAdapter"], [class*="extensionAdapter"],
+        [data-testid*="extension"],
+        div[role="dialog"][style*="z-index: 214748"],
+        div[style*="position: fixed"][style*="z-index: 214748"] {
             display: none !important;
             visibility: hidden !important;
             opacity: 0 !important;
             pointer-events: none !important;
+            position: absolute !important;
+            left: -9999px !important;
+            top: -9999px !important;
+            width: 0 !important;
+            height: 0 !important;
+            overflow: hidden !important;
+        }
+
+        /* Block extension iframes and embeds */
+        iframe[src^="chrome-extension://"],
+        iframe[src^="moz-extension://"],
+        iframe[src^="safari-extension://"],
+        embed[src^="chrome-extension://"],
+        object[data^="chrome-extension://"] {
+            display: none !important;
         }
         .sidebar {
             min-height: 100vh;
@@ -161,6 +183,9 @@
         </div>
     </div>
 
+    <!-- 🚫 Extension Blocker - Load first to block early -->
+    <script src="/static/js/extension-blocker.js"></script>
+
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -189,20 +214,50 @@
                 }
             });
 
-            // Override console.error for extension errors
+            // Override console methods for extension errors
             const originalConsoleError = console.error;
+            const originalConsoleWarn = console.warn;
+
             console.error = function(...args) {
                 const message = args.join(' ');
                 if (message.includes('chrome-extension') ||
+                    message.includes('moz-extension') ||
                     message.includes('extensionAdapter') ||
                     message.includes('sendMessageToTab') ||
                     message.includes('invalid arguments') ||
                     message.includes('inlineForm.html') ||
-                    message.includes('runtime.lastError')) {
+                    message.includes('runtime.lastError') ||
+                    message.includes('message channel closed') ||
+                    message.includes('listener indicated an asynchronous response') ||
+                    message.includes('background page')) {
                     return; // Suppress extension errors
                 }
                 originalConsoleError.apply(console, args);
             };
+
+            console.warn = function(...args) {
+                const message = args.join(' ');
+                if (message.includes('chrome-extension') ||
+                    message.includes('runtime.lastError') ||
+                    message.includes('extensionAdapter')) {
+                    return; // Suppress extension warnings
+                }
+                originalConsoleWarn.apply(console, args);
+            };
+
+            // Block unhandled promise rejections from extensions
+            window.addEventListener('unhandledrejection', function(e) {
+                const reason = e.reason ? e.reason.toString() : '';
+                if (reason.includes('runtime.lastError') ||
+                    reason.includes('message channel closed') ||
+                    reason.includes('listener indicated an asynchronous response') ||
+                    reason.includes('chrome-extension://') ||
+                    reason.includes('extensionAdapter')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
+                }
+            }, true);
 
             // Block extension message events
             const originalAddEventListener = EventTarget.prototype.addEventListener;

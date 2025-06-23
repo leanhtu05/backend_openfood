@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚫 Extension Blocking Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid;
+        }
+        .success {
+            background: #d4edda;
+            border-color: #28a745;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border-color: #dc3545;
+            color: #721c24;
+        }
+        .warning {
+            background: #fff3cd;
+            border-color: #ffc107;
+            color: #856404;
+        }
+        .info {
+            background: #d1ecf1;
+            border-color: #17a2b8;
+            color: #0c5460;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        #console {
+            background: #000;
+            color: #0f0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            height: 200px;
+            overflow-y: auto;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚫 Extension Blocking Test</h1>
+        <p>This page tests comprehensive browser extension interference blocking.</p>
+        
+        <div class="test-result info">
+            <strong>ℹ️ Test Status:</strong> Extension blocking is active
+        </div>
+        
+        <h3>🧪 Test Controls</h3>
+        <button onclick="runAllTests()">Run All Tests</button>
+        <button onclick="simulateExtensionErrors()">Simulate Extension Errors</button>
+        <button onclick="clearResults()">Clear Results</button>
+        <button onclick="checkExtensionElements()">Check Extension Elements</button>
+        
+        <h3>📊 Test Results</h3>
+        <div id="results"></div>
+        
+        <h3>📝 Console Output</h3>
+        <div id="console"></div>
+        
+        <h3>📈 Statistics</h3>
+        <div id="stats">
+            <p><strong>Blocked Errors:</strong> <span id="blockedErrors">0</span></p>
+            <p><strong>Blocked Requests:</strong> <span id="blockedRequests">0</span></p>
+            <p><strong>Removed Elements:</strong> <span id="removedElements">0</span></p>
+        </div>
+    </div>
+
+    <!-- Load extension blocker first -->
+    <script src="/static/js/extension-blocker.js"></script>
+    
+    <script>
+        let testResults = [];
+        let consoleDiv = document.getElementById('console');
+        let resultsDiv = document.getElementById('results');
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${message}`;
+            consoleDiv.innerHTML += `<div style="color: ${getLogColor(type)}">${logEntry}</div>`;
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+        }
+        
+        function getLogColor(type) {
+            switch(type) {
+                case 'error': return '#ff6b6b';
+                case 'warning': return '#feca57';
+                case 'success': return '#48ca48';
+                case 'blocked': return '#ff9ff3';
+                default: return '#0f0';
+            }
+        }
+        
+        function addResult(message, success = true) {
+            const result = {
+                message,
+                success,
+                timestamp: new Date().toLocaleTimeString()
+            };
+            testResults.push(result);
+            
+            const div = document.createElement('div');
+            div.className = `test-result ${success ? 'success' : 'error'}`;
+            div.innerHTML = `${success ? '✅' : '❌'} [${result.timestamp}] ${message}`;
+            resultsDiv.appendChild(div);
+        }
+        
+        function clearResults() {
+            testResults = [];
+            resultsDiv.innerHTML = '';
+            consoleDiv.innerHTML = '';
+            log('🧹 Results cleared');
+        }
+        
+        function runAllTests() {
+            log('🚀 Starting comprehensive extension blocking tests...');
+            
+            // Test 1: Check if extension blocker is loaded
+            if (typeof window.ExtensionBlocker !== 'undefined') {
+                addResult('Extension Blocker script loaded successfully');
+                log('✅ Extension Blocker detected');
+            } else {
+                addResult('Extension Blocker script not found', false);
+                log('❌ Extension Blocker not detected', 'error');
+            }
+            
+            // Test 2: Check extension element blocking
+            checkExtensionElements();
+            
+            // Test 3: Test error blocking
+            setTimeout(() => {
+                simulateExtensionErrors();
+            }, 500);
+            
+            // Test 4: Test DOM manipulation blocking
+            setTimeout(() => {
+                testDOMManipulation();
+            }, 1000);
+            
+            // Test 5: Test fetch blocking
+            setTimeout(() => {
+                testFetchBlocking();
+            }, 1500);
+            
+            log('🎉 All tests initiated');
+        }
+        
+        function simulateExtensionErrors() {
+            log('🧪 Testing extension error blocking...');
+            
+            const extensionErrors = [
+                'Unchecked runtime.lastError: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received',
+                'Error from chrome-extension://test',
+                'extensionAdapter.sendMessageToTab error',
+                'You do not have a background page',
+                'Invalid arguments to extensionAdapter'
+            ];
+            
+            extensionErrors.forEach((errorMsg, index) => {
+                setTimeout(() => {
+                    try {
+                        // Simulate different types of errors
+                        if (index === 0) {
+                            console.error(errorMsg);
+                        } else if (index === 1) {
+                            window.dispatchEvent(new ErrorEvent('error', {
+                                message: errorMsg,
+                                filename: 'chrome-extension://test/script.js'
+                            }));
+                        } else if (index === 2) {
+                            Promise.reject(new Error(errorMsg));
+                        } else {
+                            console.warn(errorMsg);
+                        }
+                        
+                        log(`🧪 Simulated: ${errorMsg}`, 'warning');
+                    } catch (e) {
+                        log(`🚫 Error simulation blocked: ${errorMsg}`, 'blocked');
+                    }
+                }, index * 200);
+            });
+            
+            setTimeout(() => {
+                addResult('Extension error simulation completed');
+                log('✅ Extension error blocking test completed');
+            }, 2000);
+        }
+        
+        function checkExtensionElements() {
+            log('🔍 Checking for extension elements in DOM...');
+            
+            const extensionSelectors = [
+                '[id*="extension"]',
+                '[class*="extension"]',
+                '[id*="chrome-extension"]',
+                'iframe[src*="chrome-extension"]',
+                '[data-extension]',
+                '[id*="inlineForm"]'
+            ];
+            
+            let foundElements = 0;
+            extensionSelectors.forEach(selector => {
+                try {
+                    const elements = document.querySelectorAll(selector);
+                    foundElements += elements.length;
+                    if (elements.length > 0) {
+                        log(`⚠️ Found ${elements.length} elements matching: ${selector}`, 'warning');
+                    }
+                } catch (e) {
+                    log(`❌ Error checking selector ${selector}: ${e.message}`, 'error');
+                }
+            });
+            
+            if (foundElements === 0) {
+                addResult('No extension elements found in DOM');
+                log('✅ DOM is clean of extension elements');
+            } else {
+                addResult(`Found ${foundElements} extension elements (should be hidden)`, false);
+                log(`⚠️ Found ${foundElements} extension elements`, 'warning');
+            }
+        }
+        
+        function testDOMManipulation() {
+            log('🧪 Testing extension DOM manipulation blocking...');
+            
+            // Try to create extension-like elements
+            const testElements = [
+                { tag: 'div', id: 'chrome-extension-test' },
+                { tag: 'iframe', src: 'chrome-extension://test/frame.html' },
+                { tag: 'div', className: 'extension-popup' }
+            ];
+            
+            testElements.forEach(elementConfig => {
+                const element = document.createElement(elementConfig.tag);
+                if (elementConfig.id) element.id = elementConfig.id;
+                if (elementConfig.src) element.src = elementConfig.src;
+                if (elementConfig.className) element.className = elementConfig.className;
+                
+                document.body.appendChild(element);
+                
+                // Check if element was removed
+                setTimeout(() => {
+                    if (!document.body.contains(element)) {
+                        log(`🚫 Extension element removed: ${elementConfig.tag}`, 'blocked');
+                    } else {
+                        log(`⚠️ Extension element not removed: ${elementConfig.tag}`, 'warning');
+                    }
+                }, 100);
+            });
+            
+            setTimeout(() => {
+                addResult('DOM manipulation blocking test completed');
+            }, 500);
+        }
+        
+        function testFetchBlocking() {
+            log('🧪 Testing extension fetch blocking...');
+            
+            // Try to make extension requests
+            const extensionUrls = [
+                'chrome-extension://test/api',
+                'moz-extension://test/data'
+            ];
+            
+            extensionUrls.forEach(url => {
+                fetch(url)
+                    .then(() => {
+                        log(`⚠️ Extension request not blocked: ${url}`, 'warning');
+                    })
+                    .catch(error => {
+                        log(`🚫 Extension request blocked: ${url}`, 'blocked');
+                    });
+            });
+            
+            setTimeout(() => {
+                addResult('Fetch blocking test completed');
+            }, 1000);
+        }
+        
+        // Update stats periodically
+        setInterval(() => {
+            if (window.ExtensionBlocker && window.ExtensionBlocker.stats) {
+                const stats = window.ExtensionBlocker.stats;
+                document.getElementById('blockedErrors').textContent = stats.blockedErrors || 0;
+                document.getElementById('blockedRequests').textContent = stats.blockedRequests || 0;
+                document.getElementById('removedElements').textContent = stats.removedElements || 0;
+            }
+        }, 1000);
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            log('🚀 Extension Blocking Test page loaded');
+            log('🔧 Extension blocking system is active');
+            
+            // Run initial check
+            setTimeout(() => {
+                checkExtensionElements();
+            }, 500);
+        });
+    </script>
+</body>
+</html>

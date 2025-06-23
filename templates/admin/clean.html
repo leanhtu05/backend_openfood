@@ -146,7 +146,7 @@
                 <div style="padding: 10px 0; border-bottom: 1px solid #eee;">
                     <strong>{{ activity.action or 'N/A' }}</strong><br>
                     <small style="color: #666;">{{ activity.user_email or 'N/A' }} -
-                        {% if activity.timestamp and hasattr(activity.timestamp, 'strftime') %}
+                        {% if activity.timestamp and activity.timestamp.__class__.__name__ == 'datetime' %}
                             {{ activity.timestamp.strftime('%H:%M') }}
                         {% else %}
                             Vừa xong

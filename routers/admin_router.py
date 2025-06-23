@@ -169,6 +169,18 @@ async def admin_test(request: Request):
         "request": request
     })
 
+@router.get("/template-test", response_class=HTMLResponse)
+async def admin_template_test(request: Request):
+    """Trang test template inheritance"""
+    admin_username = get_current_admin(request)
+    if not admin_username:
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    templates = get_templates()
+    return templates.TemplateResponse("admin/template_test.html", {
+        "request": request
+    })
+
 @router.get("/clean", response_class=HTMLResponse)
 async def admin_clean(request: Request):
     """Trang admin sạch không có extension interference"""

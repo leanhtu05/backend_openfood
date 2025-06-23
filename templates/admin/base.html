@@ -72,14 +72,14 @@
                     </div>
                     <ul class="nav flex-column">
                         <li class="nav-item">
-                            <a class="nav-link {% if request.url.path == '/admin' or request.url.path == '/admin/' %}active{% endif %}"
+                            <a class="nav-link {% if request.url.path == '/admin' or request.url.path == '/admin/' %}active{% endif %}" 
                                href="/admin" data-page="dashboard">
                                 <i class="fas fa-tachometer-alt"></i>
                                 Dashboard
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if '/admin/ultra-fast' in request.url.path %}active{% endif %}"
+                            <a class="nav-link {% if '/admin/ultra-fast' in request.url.path %}active{% endif %}" 
                                href="/admin/ultra-fast" data-page="ultra-fast">
                                 <i class="fas fa-bolt"></i>
                                 ⚡ Ultra Fast
@@ -100,21 +100,21 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if '/admin/meal-plans' in request.url.path or '/admin/fast-meal-plans' in request.url.path %}active{% endif %}"
+                            <a class="nav-link {% if '/admin/meal-plans' in request.url.path or '/admin/fast-meal-plans' in request.url.path %}active{% endif %}" 
                                href="/admin/fast-meal-plans" data-page="meal-plans">
                                 <i class="fas fa-calendar-alt"></i>
                                 ⚡ Kế hoạch
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if '/admin/reports' in request.url.path or '/admin/fast-reports' in request.url.path %}active{% endif %}"
+                            <a class="nav-link {% if '/admin/reports' in request.url.path or '/admin/fast-reports' in request.url.path %}active{% endif %}" 
                                href="/admin/fast-reports" data-page="reports">
                                 <i class="fas fa-chart-bar"></i>
                                 ⚡ Báo cáo
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if '/admin/settings' in request.url.path or '/admin/fast-settings' in request.url.path %}active{% endif %}"
+                            <a class="nav-link {% if '/admin/settings' in request.url.path or '/admin/fast-settings' in request.url.path %}active{% endif %}" 
                                href="/admin/fast-settings" data-page="settings">
                                 <i class="fas fa-cog"></i>
                                 ⚡ Cài đặt

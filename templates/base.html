@@ -17,10 +17,16 @@
         [id*="extension"], [class*="extension"],
         [id*="chrome-extension"], [class*="chrome-extension"],
         iframe[src*="chrome-extension"],
-        div[style*="z-index: 2147483647"] {
+        iframe[src*="moz-extension"],
+        div[style*="z-index: 2147483647"],
+        div[style*="z-index: 2147483646"],
+        [data-extension], [data-chrome-extension],
+        .extension-overlay, .extension-popup,
+        [id*="inlineForm"], [class*="inlineForm"] {
             display: none !important;
             visibility: hidden !important;
             opacity: 0 !important;
+            pointer-events: none !important;
         }
         .sidebar {
             min-height: 100vh;
@@ -189,10 +195,22 @@
                 const message = args.join(' ');
                 if (message.includes('chrome-extension') ||
                     message.includes('extensionAdapter') ||
+                    message.includes('sendMessageToTab') ||
+                    message.includes('invalid arguments') ||
+                    message.includes('inlineForm.html') ||
                     message.includes('runtime.lastError')) {
                     return; // Suppress extension errors
                 }
                 originalConsoleError.apply(console, args);
+            };
+
+            // Block extension message events
+            const originalAddEventListener = EventTarget.prototype.addEventListener;
+            EventTarget.prototype.addEventListener = function(type, listener, options) {
+                if (type === 'message' && listener && listener.toString().includes('extension')) {
+                    return; // Block extension message listeners
+                }
+                return originalAddEventListener.call(this, type, listener, options);
             };
         })();
 

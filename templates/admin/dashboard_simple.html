@@ -178,7 +178,11 @@
                             <div class="small text-muted">{{ activity.user_email or 'N/A' }}</div>
                         </div>
                         <div class="small text-muted">
-                            {{ activity.timestamp.strftime('%H:%M') if activity.timestamp else 'N/A' }}
+                            {% if activity.timestamp and hasattr(activity.timestamp, 'strftime') %}
+                                {{ activity.timestamp.strftime('%H:%M') }}
+                            {% else %}
+                                Vừa xong
+                            {% endif %}
                         </div>
                     </div>
                     {% endfor %}

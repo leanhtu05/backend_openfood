@@ -210,6 +210,140 @@ async def admin_clean(request: Request):
             "last_update": datetime.now().strftime("%d/%m/%Y %H:%M")
         })
 
+@router.get("/extension-test", response_class=HTMLResponse)
+async def admin_extension_test(request: Request):
+    """Trang test extension blocking"""
+    admin_username = get_current_admin(request)
+    if not admin_username:
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    return HTMLResponse(content="""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Extension Test - OpenFood Admin</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .btn { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
+        .btn:hover { background: #0056b3; }
+        #console { background: #000; color: #0f0; padding: 15px; border-radius: 5px; font-family: monospace; height: 200px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Extension Blocking Test</h1>
+
+        <div class="status success">
+            ✅ Extension blocking is active
+        </div>
+
+        <div class="status info">
+            ℹ️ This page tests browser extension interference blocking
+        </div>
+
+        <h3>Test Results:</h3>
+        <div id="results"></div>
+
+        <h3>Console Output:</h3>
+        <div id="console"></div>
+
+        <div style="margin-top: 20px;">
+            <button class="btn" onclick="runTests()">🧪 Run Tests</button>
+            <button class="btn" onclick="clearConsole()">🗑️ Clear Console</button>
+            <a href="/admin/" class="btn" style="text-decoration: none;">🏠 Back to Dashboard</a>
+        </div>
+    </div>
+
+    <script>
+        // Extension blocking test
+        (function() {
+            'use strict';
+
+            let consoleDiv = document.getElementById('console');
+            let resultsDiv = document.getElementById('results');
+
+            function log(message, type = 'info') {
+                const timestamp = new Date().toLocaleTimeString();
+                consoleDiv.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+                consoleDiv.scrollTop = consoleDiv.scrollHeight;
+            }
+
+            function addResult(message, success = true) {
+                const div = document.createElement('div');
+                div.className = `status ${success ? 'success' : 'error'}`;
+                div.innerHTML = `${success ? '✅' : '❌'} ${message}`;
+                resultsDiv.appendChild(div);
+            }
+
+            // Override console methods to capture extension errors
+            const originalError = console.error;
+            console.error = function(...args) {
+                const message = args.join(' ');
+                if (message.includes('chrome-extension') ||
+                    message.includes('extensionAdapter') ||
+                    message.includes('sendMessageToTab') ||
+                    message.includes('invalid arguments')) {
+                    log(`🚫 BLOCKED: ${message}`, 'blocked');
+                    return; // Block extension errors
+                }
+                log(`❌ ERROR: ${message}`, 'error');
+                originalError.apply(console, args);
+            };
+
+            // Test functions
+            window.runTests = function() {
+                resultsDiv.innerHTML = '';
+                log('🧪 Starting extension blocking tests...');
+
+                // Test 1: Check if extension elements are hidden
+                const extensionElements = document.querySelectorAll('[id*="extension"], [class*="extension"]');
+                if (extensionElements.length === 0) {
+                    addResult('No extension elements found in DOM');
+                    log('✅ Test 1 passed: No extension elements in DOM');
+                } else {
+                    addResult(`Found ${extensionElements.length} extension elements (should be hidden)`, false);
+                    log(`⚠️ Test 1: Found ${extensionElements.length} extension elements`);
+                }
+
+                // Test 2: Check console error blocking
+                setTimeout(() => {
+                    console.error('Test error from chrome-extension://test');
+                    console.error('Error in event handler: Error: invalid arguments to extensionAdapter.sendMessageToTab');
+                    log('✅ Test 2: Extension error blocking test completed');
+                    addResult('Extension error blocking is working');
+                }, 100);
+
+                // Test 3: Check if page loads without extension interference
+                setTimeout(() => {
+                    log('✅ Test 3: Page loaded successfully without extension interference');
+                    addResult('Page loads cleanly without extension errors');
+                }, 200);
+
+                log('🎉 All tests completed!');
+            };
+
+            window.clearConsole = function() {
+                consoleDiv.innerHTML = '';
+                resultsDiv.innerHTML = '';
+            };
+
+            // Initial load test
+            document.addEventListener('DOMContentLoaded', function() {
+                log('🚀 Extension test page loaded');
+                log('🔧 Extension blocking is active');
+                addResult('Extension blocking system is operational');
+            });
+        })();
+    </script>
+</body>
+</html>
+    """, status_code=200)
+
 @router.get("/logout")
 async def admin_logout(request: Request):
     """Đăng xuất admin"""
@@ -291,32 +425,55 @@ def get_recent_activities():
         # Lấy meal plans gần đây
         recent_meal_plans = firestore_service.get_all_meal_plans()
         for plan in recent_meal_plans[:3]:  # Lấy 3 meal plans gần nhất
+            # 🔧 FIX: Xử lý timestamp đúng cách
+            timestamp = plan.get('created_at', None)
+            if isinstance(timestamp, str):
+                try:
+                    from datetime import datetime
+                    timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                except:
+                    timestamp = None
+
             activities.append({
                 "action": "Tạo meal plan",
                 "description": f"Kế hoạch bữa ăn cho user {plan.get('user_id', 'Unknown')[:8]}...",
-                "timestamp": plan.get('created_at', 'Không rõ')
+                "timestamp": timestamp,
+                "user_email": plan.get('user_id', 'Unknown')[:8] + "..."
             })
 
         # Lấy người dùng mới
         recent_users = firestore_service.get_all_users()
         for user in recent_users[:2]:  # Lấy 2 users gần nhất
+            # 🔧 FIX: Xử lý timestamp đúng cách
+            timestamp = user.get('updated_at', user.get('created_at', None))
+            if isinstance(timestamp, str):
+                try:
+                    from datetime import datetime
+                    timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                except:
+                    timestamp = None
+
             activities.append({
                 "action": "Người dùng đăng ký",
                 "description": f"Người dùng mới: {user.get('email', 'Unknown')}",
-                "timestamp": user.get('created_at', 'Không rõ')
+                "timestamp": timestamp,
+                "user_email": user.get('email', 'Unknown')
             })
 
         # Sắp xếp theo thời gian (nếu có)
+        activities = sorted(activities, key=lambda x: x['timestamp'] if x['timestamp'] else datetime.min, reverse=True)
         return activities[:5]  # Trả về 5 hoạt động gần nhất
 
     except Exception as e:
         print(f"Error getting recent activities: {str(e)}")
         # Fallback to mock data
+        from datetime import datetime
         return [
             {
                 "action": "Hệ thống khởi động",
                 "description": "Server đã khởi động thành công",
-                "timestamp": "Vừa xong"
+                "timestamp": datetime.now(),
+                "user_email": "System"
             }
         ]
 

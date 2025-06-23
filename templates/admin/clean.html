@@ -145,7 +145,13 @@
                 {% for activity in recent_activities[:5] %}
                 <div style="padding: 10px 0; border-bottom: 1px solid #eee;">
                     <strong>{{ activity.action or 'N/A' }}</strong><br>
-                    <small style="color: #666;">{{ activity.user_email or 'N/A' }} - {{ activity.timestamp.strftime('%H:%M') if activity.timestamp else 'N/A' }}</small>
+                    <small style="color: #666;">{{ activity.user_email or 'N/A' }} -
+                        {% if activity.timestamp and hasattr(activity.timestamp, 'strftime') %}
+                            {{ activity.timestamp.strftime('%H:%M') }}
+                        {% else %}
+                            Vừa xong
+                        {% endif %}
+                    </small>
                 </div>
                 {% endfor %}
             {% else %}
@@ -166,10 +172,13 @@
             const originalError = console.error;
             console.error = function(...args) {
                 const msg = args.join(' ');
-                if (msg.includes('chrome-extension') || 
-                    msg.includes('extension') || 
+                if (msg.includes('chrome-extension') ||
+                    msg.includes('extension') ||
                     msg.includes('runtime.lastError') ||
-                    msg.includes('extensionAdapter')) {
+                    msg.includes('extensionAdapter') ||
+                    msg.includes('sendMessageToTab') ||
+                    msg.includes('invalid arguments') ||
+                    msg.includes('inlineForm.html')) {
                     return; // Completely suppress
                 }
                 originalError.apply(console, args);

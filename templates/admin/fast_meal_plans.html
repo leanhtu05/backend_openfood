@@ -1,0 +1,323 @@
+{% extends "admin/base.html" %}
+
+{% block title %}⚡ Fast Meal Plans - OpenFood Admin{% endblock %}
+
+{% block extra_head %}
+<style>
+    .loading-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 400px;
+        flex-direction: column;
+    }
+    .spinner {
+        width: 50px;
+        height: 50px;
+        border: 5px solid #f3f3f3;
+        border-top: 5px solid #007bff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    .meal-plan-card {
+        background: white;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        border-left: 4px solid #007bff;
+    }
+    .meal-plan-header {
+        display: flex;
+        justify-content: between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    .meal-plan-id {
+        font-family: monospace;
+        background: #f8f9fa;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+    }
+    .meal-plan-date {
+        color: #666;
+        font-size: 14px;
+    }
+    .meals-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-top: 15px;
+    }
+    .meal-item {
+        background: #f8f9fa;
+        padding: 10px;
+        border-radius: 8px;
+        border-left: 3px solid #28a745;
+    }
+    .meal-name {
+        font-weight: bold;
+        color: #333;
+        margin-bottom: 5px;
+    }
+    .meal-description {
+        font-size: 13px;
+        color: #666;
+    }
+    .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-top: 30px;
+        gap: 10px;
+    }
+    .pagination button {
+        padding: 8px 16px;
+        border: 1px solid #ddd;
+        background: white;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    .pagination button:hover:not(:disabled) {
+        background: #007bff;
+        color: white;
+    }
+    .pagination button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .pagination .current-page {
+        background: #007bff;
+        color: white;
+        border-color: #007bff;
+    }
+    .stats-bar {
+        background: linear-gradient(45deg, #007bff, #28a745);
+        color: white;
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+    .error-message {
+        background: #f8d7da;
+        color: #721c24;
+        padding: 15px;
+        border-radius: 8px;
+        margin: 20px 0;
+        border: 1px solid #f5c6cb;
+    }
+    .refresh-btn {
+        background: #28a745;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+        margin-bottom: 20px;
+    }
+    .refresh-btn:hover {
+        background: #218838;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1>⚡ Fast Meal Plans Management</h1>
+                <div>
+                    <button class="refresh-btn" onclick="refreshMealPlans()">
+                        🔄 Refresh
+                    </button>
+                    <a href="/admin/meal-plans" class="btn btn-outline-primary">
+                        📋 Full View
+                    </a>
+                </div>
+            </div>
+
+            <!-- Stats Bar -->
+            <div class="stats-bar" id="statsBar">
+                <div class="spinner" style="width: 20px; height: 20px; border-width: 2px;"></div>
+                Loading stats...
+            </div>
+
+            <!-- Loading State -->
+            <div class="loading-container" id="loadingContainer">
+                <div class="spinner"></div>
+                <p style="margin-top: 20px; color: #666;">Loading meal plans...</p>
+            </div>
+
+            <!-- Error State -->
+            <div class="error-message" id="errorContainer" style="display: none;">
+                <h5>❌ Error Loading Meal Plans</h5>
+                <p id="errorMessage"></p>
+                <button class="btn btn-primary" onclick="loadMealPlans()">🔄 Try Again</button>
+            </div>
+
+            <!-- Content Container -->
+            <div id="contentContainer" style="display: none;">
+                <!-- Meal Plans List -->
+                <div id="mealPlansList"></div>
+
+                <!-- Pagination -->
+                <div class="pagination" id="paginationContainer"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentPage = {{ current_page }};
+let currentLimit = {{ limit }};
+let totalPages = 1;
+let isLoading = false;
+
+// Load meal plans data
+async function loadMealPlans(page = currentPage, limit = currentLimit) {
+    if (isLoading) return;
+    
+    isLoading = true;
+    showLoading();
+    
+    try {
+        console.log(`Loading meal plans page ${page} with limit ${limit}...`);
+        
+        const response = await fetch(`/admin/api/meal-plans-data?page=${page}&limit=${limit}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            displayMealPlans(data);
+            updatePagination(data);
+            updateStats(data);
+            showContent();
+        } else {
+            showError(data.error || 'Unknown error occurred');
+        }
+    } catch (error) {
+        console.error('Error loading meal plans:', error);
+        showError(`Network error: ${error.message}`);
+    } finally {
+        isLoading = false;
+    }
+}
+
+function displayMealPlans(data) {
+    const container = document.getElementById('mealPlansList');
+    
+    if (!data.meal_plans || data.meal_plans.length === 0) {
+        container.innerHTML = `
+            <div class="text-center" style="padding: 40px;">
+                <h4>📋 No meal plans found</h4>
+                <p class="text-muted">No meal plans available for this page.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const html = data.meal_plans.map(plan => {
+        const planId = plan.id || plan.plan_id || 'Unknown';
+        const userId = plan.user_id || 'Unknown';
+        const createdAt = plan.created_at || 'Unknown';
+        const meals = plan.meals || {};
+        
+        const mealsHtml = Object.entries(meals).map(([mealType, mealData]) => {
+            const mealName = typeof mealData === 'string' ? mealData : (mealData?.name || 'Unknown meal');
+            const mealDesc = typeof mealData === 'object' ? (mealData?.description || '') : '';
+            
+            return `
+                <div class="meal-item">
+                    <div class="meal-name">${mealType.charAt(0).toUpperCase() + mealType.slice(1)}</div>
+                    <div class="meal-description">${mealName}</div>
+                    ${mealDesc ? `<div class="meal-description">${mealDesc}</div>` : ''}
+                </div>
+            `;
+        }).join('');
+        
+        return `
+            <div class="meal-plan-card">
+                <div class="meal-plan-header">
+                    <div>
+                        <span class="meal-plan-id">ID: ${planId.substring(0, 8)}...</span>
+                        <span class="meal-plan-date">👤 User: ${userId.substring(0, 8)}...</span>
+                    </div>
+                    <div class="meal-plan-date">📅 ${createdAt}</div>
+                </div>
+                <div class="meals-grid">
+                    ${mealsHtml || '<div class="meal-item"><div class="meal-name">No meals data</div></div>'}
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    container.innerHTML = html;
+}
+
+function updatePagination(data) {
+    currentPage = data.current_page;
+    totalPages = data.total_pages;
+    
+    const container = document.getElementById('paginationContainer');
+    
+    if (totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+    
+    const prevDisabled = !data.has_prev ? 'disabled' : '';
+    const nextDisabled = !data.has_next ? 'disabled' : '';
+    
+    container.innerHTML = `
+        <button ${prevDisabled} onclick="loadMealPlans(${currentPage - 1})">« Previous</button>
+        <span class="current-page">Page ${currentPage} of ${totalPages}</span>
+        <button ${nextDisabled} onclick="loadMealPlans(${currentPage + 1})">Next »</button>
+    `;
+}
+
+function updateStats(data) {
+    const statsBar = document.getElementById('statsBar');
+    statsBar.innerHTML = `
+        📊 Total: ${data.total_plans} meal plans | 
+        📄 Page: ${data.current_page}/${data.total_pages} | 
+        ⚡ Loaded in ultra-fast mode
+    `;
+}
+
+function showLoading() {
+    document.getElementById('loadingContainer').style.display = 'flex';
+    document.getElementById('errorContainer').style.display = 'none';
+    document.getElementById('contentContainer').style.display = 'none';
+}
+
+function showError(message) {
+    document.getElementById('errorMessage').textContent = message;
+    document.getElementById('loadingContainer').style.display = 'none';
+    document.getElementById('errorContainer').style.display = 'block';
+    document.getElementById('contentContainer').style.display = 'none';
+}
+
+function showContent() {
+    document.getElementById('loadingContainer').style.display = 'none';
+    document.getElementById('errorContainer').style.display = 'none';
+    document.getElementById('contentContainer').style.display = 'block';
+}
+
+function refreshMealPlans() {
+    loadMealPlans(1); // Reset to page 1
+}
+
+// Load data when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('⚡ Fast Meal Plans page loaded');
+    loadMealPlans();
+});
+</script>
+{% endblock %}
